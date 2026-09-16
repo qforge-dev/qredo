@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# Differential: release `qredo` vs pinned `mix credo` on one Mix approot.
+#
+# Usage: scripts/differential APPROOT [--config FILE] [--reps N] [--out DIR]
+# Runs both tools over the same lib/ + test/ files with the same project
+# .credo.exs (--strict, json), normalizes to sorted (check, filename,
+# line) triples and compares triple sets plus exit codes. Timing is
+# observational only. First run clones the pinned Credo checkout and
+# compiles it (network required once).
+set -euo pipefail
+[[ $# -ge 1 ]] || { echo 'Usage: scripts/differential APPROOT [--reps N] [--out DIR]' >&2; exit 64; }
+root=$(cd "$(dirname "$0")/.." && pwd)
+reps=1
+out=""
+cfg=""
+rest=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --reps) reps=${2:-}; shift 2 ;;
+        --out) out=${2:-}; shift 2 ;;
+        --config) cfg=${2:-}; shift 2 ;;
+        --) shift; while [[ $# -gt 0 ]]; do rest+=("$1"); shift; done ;;
+        -*) echo "Unknown argument: $1" >&2; exit 64 ;;
+        *) rest+=("$1"); shift ;;
+    esac
+done
+[[ ${#rest[@]} == 1 ]] || { echo 'Usage: scripts/differential APPROOT [--config FILE] [--reps N] [--out DIR]' >&2; exit 64; }
+[[ "$reps" =~ ^([1-9]|10)$ ]] || { echo '--reps must be 1..10' >&2; exit 64; }
+approot=$(cd "${rest[0]}" && pwd) || exit 64
+[[ -z "$cfg" ]] && cfg="$approot/.credo.exs"
+[[ -f "$cfg" ]] || { echo "No config at $cfg" >&2; exit 64; }
+[[ -d "$approot/lib" || -d "$approot/test" ]] || { echo "No lib/ or test/ in $approot" >&2; exit 64; }
+[[ -n "$out" ]] || out="$root/work/differential/$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$out"
+export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
+export PATH="$HOME/.local/share/mise/shims:$PATH"
+for cmd in cargo elixir mix git rustc; do
+    command -v "$cmd" >/dev/null 2>&1 || { echo "Missing required command: $cmd" >&2; exit 1; }
+done
+
+pin="ea1ccb9023b44eecbe079dc4bfd48cca4e8b0187"
+ref="$root/work/ref/credo"
+if [[ ! -d "$ref/.git" ]]; then
+    git clone --quiet https://github.com/rrrene/credo.git "$ref"
+fi
+[[ $(git -C "$ref" rev-parse HEAD) == "$pin" ]] || git -C "$ref" checkout --quiet "$pin"
+git -C "$ref" diff --quiet HEAD -- lib mix.exs mix.lock || { echo 'Credo checkout dirty' >&2; exit 1; }
+
+export MIX_ENV=dev
+export HEX_OFFLINE=0
+export LC_ALL=C
+
+{
+    echo "qredo: $(git -C "$root" rev-parse --short HEAD) $(git -C "$root" status --porcelain | tr '\n' ';')"
+    echo "credo-pin: $pin"
+    echo "elixir: $(elixir --version | tail -n 1) OTP $(elixir -e 'IO.puts(System.otp_release())')"
+    echo "rustc: $(rustc --version)"
+    echo "approot: $approot"
+    echo "config: $cfg"
+    echo "files: $(find "$approot/lib" "$approot/test" -type f \( -name '*.ex' -o -name '*.exs' \) 2>/dev/null | wc -l)"
+    echo "reps: $reps"
+} > "$out/provenance.txt"
+
+(cd "$ref" && mix deps.get) >"$out/credo-deps.log" 2>&1 || true
+(cd "$ref" && mix compile) >"$out/credo-compile.log" 2>&1
+cargo build --release -p qredo --locked --offline >"$out/rust-build.log" 2>&1
+
+# Point the same config at the approot with absolute included paths.
+tmpconfig="$out/abs.credo.exs"
+elixir -e '
+[config_path, approot, tmp] = System.argv()
+{config, _} = Code.eval_file(config_path)
+abs = fn
+  %Regex{} = r -> r
+  rel when is_binary(rel) ->
+    if Path.type(rel) == :absolute, do: rel, else: Path.join(approot, rel)
+  other -> other
+end
+configs = Enum.map(config[:configs], fn c ->
+  if c[:name] == "default",
+    do: put_in(c, [:files, :included], Enum.map(get_in(c, [:files, :included]) || [], abs)),
+    else: c
+end)
+unless Enum.any?(configs, &(&1[:name] == "default")), do: raise("no default config")
+File.write!(tmp, inspect(%{configs: configs}, limit: :infinity, printable_limit: :infinity))
+' "$cfg" "$approot" "$tmpconfig"
+
+run_timed() {
+    local tag=$1 rundir=$2; shift 2
+    set +e
+    (cd "$rundir" && /usr/bin/time -p "$@" >"$out/$tag.out" 2>"$out/$tag.time")
+    local code=$?
+    set -e
+    echo "$code"
+}
+
+normalize() {
+    local rep=$1
+    elixir -e '
+[native_path, rust_path, approot, out_n, out_r] = System.argv()
+native = :json.decode(File.read!(native_path))["issues"]
+triples_n =
+  Enum.map(native, fn i ->
+    Enum.join([i["check"], String.replace_prefix(i["filename"] || "", approot <> "/", ""), inspect(i["line_no"])], "\t")
+  end)
+rust =
+  File.stream!(rust_path)
+  |> Stream.filter(&(String.starts_with?(&1, "{") and String.contains?(&1, "\"check\"")))
+  |> Enum.map(&:json.decode/1)
+triples_r =
+  Enum.map(rust, fn i ->
+    Enum.join([i["check"], i["filename"], inspect(i["line_no"])], "\t")
+  end)
+File.write!(out_n, Enum.join(Enum.sort(triples_n), "\n") <> "\n")
+File.write!(out_r, Enum.join(Enum.sort(triples_r), "\n") <> "\n")
+' "$out/native-$rep.out" "$out/rust-$rep.out" "$approot" "$out/native-triples-$rep.txt" "$out/rust-triples-$rep.txt"
+}
+
+fail=""
+for (( i=1; i<=reps; i++ )); do
+    rcode=$(run_timed "rust-$i" "$root" "$root/target/release/qredo" "$approot" --config-file "$cfg" --strict --format json)
+    rsummary=$(grep '"summary"' "$out/rust-$i.out" | tail -n 1 || true)
+    if [[ -z "$rsummary" ]]; then
+        reason=$(grep -o "unsupported config: .*" "$out/rust-$i.time" | head -n 1 || true)
+        printf 'rep %d: rust REFUSED (%s, exit %s); cannot compare, see triage\n' \
+            "$i" "${reason:-unknown}" "$rcode" | tee -a "$out/reps.txt"
+        fail="rep $i: qredo refused config (${reason:-unknown}); serve it before claiming parity"
+        continue
+    fi
+    rexit=$(echo "$rsummary" | grep -o '"exit":[0-9]*' | cut -d: -f2)
+    ncode=$(run_timed "native-$i" "$ref" mix credo --config-file "$tmpconfig" --strict --format json)
+    nissues=$(elixir -e 'IO.puts(length(:json.decode(File.read!(hd(System.argv())))["issues"]))' "$out/native-$i.out")
+    printf 'rep %d: rust exit=%s summary=%s | native exit=%s issues=%s\n' \
+        "$i" "$rcode" "$rsummary" "$ncode" "$nissues" | tee -a "$out/reps.txt"
+    echo "$rexit $ncode" >> "$out/exits.tsv"
+    normalize "$i"
+    if ! diff -q "$out/native-triples-$i.txt" "$out/rust-triples-$i.txt" >/dev/null; then
+        fail="rep $i: issue triples differ"
+        diff -u "$out/native-triples-$i.txt" "$out/rust-triples-$i.txt" | head -n 20 || true
+    fi
+    if [[ "$rexit" != "$ncode" ]]; then
+        fail="rep $i: exit codes differ (rust $rexit, native $ncode)"
+    fi
+done
+
+{
+    if grep -q '"summary"' "$out/rust-1.out" 2>/dev/null; then
+        echo "rust summary: $(grep '"summary"' "$out/rust-1.out" | tail -n 1)"
+    else
+        echo "rust summary: REFUSED (see reps.txt)"
+    fi
+    if [[ -f "$out/native-triples-1.txt" ]]; then
+        echo "native issues: $(grep -c . "$out/native-triples-1.txt")"
+    fi
+    if [[ -z "$fail" ]]; then echo "MATCH: issue sets and exit codes agree"; else echo "MISMATCH: $fail"; fi
+} | tee "$out/summary.txt"
+[[ -z "$fail" ]]
