@@ -150,7 +150,6 @@ enum Lane {
     Filename,
     Kernel,
 }
-
 fn lane_for(rule: &str) -> Lane {
     if PROJECT_LANE.contains(&rule) {
         Lane::Project
@@ -171,6 +170,27 @@ pub fn supports_per_file(rule: &str) -> bool {
         && rule != "Credo.Check.Design.RedundantConfigComments"
         && rule != "Credo.Check.Design.MissingCheckInConfig"
         && rule != "Credo.Check.Design.DeprecatedChecksConfig"
+}
+
+/// Project-lane checks promoted to full-run native serving after
+/// differential proof (real-target campaign + corpus + tie/revert
+/// contracts). They still aggregate across files, so subset execution
+/// stays fail-closed (`supports_per_file` remains false for all of them)
+/// and `DuplicatedCode` stays fully gated (absolute peer paths in
+/// messages, unverified scale behavior).
+#[must_use]
+pub fn promoted_project_check(rule: &str) -> bool {
+    matches!(
+        rule,
+        "Credo.Check.Consistency.LineEndings"
+            | "Credo.Check.Consistency.ExceptionNames"
+            | "Credo.Check.Consistency.MultiAliasImportRequireUse"
+            | "Credo.Check.Consistency.ParameterPatternMatching"
+            | "Credo.Check.Consistency.SpaceAroundOperators"
+            | "Credo.Check.Consistency.SpaceInParentheses"
+            | "Credo.Check.Consistency.TabsOrSpaces"
+            | "Credo.Check.Consistency.UnusedVariableNames"
+    )
 }
 
 /// One file ready for check runs.
@@ -228,6 +248,11 @@ fn run_check_entry(
     let rule = entry.module.as_str();
     if rule == "Credo.Check.Design.RedundantConfigComments" {
         work.redundant.push(entry.params.clone());
+        return;
+    }
+    if crate::check_meta::version_skipped_on_pinned_toolchain(rule) {
+        // Native `PrepareChecksToRun` excludes version-gated checks before
+        // any file runs; they emit zero issues on this toolchain.
         return;
     }
     if rule == "Credo.Check.Design.MissingCheckInConfig"
@@ -487,7 +512,7 @@ fn eval_kernel_file(
     general: &GeneralParams,
 ) -> (usize, Vec<Staged>) {
     let mut items = Vec::new();
-    for finding in once_rule(rule, &file.prepared, params) {
+    for finding in once_rule_named(rule, file, params) {
         match build_issue(rule, finding, params, general, &file.meta) {
             Ok(issue) => items.push(Staged::Issue(issue)),
             Err(error) => items.push(Staged::Error(RunError::Issue(error.0))),
@@ -525,6 +550,23 @@ fn once_rule(
     params: &BTreeMap<String, String>,
 ) -> Vec<crate::Finding> {
     crate::batch::run_one(rule, prepared, params).unwrap_or_default()
+}
+
+/// One rule's findings with the checked filename available for messages
+/// that name it (currently only `DuplicatedCode` single-file wording).
+fn once_rule_named(
+    rule: &str,
+    file: &PreparedFile<'_>,
+    params: &BTreeMap<String, String>,
+) -> Vec<crate::Finding> {
+    if rule == "Credo.Check.Design.DuplicatedCode" {
+        return crate::design::duplicated::check_prepared_with_filename(
+            &file.prepared,
+            params,
+            file.filename,
+        );
+    }
+    once_rule(rule, &file.prepared, params)
 }
 
 /// Per-check file selection; pattern errors are recorded once and stop
@@ -859,6 +901,126 @@ mod tests {
             vec![RunError::UnknownRule("Credo.Check.Nope".to_owned())]
         );
         assert!(report.issues.is_empty());
+    }
+
+    #[test]
+    fn named_kernel_lane_reports_checked_filename() {
+        // The filename-aware lane names the checked file; the anonymous
+        // `once_rule` path keeps the generic rendering.
+        let block = "  x = 1_000_000_000_000_000_000_000_000\n  y = 2_000_000_000_000_000_000_000_000\n  z = x + y + 1_000_000_000_000_000_000_000\n  w = z * 2_000_000_000_000_000_000_000_000\n";
+        let source = format!("def a do\n{block}end\ndef b do\n{block}end\n");
+        let file = RunnerFile {
+            filename: "lib/a.ex".to_owned(),
+            source,
+        };
+        let prepared = crate::batch::Prepared::lazy(&file.source);
+        let meta = FileMeta::collect_shared(&file.filename, &file.source, prepared.facts());
+        let prepared_file = PreparedFile {
+            index: 0,
+            filename: &file.filename,
+            source: &file.source,
+            meta,
+            prepared,
+            comments: config_comments(&file.source),
+        };
+        let params = BTreeMap::new();
+        let named = once_rule_named("Credo.Check.Design.DuplicatedCode", &prepared_file, &params);
+        assert_eq!(named.len(), 1);
+        assert!(
+            named[0]
+                .message
+                .starts_with("Duplicate code found in lib/a.ex (mass: "),
+            "unexpected message: {}",
+            named[0].message
+        );
+        let anonymous = once_rule(
+            "Credo.Check.Design.DuplicatedCode",
+            &prepared_file.prepared,
+            &params,
+        );
+        assert_eq!(anonymous.len(), 1);
+        assert!(
+            anonymous[0]
+                .message
+                .starts_with("Duplicate code found in file (mass: "),
+            "unexpected message: {}",
+            anonymous[0].message
+        );
+    }
+
+    #[test]
+    fn version_gated_kernels_still_fire_directly() {
+        // Native `run/2` bypasses the version gate (it lives in
+        // `PrepareChecksToRun`); direct kernel calls keep answering.
+        assert_eq!(
+            crate::check_kernel("Credo.Check.Warning.LazyLogging", lazy_src())
+                .expect("kernel")
+                .len(),
+            1
+        );
+        assert_eq!(
+            crate::check_kernel(
+                "Credo.Check.Readability.PreferUnquotedAtoms",
+                unquoted_src()
+            )
+            .expect("kernel")
+            .len(),
+            1
+        );
+        assert_eq!(
+            crate::check_kernel("Credo.Check.Refactor.MapInto", map_src())
+                .expect("kernel")
+                .len(),
+            1
+        );
+    }
+
+    fn lazy_src() -> &'static str {
+        "Logger.debug(\"hi #{x}\")\n"
+    }
+
+    fn unquoted_src() -> &'static str {
+        "x = :\"foo\"\n"
+    }
+
+    fn map_src() -> &'static str {
+        "x = Enum.map(a, f) |> Enum.into(b)\n"
+    }
+
+    #[test]
+    fn version_gated_checks_emit_nothing_on_pinned_toolchain() {
+        // Execution skips what native `PrepareChecksToRun` skips on
+        // Elixir 1.20.2: zero issues from firing kernels.
+        let files = vec![
+            RunnerFile {
+                filename: "lib/a.ex".to_owned(),
+                source: lazy_src().to_owned(),
+            },
+            RunnerFile {
+                filename: "lib/b.ex".to_owned(),
+                source: unquoted_src().to_owned(),
+            },
+            RunnerFile {
+                filename: "lib/c.ex".to_owned(),
+                source: map_src().to_owned(),
+            },
+        ];
+        let gated = vec![
+            "Credo.Check.Warning.LazyLogging",
+            "Credo.Check.Readability.PreferUnquotedAtoms",
+            "Credo.Check.Refactor.MapInto",
+        ]
+        .into_iter()
+        .map(|module| CheckEntry {
+            module: module.to_owned(),
+            enabled: true,
+            params: BTreeMap::new(),
+        })
+        .collect();
+        let report = run_checks(&files, &default_config(gated));
+        assert!(report.errors.is_empty());
+        assert!(report.issues.is_empty());
+        assert_eq!(report.exit_status, 0);
     }
 
     #[test]

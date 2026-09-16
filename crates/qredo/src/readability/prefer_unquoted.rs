@@ -27,7 +27,9 @@ pub(crate) fn check(source: &str) -> Vec<Finding> {
                 j += 1;
             }
             if j < bytes.len() && bytes[j] == quote && is_simple_atom(&inner) {
-                let trigger = format!(":{}{inner}{}", quote as char, quote as char);
+                // Upstream always renders `:"atom"` (double quotes) in both
+                // message and trigger, regardless of source quote.
+                let trigger = format!(":\"{inner}\"");
                 findings.push(Finding::with_trigger(
                     start_line,
                     Some(start_col),
@@ -71,5 +73,18 @@ mod tests {
     #[test]
     fn reports_quoted() {
         assert_eq!(check("x = :\"foo\"\n").len(), 1);
+    }
+    #[test]
+    fn single_quoted_normalizes_to_double_quotes() {
+        let found = check("x = :'foo'\n");
+        assert_eq!(found.len(), 1);
+        assert_eq!(
+            found[0].message,
+            "Use unquoted atom `:foo` rather than quoted atom `:\"foo\"`."
+        );
+        assert_eq!(
+            found[0].trigger,
+            crate::Trigger::Text(":\"foo\"".to_owned())
+        );
     }
 }

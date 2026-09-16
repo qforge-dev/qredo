@@ -79,18 +79,23 @@ fn parse_functions(params: &BTreeMap<String, String>) -> Vec<Forbidden> {
         if parts.len() != 3 {
             continue;
         }
-        let (Some(module), Some(fun), Some(message)) =
-            (parts[0].as_str(), parts[1].as_str(), parts[2].as_str())
-        else {
+        let (Some(module), Some(fun)) = (parts[0].as_str(), parts[1].as_str()) else {
             continue;
         };
         let (key, display) = split_module(module);
         let fun = fun.strip_prefix(':').unwrap_or(fun);
+        let message = match &parts[2] {
+            serde_json::Value::String(message) => message.clone(),
+            serde_json::Value::Null => {
+                format!("Calls to `{display}.{fun}` are not allowed.")
+            }
+            _ => continue,
+        };
         out.push(Forbidden {
             module: key,
             display,
             fun: fun.to_owned(),
-            message: message.to_owned(),
+            message,
         });
     }
     out
@@ -186,5 +191,43 @@ mod tests {
             r#"[{"tuple":["erlang","binary_to_term","Use safe alternative."]}]"#.to_owned(),
         );
         assert!(check_prepared(&crate::batch::Prepared::lazy("def foo( do\n"), &params).is_empty());
+    }
+    #[test]
+    fn null_message_uses_default_template_erlang() {
+        let mut params = BTreeMap::new();
+        params.insert(
+            "functions".to_owned(),
+            r#"[{"tuple":[":erlang",":binary_to_term",null]}]"#.to_owned(),
+        );
+        let src = "defmodule MyModule do\n  def decode(data) do\n    :erlang.binary_to_term(data)\n  end\nend\n";
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &params);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].message,
+            "Calls to `:erlang.binary_to_term` are not allowed."
+        );
+        assert_eq!(
+            findings[0].trigger,
+            Trigger::Text(":erlang.binary_to_term".to_owned())
+        );
+    }
+    #[test]
+    fn null_message_uses_default_template_elixir_module() {
+        let mut params = BTreeMap::new();
+        params.insert(
+            "functions".to_owned(),
+            r#"[{"tuple":["Elixir.SomeModule","dangerous_function",null]}]"#.to_owned(),
+        );
+        let src = "defmodule MyModule do\n  def dangerous do\n    SomeModule.dangerous_function(\"foo\")\n  end\nend\n";
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &params);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].message,
+            "Calls to `SomeModule.dangerous_function` are not allowed."
+        );
+        assert_eq!(
+            findings[0].trigger,
+            Trigger::Text("SomeModule.dangerous_function".to_owned())
+        );
     }
 }
