@@ -40,6 +40,7 @@ pub(crate) fn check_prepared(
         }
         let body = def_body(&lines, &depths, idx);
         let (assignments, branches, conditions) = count_abc(&body, def_params(&lines, idx));
+
         #[allow(
             clippy::cast_precision_loss,
             reason = "ABC counts grow with source length; precision loss only affects gigantic inputs"
@@ -498,7 +499,10 @@ fn bare_do_end(line: &str) -> Option<usize> {
 /// destructured heads contribute none.
 fn def_params(lines: &[&str], from: usize) -> Vec<String> {
     let head = head_text(lines, from);
-    if has_guard(&head) {
+    // Guarded heads scope nothing upstream (`get_parameters` sees the
+    // `when` wrapper, not the head tuple). The guard may sit on the def
+    // line itself (past `head_text`'s balanced close) or below it.
+    if has_guard(&head) || has_guard(lines.get(from).unwrap_or(&"")) {
         return Vec::new();
     }
     let Some(open) = head.find('(') else {
@@ -931,24 +935,25 @@ impl Counter<'_> {
             idx += 1;
         }
     }
+}
 
+/// Longest compound operator (`=>` pairs are plain tuples upstream:
+/// consumed, never counted; `->` stays a branch) at a rest slice.
+fn match_compound_op(rest: &str) -> Option<&'static str> {
+    [
+        "|>", "->", "<-", "=>", "==", "!=", "=~", "<=", ">=", "&&", "||", "<>", "++", "**", "//",
+        "..",
+    ]
+    .into_iter()
+    .find(|op| rest.starts_with(op))
+}
+
+impl Counter<'_> {
     /// Multi-character operators and punctuation; advances `idx` past a match.
     fn scan_operator(&mut self, body: &str, idx: &mut usize) -> bool {
         let bytes = body.as_bytes();
         let rest = body.get(*idx..).unwrap_or("");
-        let mut matched: Option<&str> = None;
-        // `=>` pairs are plain tuples upstream: consumed, never counted.
-        // `->` stays a branch.
-        for op in [
-            "|>", "->", "<-", "=>", "==", "!=", "=~", "<=", ">=", "&&", "||", "<>", "++", "**",
-            "//", "..",
-        ] {
-            if rest.starts_with(op) {
-                matched = Some(op);
-                break;
-            }
-        }
-        if let Some(op) = matched {
+        if let Some(op) = match_compound_op(rest) {
             if !matches!(op, "|>" | "==" | "=>") {
                 self.branches += 1;
             }
@@ -1386,6 +1391,19 @@ mod tests {
             .collect();
         let findings = check_prepared(&crate::batch::Prepared::lazy(src), &params);
         assert_eq!(findings.len(), 1);
+    }
+
+    #[test]
+    fn single_line_guard_scopes_nothing() {
+        // The guard may sit past `head_text`'s balanced close; params
+        // still stay unscoped, so later uses count.
+        let src = "def f(v) when is_binary(v) do\n    Models.get_version(v)\n  end\n";
+        let params: BTreeMap<String, String> = [("max_size".to_owned(), "1".to_owned())]
+            .into_iter()
+            .collect();
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &params);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].message.contains("ABC size is 2"));
     }
 
     #[test]
