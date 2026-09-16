@@ -19,6 +19,7 @@ pub use file_select::{PatternError, check_runs_on_entries, check_runs_on_file, w
 mod batch;
 pub mod check_docs;
 mod check_meta;
+pub mod cmd_diff;
 mod config_data;
 mod config_file;
 mod consistency;
