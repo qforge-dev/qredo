@@ -8,24 +8,42 @@ pub(crate) fn check_prepared(
 ) -> Vec<Finding> {
     let min_len = helpers::param_usize(params, "min_pipeline_length", 2);
     let masked = prepared.masked();
+    let lines: Vec<&str> = masked.split('\n').collect();
+    let starts = line_starts(masked);
+    let mut calls = find_calls(masked);
+    calls.sort_by_key(|call| call.head_start);
+    let lengths: Vec<usize> = calls
+        .iter()
+        .map(|call| 1 + pipe_len(first_arg(call)))
+        .collect();
+    let pipe_target: Vec<bool> = calls
+        .iter()
+        .map(|call| is_pipe_target(masked, call.head_start))
+        .collect();
+    let hidden = capture_spans(masked);
     let mut findings = Vec::new();
-    for (idx, line) in masked.split('\n').enumerate() {
+    for (idx, call) in calls.iter().enumerate() {
+        let line = line_of_idx(&starts, &lines, call.head_start);
         if skip_line(line) {
             continue;
         }
-        for call in remote_calls(line) {
-            if is_pipe_target(line, call.head_start) {
-                continue;
-            }
-            let length = 1 + pipe_len(first_arg(&call));
-            if length >= min_len {
-                findings.push(Finding::with_trigger(
-                    idx + 1,
-                    credo_column(line, &call.head),
-                    "Use a pipeline instead of nested function calls.",
-                    call.head,
-                ));
-            }
+        // Upstream never visits calls inside `&(...)` captures.
+        if hidden
+            .iter()
+            .any(|(from, to)| *from <= call.head_start && call.head_start < *to)
+        {
+            continue;
+        }
+        if pipe_target[idx] {
+            continue;
+        }
+        if lengths[idx] >= min_len {
+            findings.push(Finding::with_trigger(
+                line_no(&starts, call.head_start),
+                credo_column(line, &call.head),
+                "Use a pipeline instead of nested function calls.",
+                call.head.clone(),
+            ));
         }
     }
     findings.sort_by_key(|finding| (finding.line, finding.column.unwrap_or(0)));
@@ -41,9 +59,6 @@ struct RemoteCall {
 /// Guards, typespecs and documentation carry no pipeline candidates.
 fn skip_line(line: &str) -> bool {
     let trimmed = line.trim_start();
-    if has_word(line, "when") {
-        return true;
-    }
     for word in ["defguard ", "defguardp "] {
         if trimmed.starts_with(word) {
             return true;
@@ -71,9 +86,11 @@ fn skip_line(line: &str) -> bool {
     false
 }
 
-/// Remote (`Mod.fun(...)`, `var.fun(...)`) calls on one masked line.
-fn remote_calls(line: &str) -> Vec<RemoteCall> {
-    let bytes = line.as_bytes();
+/// Remote (`Mod.fun(...)`), Erlang (`:mod.fun(...)`) and anonymous
+/// (`name.(...)`) calls over the whole masked source, so multiline outers
+/// keep their arguments.
+fn find_calls(text: &str) -> Vec<RemoteCall> {
+    let bytes = text.as_bytes();
     let mut out = Vec::new();
     let mut idx = 0_usize;
     while idx < bytes.len() {
@@ -81,47 +98,67 @@ fn remote_calls(line: &str) -> Vec<RemoteCall> {
             idx += 1;
             continue;
         }
-        if let Some((head, head_start)) = call_head(line, idx)
-            && let Some(close) = match_paren(line, idx)
+        if let Some((head, head_start)) = call_head(text, idx)
+            && let Some(close) = match_paren(text, idx)
         {
-            let args = line.get(idx + 1..close).unwrap_or("").to_owned();
+            let args = text.get(idx + 1..close).unwrap_or("").to_owned();
             out.push(RemoteCall {
                 head,
                 head_start,
                 args,
             });
-            idx += 1;
-        } else if let Some((head, head_start)) = call_head(line, idx) {
-            out.push(RemoteCall {
-                head,
-                head_start,
-                args: line.get(idx + 1..).unwrap_or("").to_owned(),
-            });
-            idx += 1;
-        } else {
-            idx += 1;
         }
+        idx += 1;
     }
     out
 }
 
-/// Dotted head (`Alias.name`, `var.name`) ending right before `(` at `open`.
-fn call_head(line: &str, open: usize) -> Option<(String, usize)> {
-    let bytes = line.as_bytes();
+/// Dotted, Erlang or anonymous head ending right before `(` at `open`.
+/// A preceding keyword/word on the same line (`case`, `if`, `and`, `do:`)
+/// no longer absorbs the head: only the last space-separated segment counts.
+fn call_head(text: &str, open: usize) -> Option<(String, usize)> {
+    let bytes = text.as_bytes();
     let mut start = open;
-    while start > 0 && is_head_byte(bytes[start - 1]) {
+    while start > 0 && is_head_byte(bytes[start - 1]) && bytes[start - 1] != b'\n' {
         start -= 1;
     }
-    let raw = line.get(start..open)?.trim_end().to_owned();
-    let trimmed = raw.trim_start().to_owned();
-    if !is_remote_head(&trimmed) {
+    let raw = text.get(start..open)?.trim_end();
+    if raw.is_empty() {
         return None;
     }
-    if start > 0 && bytes[start - 1] == b':' {
+    let trimmed = raw.trim_start();
+    let candidate = trimmed
+        .split(' ')
+        .filter(|part| !part.is_empty())
+        .next_back()
+        .unwrap_or(trimmed);
+    if candidate.is_empty() {
         return None;
     }
-    let offset = raw.len() - trimmed.len();
-    Some((trimmed, start + offset))
+    // Anonymous `name.(...)`: trigger is the bare name.
+    if candidate.ends_with('.') {
+        let base = candidate.trim_end_matches('.');
+        if is_local_name(base)
+            && let Some(head_start) = text.get(..open)?.rfind(base)
+        {
+            return Some((base.to_owned(), head_start));
+        }
+        return None;
+    }
+    if !is_remote_head(candidate) {
+        return None;
+    }
+    let head_start = text.get(..open)?.rfind(candidate)?;
+    // A directly adjacent colon is either an Erlang marker or a `key:`/`do:`
+    // separator: both still report the head; `::` stays out.
+    if head_start > 0
+        && bytes[head_start - 1] == b':'
+        && head_start >= 2
+        && bytes[head_start - 2] == b':'
+    {
+        return None;
+    }
+    Some((candidate.to_owned(), head_start))
 }
 
 fn is_head_byte(byte: u8) -> bool {
@@ -149,10 +186,75 @@ fn is_remote_head(head: &str) -> bool {
     })
 }
 
-/// Whether the call is the direct target of a `|>` on the same line.
-fn is_pipe_target(line: &str, head_start: usize) -> bool {
-    let before = line.get(..head_start).unwrap_or("").trim_end();
+/// Whether the call is the direct target of a `|>` (checked over the whole
+/// source, so `|>` at the end of the previous line still counts).
+fn is_pipe_target(text: &str, head_start: usize) -> bool {
+    let before = text.get(..head_start).unwrap_or("").trim_end();
     before.ends_with("|>")
+}
+
+/// Byte spans of `&` captures, whose contents upstream never visits.
+/// `&&` boolean conjunction is not a capture.
+fn capture_spans(text: &str) -> Vec<(usize, usize)> {
+    let bytes = text.as_bytes();
+    let mut spans = Vec::new();
+    let mut idx = 0_usize;
+    while idx < bytes.len() {
+        if bytes[idx] == b'&'
+            && bytes.get(idx + 1) != Some(&b'&')
+            && (idx == 0 || bytes[idx - 1] != b'&')
+            && let Some(end) = capture_end(bytes, idx + 1)
+        {
+            spans.push((idx, end));
+            idx = end;
+            continue;
+        }
+        idx += 1;
+    }
+    spans
+}
+
+/// End offset (exclusive) of the captured expression after `&`, or `None`
+/// when nothing callable follows: a bracketed span balances out, a call
+/// head runs to its matched paren, anything else captures nothing nested.
+fn capture_end(bytes: &[u8], mut idx: usize) -> Option<usize> {
+    if let Some(b'(' | b'[' | b'{') = bytes.get(idx) {
+        return balanced_end(bytes, idx);
+    }
+    if bytes.get(idx) == Some(&b'%') && bytes.get(idx + 1) == Some(&b'{') {
+        return balanced_end(bytes, idx + 1);
+    }
+    let start = idx;
+    while idx < bytes.len()
+        && (bytes[idx].is_ascii_alphanumeric()
+            || matches!(bytes[idx], b'_' | b'.' | b'?' | b'!' | b':'))
+    {
+        idx += 1;
+    }
+    if idx == start || bytes.get(idx) != Some(&b'(') {
+        return None;
+    }
+    balanced_end(bytes, idx)
+}
+
+/// End offset past the balanced bracket run starting at `open`.
+fn balanced_end(bytes: &[u8], open: usize) -> Option<usize> {
+    let mut depth = 0_usize;
+    let mut idx = open;
+    while idx < bytes.len() {
+        match bytes[idx] {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(idx + 1);
+                }
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    None
 }
 
 /// First top-level argument of the call.
@@ -161,16 +263,28 @@ fn first_arg(call: &RemoteCall) -> &str {
 }
 
 /// Pipeline length contributed by the first argument: another nested call
-/// with arguments adds one level plus its own first argument.
+/// with arguments adds one level. Paren-less `from x in y` counts as one;
+/// `key: value` keywords, field access (`a.b`) and operator rests count zero.
 fn pipe_len(arg: &str) -> usize {
     let trimmed = strip_parens(arg.trim());
-    let Some((head, args)) = split_call(trimmed) else {
-        return 0;
-    };
-    if is_excluded_head(head) || args.trim().is_empty() {
+    // Erlang `:mod.fun(...)` counts like its dotted form.
+    let trimmed = trimmed.strip_prefix(':').unwrap_or(trimmed);
+    if trimmed.is_empty() || keyword_value(trimmed).is_some() {
         return 0;
     }
-    1 + pipe_len(first_arg_in(&args))
+    if let Some((head, args)) = split_call(trimmed) {
+        if is_excluded_head(head) || args.trim().is_empty() {
+            return 0;
+        }
+        return 1 + pipe_len(first_arg_in(&args));
+    }
+    if let Some((head, rest)) = split_space_inner(trimmed) {
+        if is_excluded_head(head) || rest.trim().is_empty() {
+            return 0;
+        }
+        return 1;
+    }
+    0
 }
 
 fn first_arg_in(args: &str) -> &str {
@@ -185,7 +299,8 @@ fn is_excluded_head(head: &str) -> bool {
     )
 }
 
-/// Leading call (`name(...)` or `Mod.name(...)`) with balanced arguments.
+/// Leading call (`name(...)` or `Mod.name(...)`) consuming the whole text.
+/// Trailing field access (`Repo.get!(...).field`) is not a plain call.
 fn split_call(text: &str) -> Option<(&str, String)> {
     let mut head_end = 0_usize;
     for (idx, char) in text.char_indices() {
@@ -207,7 +322,104 @@ fn split_call(text: &str) -> Option<(&str, String)> {
         return None;
     }
     let close = match_paren(text, open)?;
+    if !text
+        .get(close + 1..)
+        .is_some_and(|rest| rest.trim().is_empty())
+    {
+        return None;
+    }
     Some((head, text.get(open + 1..close).unwrap_or("").to_owned()))
+}
+
+/// Paren-less call (`from log in Log`): head plus a non-operator rest.
+fn split_space_inner(text: &str) -> Option<(&str, &str)> {
+    let mut head_end = 0_usize;
+    for (idx, char) in text.char_indices() {
+        if char.is_alphanumeric() || char == '_' || char == '.' || char == '?' || char == '!' {
+            head_end = idx + char.len_utf8();
+        } else {
+            break;
+        }
+    }
+    let head = text.get(..head_end)?;
+    if head.is_empty() || head.starts_with('.') || head.ends_with('.') || head.contains("..") {
+        return None;
+    }
+    let rest = text.get(head_end..)?.trim_start();
+    if rest.is_empty() {
+        return None;
+    }
+    let first = rest.chars().next().unwrap_or(' ');
+    if matches!(
+        first,
+        '(' | '[' | '{' | '"' | '\'' | ':' | ',' | ';' | ')' | ']' | '}'
+    ) || is_operator_start(first)
+    {
+        return None;
+    }
+    Some((head, rest))
+}
+
+fn is_operator_start(char: char) -> bool {
+    matches!(
+        char,
+        '<' | '>' | '=' | '|' | '+' | '-' | '*' | '/' | '&' | '~' | '^' | '!' | '?' | '.'
+    )
+}
+
+/// Leading `key:` in `key: value` keywords.
+fn keyword_value(text: &str) -> Option<&str> {
+    let mut idx = 0_usize;
+    for (byte, char) in text.char_indices() {
+        if char.is_alphanumeric() || char == '_' || char == '?' || char == '!' {
+            idx = byte + char.len_utf8();
+        } else {
+            break;
+        }
+    }
+    if idx == 0 {
+        return None;
+    }
+    let rest = text.get(idx..)?;
+    if !rest.starts_with(':') || rest[1..].starts_with(':') {
+        return None;
+    }
+    let after = rest[1..].trim_start();
+    if after.is_empty() {
+        return None;
+    }
+    Some(after)
+}
+
+fn is_local_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    if chars
+        .next()
+        .is_none_or(|c| !(c.is_ascii_lowercase() || c == '_'))
+    {
+        return false;
+    }
+    name.chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '?' || c == '!')
+}
+
+fn line_starts(text: &str) -> Vec<usize> {
+    let mut starts = vec![0_usize];
+    for (byte, char) in text.char_indices() {
+        if char == '\n' {
+            starts.push(byte + 1);
+        }
+    }
+    starts
+}
+
+fn line_no(starts: &[usize], pos: usize) -> usize {
+    starts.partition_point(|start| *start <= pos).max(1)
+}
+
+fn line_of_idx<'a>(starts: &[usize], lines: &[&'a str], pos: usize) -> &'a str {
+    let line_no = line_no(starts, pos);
+    lines.get(line_no - 1).copied().unwrap_or("")
 }
 
 /// Strip fully enclosing parentheses (`(f(x))` -> `f(x)`).
@@ -265,28 +477,6 @@ fn match_paren(line: &str, open: usize) -> Option<usize> {
         idx += 1;
     }
     None
-}
-
-fn has_word(line: &str, needle: &str) -> bool {
-    let bytes = line.as_bytes();
-    let mut idx = 0_usize;
-    while idx + needle.len() <= bytes.len() {
-        if line.get(idx..).is_some_and(|rest| rest.starts_with(needle))
-            && word_boundary(bytes, idx)
-            && word_boundary(bytes, idx + needle.len())
-        {
-            return true;
-        }
-        idx += 1;
-    }
-    false
-}
-
-fn word_boundary(bytes: &[u8], idx: usize) -> bool {
-    if idx == 0 || idx >= bytes.len() {
-        return true;
-    }
-    !is_name_byte(bytes[idx]) || !is_name_byte(bytes[idx - 1])
 }
 
 fn is_name_byte(byte: u8) -> bool {
@@ -392,5 +582,75 @@ mod tests {
         let mut params = BTreeMap::new();
         params.insert("min_pipeline_length".to_owned(), "3".to_owned());
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+    #[test]
+    fn multiline_outer_reports() {
+        let src = "Repo.update_all(\n  from(i in Item, where: i.id == ^id),\n  set: [x: 1]\n)\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+    }
+    #[test]
+    fn keyword_preceded_outer_reports() {
+        let src = "case Integer.parse(to_string(raw)) do\n  {n, \"\"} -> n\nend\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+    }
+    #[test]
+    fn do_colon_outer_reports() {
+        let src = "def f(raw), do: Integer.parse(to_string(raw))\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+    }
+    #[test]
+    fn parenless_from_inner_counts() {
+        let src = "Repo.one(from log in Log, where: log.build_id == ^build_id, select: max(log.seq)) || 0\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+    }
+    #[test]
+    fn anonymous_outer_reports() {
+        let src = "nil -> insert.(Ecto.Changeset.put_change(changeset, :reuse_key, key))\n";
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new());
+        assert_eq!(findings.len(), 1);
+    }
+    #[test]
+    fn when_line_rhs_reports() {
+        let src = "{:ok, values} when is_list(values) <- Jason.decode(to_string(json)),\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+    }
+    #[test]
+    fn erlang_outer_reports() {
+        let src = "volume = Base.encode16(:crypto.hash(:sha256, owner), case: :lower)\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+    }
+    #[test]
+    fn capture_hides_nested_calls() {
+        // Upstream never visits calls inside `&` captures.
+        let src = "Enum.map(items, &Map.merge(Map.from_struct(&1), %{}))\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+    }
+
+    #[test]
+    fn nested_inside_fn_body_reports() {
+        // Short outers never suppress inner nesting; only `&` captures
+        // hide their contents.
+        let src = "def f(build) do\n  Repo.transaction(fn ->\n    Repo.update_all(\n      from(i in B, where: i.id == 1),\n      set: [x: 1]\n    )\n  end)\nend\n";
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new());
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].line, 3);
     }
 }

@@ -89,7 +89,7 @@ fn collect_matches(line: &str, open: usize, close: usize, line_no: usize, out: &
     while i < close {
         if bytes[i] == b'='
             && is_match_operator(bytes, i, close)
-            && let Some(finding) = ignored_match(bytes, i, close, line_no)
+            && let Some(finding) = ignored_match(bytes, open, i, close, line_no)
         {
             out.push(finding);
         }
@@ -114,21 +114,93 @@ fn is_match_operator(bytes: &[u8], pos: usize, close: usize) -> bool {
     true
 }
 
-/// Issue for `left = right` when either side is a bare ignored variable.
-fn ignored_match(bytes: &[u8], equals: usize, close: usize, line_no: usize) -> Option<Finding> {
-    if let Some((start, name)) = ident_before(bytes, equals)
-        && is_ignored_var(&name)
-        && var_start_ok(bytes, start)
-    {
-        return Some(issue(line_no, start, name));
+/// Issue for `left = right` when a whole side is a bare ignored variable
+/// (upstream matches only exact-variable sides, so `"lib/" <> _ = path`
+/// is clean: neither side is bare).
+fn ignored_match(
+    bytes: &[u8],
+    open: usize,
+    equals: usize,
+    close: usize,
+    line_no: usize,
+) -> Option<Finding> {
+    let (start, end) = operand_before(bytes, open, equals);
+    if let Some((name_start, name)) = bare_ignored_var(&bytes[start..end], start) {
+        return Some(issue(line_no, name_start, name));
     }
-    if let Some((start, name)) = ident_after(bytes, equals, close)
-        && is_ignored_var(&name)
-        && var_end_ok(bytes, start + name.len())
-    {
-        return Some(issue(line_no, start, name));
+    let (start, end) = operand_after(bytes, equals, close);
+    if let Some((name_start, name)) = bare_ignored_var(&bytes[start..end], start) {
+        return Some(issue(line_no, name_start, name));
     }
     None
+}
+
+/// Byte range of the `=` operand before `equals`: back to the enclosing
+/// `(`/top-level `,` (any depth-0 opener or comma bounds a nested side too).
+fn operand_before(bytes: &[u8], open: usize, equals: usize) -> (usize, usize) {
+    let mut depth = 0_usize;
+    let mut i = equals;
+    while i > open + 1 {
+        i -= 1;
+        match bytes[i] {
+            b')' | b']' | b'}' => depth += 1,
+            b'(' | b'[' | b'{' => {
+                if depth == 0 {
+                    return (i + 1, equals);
+                }
+                depth -= 1;
+            }
+            b',' if depth == 0 => return (i + 1, equals),
+            _ => {}
+        }
+    }
+    (open + 1, equals)
+}
+
+/// Byte range of the `=` operand after `equals`: forward to the enclosing
+/// `)`/top-level `,`.
+fn operand_after(bytes: &[u8], equals: usize, close: usize) -> (usize, usize) {
+    let mut depth = 0_usize;
+    let mut j = equals + 1;
+    while j < close {
+        match bytes[j] {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => {
+                if depth == 0 {
+                    return (equals + 1, j);
+                }
+                depth -= 1;
+            }
+            b',' if depth == 0 => return (equals + 1, j),
+            _ => {}
+        }
+        j += 1;
+    }
+    (equals + 1, close)
+}
+
+/// `(name_start, name)` when the trimmed operand is exactly one ignored
+/// variable (`_`, `_user`); `None` for patterns, calls, pins and fields.
+fn bare_ignored_var(operand: &[u8], base: usize) -> Option<(usize, String)> {
+    let mut start = 0_usize;
+    while start < operand.len() && operand[start].is_ascii_whitespace() {
+        start += 1;
+    }
+    let mut end = operand.len();
+    while end > start && operand[end - 1].is_ascii_whitespace() {
+        end -= 1;
+    }
+    if end == start || operand[start] != b'_' {
+        return None;
+    }
+    // ASCII-only scan, so `base + start..base + end` is a char boundary range.
+    if operand[start..end].iter().all(|byte| is_var_byte(*byte)) {
+        String::from_utf8(operand[start..end].to_vec())
+            .ok()
+            .map(|name| (base + start, name))
+    } else {
+        None
+    }
 }
 
 fn issue(line_no: usize, start: usize, name: String) -> Finding {
@@ -138,64 +210,6 @@ fn issue(line_no: usize, start: usize, name: String) -> Finding {
         "Function parameter has a pattern match but is immediately ignored.",
         name,
     )
-}
-
-/// Identifier ending just before `pos` (skipping blanks); returns byte start.
-fn ident_before(bytes: &[u8], pos: usize) -> Option<(usize, String)> {
-    let mut end = pos;
-    while end > 0 && bytes[end - 1].is_ascii_whitespace() {
-        end -= 1;
-    }
-    let mut start = end;
-    while start > 0 && is_var_byte(bytes[start - 1]) {
-        start -= 1;
-    }
-    if start == end {
-        return None;
-    }
-    // ASCII-only scan, so `start..end` is a char boundary range.
-    String::from_utf8(bytes[start..end].to_vec())
-        .ok()
-        .map(|name| (start, name))
-}
-
-/// Identifier starting just after `pos` (skipping blanks); returns byte start.
-fn ident_after(bytes: &[u8], pos: usize, close: usize) -> Option<(usize, String)> {
-    let mut start = pos + 1;
-    while start < close && bytes[start].is_ascii_whitespace() {
-        start += 1;
-    }
-    let mut end = start;
-    while end < close && is_var_byte(bytes[end]) {
-        end += 1;
-    }
-    if start == end {
-        return None;
-    }
-    String::from_utf8(bytes[start..end].to_vec())
-        .ok()
-        .map(|name| (start, name))
-}
-
-/// A bare `_var` cannot follow `.`, `:`, `@`, or `&` (atom, field, capture).
-fn var_start_ok(bytes: &[u8], start: usize) -> bool {
-    if start == 0 {
-        return true;
-    }
-    let prev = bytes[start - 1];
-    prev != b'.' && prev != b':' && prev != b'@' && prev != b'&'
-}
-
-/// A bare `_var` cannot open a call (`_f(`) or a dot access (`_m.field`).
-fn var_end_ok(bytes: &[u8], end: usize) -> bool {
-    if end >= bytes.len() {
-        return true;
-    }
-    bytes[end] != b'(' && bytes[end] != b'.'
-}
-
-fn is_ignored_var(name: &str) -> bool {
-    name.starts_with('_')
 }
 
 fn is_var_byte(byte: u8) -> bool {
@@ -269,5 +283,21 @@ mod tests {
     #[test]
     fn map_arrow_is_not_a_match() {
         assert!(check_prepared(&crate::batch::Prepared::lazy("  def f(%{a: x}) do\n")).is_empty());
+    }
+    #[test]
+    fn concat_pattern_side_is_not_a_bare_var() {
+        // Triage: `"lib/" <> _ = path` — neither whole `=` side is bare.
+        assert!(
+            check_prepared(&crate::batch::Prepared::lazy(
+                "  defp check_path_mapping(\"lib/\" <> _ = path, name) do\n"
+            ))
+            .is_empty()
+        );
+        assert!(
+            check_prepared(&crate::batch::Prepared::lazy(
+                "  defp check_path_mapping(\"test/\" <> _ = path, name) do\n"
+            ))
+            .is_empty()
+        );
     }
 }

@@ -32,8 +32,12 @@ pub fn param_usize(params: &BTreeMap<String, String>, key: &str, default: usize)
 
 /// Mask strings, chars, and comments with spaces (preserving newlines and
 /// byte length for ASCII delimiters). This lets text checks ignore `;`, `,`,
-/// `#`, TODO, etc. inside literals. It is an approximation: sigils, heredocs
-/// with custom delimiters, and escapes are handled on a best-effort basis.
+/// `#`, TODO, etc. inside literals. `#{...}` interpolation inside `"..."`,
+/// `'...'`, heredocs, and lowercase sigils is real code, so it is masked
+/// recursively (literal parts blanked, code kept) rather than blanked whole;
+/// uppercase sigils never interpolate and stay fully blanked. It is an
+/// approximation: custom-delimiter heredocs and escapes are handled on a
+/// best-effort basis.
 #[allow(
     clippy::too_many_lines,
     clippy::cognitive_complexity,
@@ -44,29 +48,7 @@ pub fn mask_strings_comments(source: &str) -> String {
     let bytes = source.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0_usize;
-    let mut heredoc: Option<String> = None;
     while i < bytes.len() {
-        // Inside a heredoc: copy until closing delimiter line.
-        if let Some(delim) = heredoc.clone() {
-            if source[i..].starts_with(&delim) {
-                for _ in 0..delim.len() {
-                    out.push(bytes[i]);
-                    i += 1;
-                }
-                heredoc = None;
-                continue;
-            }
-            let b = bytes[i];
-            if b == b'\n' {
-                out.push(b);
-            } else {
-                out.push(b' ');
-            }
-            // Advance by UTF-8 char length.
-            let ch_len = utf8_len(source, i);
-            i += ch_len;
-            continue;
-        }
         // Line comment.
         if bytes[i] == b'#' {
             while i < bytes.len() && bytes[i] != b'\n' {
@@ -82,91 +64,23 @@ pub fn mask_strings_comments(source: &str) -> String {
                 out.push(bytes[i]);
                 i += 1;
             }
-            heredoc = Some(delim);
+            mask_heredoc_body(source, bytes, &mut out, &mut i, &delim);
             continue;
         }
         // Sigils: `~name<open>...<close>` with escapes, nesting bracket
         // pairs and triple-quoted heredoc forms (`~s"""..."""`).
         if bytes[i] == b'~' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_alphabetic() {
-            let mut name_end = i + 1;
-            while name_end < bytes.len() && bytes[name_end].is_ascii_alphanumeric() {
-                name_end += 1;
-            }
-            if name_end < bytes.len() {
-                let open = bytes[name_end];
-                let triple = name_end + 2 < bytes.len()
-                    && bytes[name_end + 1] == open
-                    && bytes[name_end + 2] == open
-                    && (open == b'"' || open == b'\'');
-                // Copy `~name` verbatim so later scans still see it.
-                for byte in &bytes[i..name_end] {
-                    out.push(*byte);
-                }
-                i = name_end;
-                if triple {
-                    for _ in 0..3 {
-                        out.push(bytes[i]);
-                        i += 1;
-                    }
-                    mask_until_triple(source, bytes, &mut out, &mut i, open);
-                } else if let Some(close) = sigil_close(open) {
-                    out.push(open);
-                    i += 1;
-                    mask_until_sigil_end(source, bytes, &mut out, &mut i, (open, close));
-                }
-                continue;
-            }
+            mask_sigil(source, bytes, &mut out, &mut i);
+            continue;
         }
         // Double-quoted string.
         if bytes[i] == b'"' {
-            out.push(b'"');
-            i += 1;
-            while i < bytes.len() {
-                if bytes[i] == b'\\' && i + 1 < bytes.len() {
-                    out.push(b' ');
-                    out.push(b' ');
-                    i += escape_len(source, i);
-                    continue;
-                }
-                if bytes[i] == b'"' {
-                    out.push(b'"');
-                    i += 1;
-                    break;
-                }
-                if bytes[i] == b'\n' {
-                    out.push(b'\n');
-                    i += 1;
-                } else {
-                    out.push(b' ');
-                    i += utf8_len(source, i);
-                }
-            }
+            mask_quoted(source, bytes, &mut out, &mut i, b'"');
             continue;
         }
         // Single-quoted charlist.
         if bytes[i] == b'\'' {
-            out.push(b'\'');
-            i += 1;
-            while i < bytes.len() {
-                if bytes[i] == b'\\' && i + 1 < bytes.len() {
-                    out.push(b' ');
-                    out.push(b' ');
-                    i += escape_len(source, i);
-                    continue;
-                }
-                if bytes[i] == b'\'' {
-                    out.push(b'\'');
-                    i += 1;
-                    break;
-                }
-                if bytes[i] == b'\n' {
-                    out.push(b'\n');
-                    i += 1;
-                } else {
-                    out.push(b' ');
-                    i += utf8_len(source, i);
-                }
-            }
+            mask_quoted(source, bytes, &mut out, &mut i, b'\'');
             continue;
         }
         // `?x` char literal: mask both characters, but only where an expression
@@ -195,6 +109,11 @@ pub fn mask_strings_comments(source: &str) -> String {
     String::from_utf8(out).unwrap_or_else(|_| source.to_owned())
 }
 
+/// Byte that can continue an Elixir identifier (ASCII subset).
+fn is_name_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'?' || byte == b'!'
+}
+
 /// Length in bytes of the two-character escape starting at byte `i`
 /// (backslash plus one character, which may be multibyte). Masking pushes two
 /// spaces for the two characters, preserving char alignment.
@@ -202,6 +121,213 @@ fn escape_len(source: &str, i: usize) -> usize {
     1 + utf8_len(source, i + 1)
 }
 
+/// Mask one `"..."`/`'...'` literal starting at its opener: the delimiters
+/// are copied verbatim, literal content is blanked, and `#{...}`
+/// interpolation is masked recursively as code so nested quotes cannot
+/// desync the outer string.
+fn mask_quoted(source: &str, bytes: &[u8], out: &mut Vec<u8>, i: &mut usize, quote: u8) {
+    out.push(quote);
+    *i += 1;
+    while *i < bytes.len() {
+        if bytes[*i] == b'\\' && *i + 1 < bytes.len() {
+            out.push(b' ');
+            out.push(b' ');
+            *i += escape_len(source, *i);
+            continue;
+        }
+        if source[*i..].starts_with("#{") {
+            out.push(b'#');
+            out.push(b'{');
+            *i += 2;
+            mask_interp_code(source, bytes, out, i);
+            continue;
+        }
+        if bytes[*i] == quote {
+            out.push(quote);
+            *i += 1;
+            return;
+        }
+        if bytes[*i] == b'\n' {
+            out.push(b'\n');
+            *i += 1;
+        } else {
+            out.push(b' ');
+            *i += utf8_len(source, *i);
+        }
+    }
+}
+
+/// Mask a heredoc body until its closing delimiter: content is blanked while
+/// `#{...}` interpolation is masked recursively as code.
+fn mask_heredoc_body(source: &str, bytes: &[u8], out: &mut Vec<u8>, i: &mut usize, delim: &str) {
+    while *i < bytes.len() {
+        if source[*i..].starts_with(delim) {
+            for _ in 0..delim.len() {
+                out.push(bytes[*i]);
+                *i += 1;
+            }
+            return;
+        }
+        if source[*i..].starts_with("#{") {
+            out.push(b'#');
+            out.push(b'{');
+            *i += 2;
+            mask_interp_code(source, bytes, out, i);
+            continue;
+        }
+        if bytes[*i] == b'\\' && *i + 1 < bytes.len() {
+            out.push(b' ');
+            out.push(b' ');
+            *i += escape_len(source, *i);
+            continue;
+        }
+        if bytes[*i] == b'\n' {
+            out.push(b'\n');
+            *i += 1;
+        } else {
+            out.push(b' ');
+            *i += utf8_len(source, *i);
+        }
+    }
+}
+
+/// How to mask one sigil body: its delimiters plus whether `#{...}`
+/// interpolates (lowercase sigils) or stays fully literal (uppercase).
+#[derive(Clone, Copy)]
+struct SigilBody {
+    open: u8,
+    close: u8,
+    interpolate: bool,
+}
+/// Mask the sigil starting at `*i` (`~name<open>...<close>`): `~name` and the
+/// delimiters are copied verbatim, the body is blanked. Lowercase sigils
+/// interpolate, so their `#{...}` code is masked recursively; uppercase
+/// sigils are fully literal.
+fn mask_sigil(source: &str, bytes: &[u8], out: &mut Vec<u8>, i: &mut usize) {
+    let start = *i;
+    let mut name_end = start + 1;
+    while name_end < bytes.len() && bytes[name_end].is_ascii_alphanumeric() {
+        name_end += 1;
+    }
+    // Copy `~name` verbatim so later scans still see it.
+    for byte in &bytes[start..name_end] {
+        out.push(*byte);
+    }
+    *i = name_end;
+    if name_end >= bytes.len() {
+        return;
+    }
+    let interpolate = bytes[start + 1].is_ascii_lowercase();
+    let open = bytes[name_end];
+    let triple = name_end + 2 < bytes.len()
+        && bytes[name_end + 1] == open
+        && bytes[name_end + 2] == open
+        && (open == b'"' || open == b'\'');
+    if triple {
+        for _ in 0..3 {
+            out.push(bytes[*i]);
+            *i += 1;
+        }
+        mask_until_triple(
+            source,
+            bytes,
+            out,
+            i,
+            SigilBody {
+                open,
+                close: open,
+                interpolate,
+            },
+        );
+    } else if let Some(close) = sigil_close(open) {
+        out.push(open);
+        *i += 1;
+        mask_until_sigil_end(
+            source,
+            bytes,
+            out,
+            i,
+            SigilBody {
+                open,
+                close,
+                interpolate,
+            },
+        );
+    }
+}
+
+/// Mask interpolation code after `#{` until its closing `}`: code is copied
+/// verbatim while nested literals, comments, sigils, and further
+/// interpolations are masked, tracking `{`/`}` nesting so the true closer
+/// (not a quote or brace inside a nested literal) ends the scan.
+#[allow(
+    clippy::too_many_lines,
+    clippy::cognitive_complexity,
+    reason = "single interpolation scanner mirroring the top-level masker states; splitting would duplicate literal handling"
+)]
+fn mask_interp_code(source: &str, bytes: &[u8], out: &mut Vec<u8>, i: &mut usize) {
+    let mut depth = 1_usize;
+    while *i < bytes.len() && depth > 0 {
+        if source[*i..].starts_with("#{") {
+            out.push(b'#');
+            out.push(b'{');
+            *i += 2;
+            depth += 1;
+            continue;
+        }
+        if bytes[*i] == b'#' {
+            while *i < bytes.len() && bytes[*i] != b'\n' {
+                out.push(b' ');
+                *i += utf8_len(source, *i);
+            }
+            continue;
+        }
+        if source[*i..].starts_with("\"\"\"") || source[*i..].starts_with("'''") {
+            let delim = source[*i..*i + 3].to_owned();
+            for _ in 0..3 {
+                out.push(bytes[*i]);
+                *i += 1;
+            }
+            mask_heredoc_body(source, bytes, out, i, &delim);
+            continue;
+        }
+        if bytes[*i] == b'"' {
+            mask_quoted(source, bytes, out, i, b'"');
+            continue;
+        }
+        if bytes[*i] == b'\'' {
+            mask_quoted(source, bytes, out, i, b'\'');
+            continue;
+        }
+        if bytes[*i] == b'~' && *i + 1 < bytes.len() && bytes[*i + 1].is_ascii_alphabetic() {
+            mask_sigil(source, bytes, out, i);
+            continue;
+        }
+        if skip_char_literal(source, bytes, *i).is_some() {
+            out.push(b' ');
+            out.push(b' ');
+            *i += escape_len(source, *i);
+            continue;
+        }
+        if bytes[*i] == b'{' {
+            out.push(b'{');
+            *i += 1;
+            depth += 1;
+            continue;
+        }
+        if bytes[*i] == b'}' {
+            out.push(b'}');
+            *i += 1;
+            depth -= 1;
+            continue;
+        }
+        // Any other byte is code: copy it whole so later indexes stay on
+        // UTF-8 boundaries (newlines pass through, preserving line layout).
+        let len = utf8_len(source, *i);
+        out.extend_from_slice(&bytes[*i..*i + len]);
+        *i += len;
+    }
+}
 /// Matching closer for a sigil opener, if it opens a sigil span.
 fn sigil_close(open: u8) -> Option<u8> {
     match open {
@@ -215,7 +341,14 @@ fn sigil_close(open: u8) -> Option<u8> {
 }
 
 /// Mask a triple-quoted sigil body; the closing triple is copied verbatim.
-fn mask_until_triple(source: &str, bytes: &[u8], out: &mut Vec<u8>, i: &mut usize, delimiter: u8) {
+/// Lowercase (`interpolate`) sigils mask `#{...}` code recursively.
+fn mask_until_triple(
+    source: &str,
+    bytes: &[u8],
+    out: &mut Vec<u8>,
+    i: &mut usize,
+    body: SigilBody,
+) {
     while *i < bytes.len() {
         if bytes[*i] == b'\\' && *i + 1 < bytes.len() {
             out.push(b' ');
@@ -223,10 +356,17 @@ fn mask_until_triple(source: &str, bytes: &[u8], out: &mut Vec<u8>, i: &mut usiz
             *i += escape_len(source, *i);
             continue;
         }
+        if body.interpolate && source[*i..].starts_with("#{") {
+            out.push(b'#');
+            out.push(b'{');
+            *i += 2;
+            mask_interp_code(source, bytes, out, i);
+            continue;
+        }
         if *i + 2 < bytes.len()
-            && bytes[*i] == delimiter
-            && bytes[*i + 1] == delimiter
-            && bytes[*i + 2] == delimiter
+            && bytes[*i] == body.open
+            && bytes[*i + 1] == body.open
+            && bytes[*i + 2] == body.open
         {
             for _ in 0..3 {
                 out.push(bytes[*i]);
@@ -245,15 +385,16 @@ fn mask_until_triple(source: &str, bytes: &[u8], out: &mut Vec<u8>, i: &mut usiz
 }
 
 /// Mask a sigil body; brackets nest, other delimiters end at the first
-/// unescaped closer. The closer is copied verbatim.
+/// unescaped closer. The closer is copied verbatim. Lowercase (`interpolate`)
+/// sigils mask `#{...}` code recursively.
 fn mask_until_sigil_end(
     source: &str,
     bytes: &[u8],
     out: &mut Vec<u8>,
     i: &mut usize,
-    delimiters: (u8, u8),
+    body: SigilBody,
 ) {
-    let (open, close) = delimiters;
+    let (open, close) = (body.open, body.close);
     let nested = open != close;
     let mut depth = 0_usize;
     while *i < bytes.len() {
@@ -261,6 +402,13 @@ fn mask_until_sigil_end(
             out.push(b' ');
             out.push(b' ');
             *i += escape_len(source, *i);
+            continue;
+        }
+        if body.interpolate && source[*i..].starts_with("#{") {
+            out.push(b'#');
+            out.push(b'{');
+            *i += 2;
+            mask_interp_code(source, bytes, out, i);
             continue;
         }
         if nested && bytes[*i] == open {
@@ -505,9 +653,60 @@ pub fn comments(source: &str) -> Vec<(usize, usize, String)> {
     result
 }
 
-/// Byte that can continue an Elixir identifier (ASCII subset).
-fn is_name_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'?' || byte == b'!'
+/// Blank `#{...}` interpolation spans (balanced, newlines preserved).
+/// Most kernels want interpolation code visible (it is real code), but a
+/// few checks (e.g. ABC size) ignore string interpolation like upstream.
+#[must_use]
+pub fn mask_interpolation(source: &str) -> String {
+    let bytes = source.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0_usize;
+    while i < bytes.len() {
+        if bytes[i] == b'#' && bytes.get(i + 1) == Some(&b'{') && (i == 0 || bytes[i - 1] != b'\\')
+        {
+            let mut depth = 0_usize;
+            let mut j = i + 1;
+            while j < bytes.len() {
+                match bytes[j] {
+                    b'"' | b'\'' => {
+                        let quote = bytes[j];
+                        j += 1;
+                        while j < bytes.len() && bytes[j] != quote {
+                            if bytes[j] == b'\\' {
+                                j += 1;
+                            }
+                            j += 1;
+                        }
+                        j += 1;
+                    }
+                    b'{' => {
+                        depth += 1;
+                        j += 1;
+                    }
+                    b'}' => {
+                        depth -= 1;
+                        j += 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    _ => j += 1,
+                }
+            }
+            out.extend(
+                bytes[i..j.min(bytes.len())].iter().map(
+                    |byte| {
+                        if *byte == b'\n' { b'\n' } else { b' ' }
+                    },
+                ),
+            );
+            i = j.min(bytes.len());
+            continue;
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| source.to_owned())
 }
 
 /// Find function/macro definitions `def name`, `defp name`, etc.
@@ -699,6 +898,59 @@ mod tests {
         assert!(comments("x = ?#\n").is_empty());
     }
 
+    #[test]
+    fn mask_preserves_double_string_interpolation() {
+        // CAP-A/AU-A: `#{...}` is code, not string content.
+        let masked = mask_strings_comments("x = \"sum #{Enum.map_join(a, b)}\"\n");
+        assert!(masked.contains("Enum.map_join"));
+    }
+
+    #[test]
+    fn mask_preserves_charlist_interpolation() {
+        let masked = mask_strings_comments("x = 'sum #{Foo.Bar.baz()}'\n");
+        assert!(masked.contains("Foo.Bar"));
+    }
+
+    #[test]
+    fn mask_preserves_nested_interpolation() {
+        let masked = mask_strings_comments("x = \"outer #{\"inner #{y + 1}\"} done\"\n");
+        assert!(masked.contains("y + 1"));
+    }
+
+    #[test]
+    fn mask_keeps_escaped_interpolation_blanked() {
+        let masked = mask_strings_comments("x = \"literal \\#{not_code}\"\n");
+        assert!(!masked.contains("not_code"));
+    }
+
+    #[test]
+    fn mask_keeps_quote_state_after_quotes_in_interpolation() {
+        // CAP-B/AU-B cocktail: quotes nested inside interpolation must not
+        // desync the outer string; later code lines stay visible.
+        let src = "x = \"'#{f(a, \"'\", \"''\")}'\"\ny = Enum.map(z, & &1)\n";
+        let masked = mask_strings_comments(src);
+        assert!(masked.contains("& &1"), "masked was: {masked:?}");
+        assert!(!masked.contains("''"));
+    }
+
+    #[test]
+    fn mask_preserves_heredoc_interpolation() {
+        let masked = mask_strings_comments("x = \"\"\"\nhello #{Foo.Bar.baz()}\n\"\"\"\n");
+        assert!(masked.contains("Foo.Bar"));
+    }
+
+    #[test]
+    fn mask_preserves_lowercase_sigil_interpolation() {
+        let masked = mask_strings_comments("x = ~s[hello #{Foo.Bar.baz()}]\n");
+        assert!(masked.contains("Foo.Bar"));
+    }
+
+    #[test]
+    fn mask_keeps_uppercase_sigil_blanked() {
+        let masked = mask_strings_comments("x = ~S[hello #{not_code}]\n");
+        assert!(!masked.contains("not_code"));
+    }
+
     fn bool_params(value: &str) -> BTreeMap<String, String> {
         BTreeMap::from([("flag".to_owned(), value.to_owned())])
     }
@@ -717,5 +969,18 @@ mod tests {
     fn missing_bool_params_use_the_default() {
         assert!(param_bool(&BTreeMap::new(), "flag", true));
         assert!(!param_bool(&BTreeMap::new(), "flag", false));
+    }
+
+    #[test]
+    fn interpolation_blanks_balanced_spans() {
+        assert_eq!(
+            mask_interpolation("x = \"#{f(a)}?#{g(b)}\"\n"),
+            "x = \"       ?       \"\n"
+        );
+        // Newlines survive so line numbers hold.
+        assert_eq!(
+            mask_interpolation("x = \"#{\nfoo}\"\n"),
+            "x = \"  \n    \"\n"
+        );
     }
 }

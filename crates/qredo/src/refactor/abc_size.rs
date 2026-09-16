@@ -1,4 +1,4 @@
-use crate::Finding;
+use crate::{Finding, helpers};
 use std::collections::BTreeMap;
 
 const ECTO_IMPORT: [&str; 4] = ["where", "from", "select", "join"];
@@ -12,14 +12,18 @@ pub(crate) fn check_prepared(
     let max_size: f64 = max_raw.parse().unwrap_or(30.0);
     let mut excluded = parse_string_list(params.get("excluded_functions"));
     let masked = prepared.masked();
-    if has_ecto_import(masked) {
+    // Upstream ignores string interpolation (`traverse_abc({:<<>>, _, _})`
+    // drops binaries); blank it after masking (which keeps code visible
+    // for other checks).
+    let masked = helpers::mask_interpolation(masked);
+    if has_ecto_import(&masked) {
         for fun in ECTO_IMPORT {
             if !excluded.contains(&fun.to_owned()) {
                 excluded.push(fun.to_owned());
             }
         }
     }
-    let pruned = prune_calls(masked, &excluded);
+    let pruned = prune_calls(&masked, &excluded);
     let lines: Vec<&str> = pruned.split('\n').collect();
     let depths = line_depths(&lines);
     let mut findings = Vec::new();
@@ -35,7 +39,7 @@ pub(crate) fn check_prepared(
             continue;
         }
         let body = def_body(&lines, &depths, idx);
-        let (assignments, branches, conditions) = count_abc(&body, def_params(trimmed));
+        let (assignments, branches, conditions) = count_abc(&body, def_params(&lines, idx));
         #[allow(
             clippy::cast_precision_loss,
             reason = "ABC counts grow with source length; precision loss only affects gigantic inputs"
@@ -47,7 +51,7 @@ pub(crate) fn check_prepared(
             findings.push(
                 Finding::with_trigger(
                     idx + 1,
-                    credo_column(&masked_line(masked, idx), &name),
+                    credo_column(&masked_line(&masked, idx), &name),
                     format!("Function is too complex (ABC size is {size:.0}, max is {max_raw})."),
                     name,
                 )
@@ -145,6 +149,8 @@ fn prune_calls(masked: &str, excluded: &[String]) -> String {
             if masked.get(idx..).is_some_and(|rest| rest.starts_with(name))
                 && word_boundary(masked.as_bytes(), idx)
                 && word_boundary(masked.as_bytes(), idx + name.len())
+                && !continues_value(masked.as_bytes(), idx)
+                && call_like_follows(masked, idx + name.len())
             {
                 let paren = skip_ws(masked, idx + name.len());
                 if masked.as_bytes().get(paren) == Some(&b'(')
@@ -154,11 +160,91 @@ fn prune_calls(masked: &str, excluded: &[String]) -> String {
                     idx = close + 1;
                     continue;
                 }
+                // Paren-less call (`from x in T, where: ...`): blank the
+                // statement through comma/bracket continuations. Upstream
+                // prunes the whole call including arguments.
+                let stop = bare_call_end(masked, idx).max(idx + 1);
+                blank_range(&mut out, masked, idx, stop);
+                idx = stop;
+                continue;
             }
             idx += 1;
         }
     }
     String::from_utf8(out).unwrap_or_else(|_| masked.to_owned())
+}
+
+/// Whether the name continues a value (`x.from`, `:from`, `@from`): never
+/// an excluded call head.
+fn continues_value(bytes: &[u8], idx: usize) -> bool {
+    idx > 0 && matches!(bytes[idx - 1], b'.' | b':' | b'@')
+}
+
+/// Whether a call follows the name: a word character, quote, sigil or
+/// opening bracket (a bare variable of the same spelling is not a call).
+fn call_like_follows(masked: &str, mut idx: usize) -> bool {
+    let bytes = masked.as_bytes();
+    while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
+        idx += 1;
+    }
+    bytes.get(idx).is_some_and(|byte| {
+        byte.is_ascii_alphanumeric()
+            || matches!(byte, b'_' | b'"' | b'\'' | b'~' | b'(' | b'[' | b'{')
+    })
+}
+
+/// End of a paren-less excluded call: newlines end it unless brackets are
+/// open or the line continues with `,`; `|>` pipes, `;`, stray closers
+/// and block `do`/`fn`/`end` (blanking those would corrupt depth tracking)
+/// end it too.
+fn bare_call_end(text: &str, from: usize) -> usize {
+    let bytes = text.as_bytes();
+    let mut depth = 0_i64;
+    let mut idx = from;
+    let mut line_start = from;
+    while idx < bytes.len() {
+        match bytes[idx] {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => {
+                if depth == 0 {
+                    return idx;
+                }
+                depth -= 1;
+            }
+            b';' if depth == 0 => return idx,
+            b'\n' => {
+                if depth == 0 && !text.get(line_start..idx).is_some_and(ends_comma) {
+                    return idx;
+                }
+                line_start = idx + 1;
+            }
+            _ => {}
+        }
+        if depth == 0 && is_block_word(text, idx) {
+            return idx;
+        }
+        if depth == 0 && text.get(idx..).is_some_and(|rest| rest.starts_with("|>")) {
+            return idx;
+        }
+        idx += 1;
+    }
+    bytes.len()
+}
+
+/// Whether the line continues onto the next one (trailing comma).
+fn ends_comma(line: &str) -> bool {
+    line.trim_end().ends_with(',')
+}
+
+/// Whether a block `do`/`fn`/`end` (never `do:`) starts at `idx`.
+fn is_block_word(text: &str, idx: usize) -> bool {
+    let bytes = text.as_bytes();
+    ["do", "fn", "end"].iter().any(|word| {
+        text.get(idx..).is_some_and(|rest| rest.starts_with(word))
+            && word_boundary(bytes, idx)
+            && word_boundary(bytes, idx + word.len())
+            && bytes.get(idx + word.len()) != Some(&b':')
+    })
 }
 
 fn blank_range(out: &mut [u8], masked: &str, start: usize, end: usize) {
@@ -226,10 +312,80 @@ fn def_body(lines: &[&str], depths: &[usize], from: usize) -> String {
         return line.get(pos + 5..).unwrap_or("").to_owned();
     }
     if depth_after(lines, depths, from) == depths[from] {
+        // No block opens on the head line: a one-liner body, or a
+        // continued head whose body starts after a later `do`.
+        if let Some(open) = block_opener(lines, depths, from) {
+            let end = span_end(lines, depths, open);
+            return lines.get((open + 1)..=end).unwrap_or(&[]).join("\n");
+        }
         return inline_body(line);
     }
     let end = span_end(lines, depths, from);
     lines.get((from + 1)..=end).unwrap_or(&[]).join("\n")
+}
+
+/// First later line opening a continued head's block, if the head at
+/// `from` keeps going below its first line.
+fn block_opener(lines: &[&str], depths: &[usize], from: usize) -> Option<usize> {
+    if !head_continued(lines[from]) {
+        return None;
+    }
+    let mut idx = from + 1;
+    while idx < lines.len() {
+        if depth_after(lines, depths, idx) > depths[idx] {
+            return Some(idx);
+        }
+        if depths[idx] < depths[from] {
+            return None;
+        }
+        idx += 1;
+    }
+    None
+}
+
+/// Whether the head line continues below: unbalanced brackets, a trailing
+/// comma, or a trailing operator.
+fn head_continued(line: &str) -> bool {
+    let mut depth = 0_i64;
+    for byte in line.bytes() {
+        match byte {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth -= 1,
+            _ => {}
+        }
+    }
+    if depth > 0 {
+        return true;
+    }
+    let trimmed = line.trim_end();
+    if trimmed.ends_with(',') {
+        return true;
+    }
+    if trimmed.as_bytes().last().is_some_and(|byte| {
+        matches!(
+            byte,
+            b'+' | b'-'
+                | b'*'
+                | b'/'
+                | b'|'
+                | b'<'
+                | b'>'
+                | b'='
+                | b'!'
+                | b'~'
+                | b'&'
+                | b'^'
+                | b'%'
+                | b':'
+                | b'.'
+        )
+    }) {
+        return true;
+    }
+    trimmed
+        .split_whitespace()
+        .last()
+        .is_some_and(|word| matches!(word, "and" | "or" | "not" | "in"))
 }
 
 fn span_end(lines: &[&str], depths: &[usize], from: usize) -> usize {
@@ -272,18 +428,66 @@ fn bare_do_end(line: &str) -> Option<usize> {
     None
 }
 
-/// Simple parameter names from the head line (destructured heads contribute none).
-fn def_params(trimmed: &str) -> Vec<String> {
-    let Some(open) = trimmed.find('(') else {
+/// Parameter names from the (possibly multi-line) head at `from`.
+/// Guarded heads scope nothing upstream (`when` hides every parameter);
+/// destructured heads contribute none.
+fn def_params(lines: &[&str], from: usize) -> Vec<String> {
+    let head = head_text(lines, from);
+    if has_guard(&head) {
+        return Vec::new();
+    }
+    let Some(open) = head.find('(') else {
         return Vec::new();
     };
-    let Some(close) = match_paren(trimmed, open) else {
+    let Some(close) = match_paren(&head, open) else {
         return Vec::new();
     };
-    split_args(trimmed.get(open + 1..close).unwrap_or(""))
+    split_args(head.get(open + 1..close).unwrap_or(""))
         .into_iter()
         .filter_map(|part| bare_ident(part.trim()))
         .collect()
+}
+
+/// Head lines at `from`, joined while brackets stay open.
+fn head_text(lines: &[&str], from: usize) -> String {
+    let mut text = lines[from].to_owned();
+    let mut depth = bracket_depth(&text);
+    let mut idx = from;
+    while depth > 0 && idx + 1 < lines.len() && idx - from < 32 {
+        idx += 1;
+        text.push('\n');
+        text.push_str(lines[idx]);
+        depth += bracket_depth(lines[idx]);
+    }
+    text
+}
+
+fn bracket_depth(line: &str) -> i64 {
+    let mut depth = 0_i64;
+    for byte in line.bytes() {
+        match byte {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth -= 1,
+            _ => {}
+        }
+    }
+    depth
+}
+
+/// Whether the head carries a `when` guard clause.
+fn has_guard(head: &str) -> bool {
+    let bytes = head.as_bytes();
+    let mut idx = 0_usize;
+    while idx + 4 <= bytes.len() {
+        if head.get(idx..).is_some_and(|rest| rest.starts_with("when"))
+            && word_boundary(bytes, idx)
+            && word_boundary(bytes, idx + 4)
+        {
+            return true;
+        }
+        idx += 1;
+    }
+    false
 }
 
 fn split_args(inside: &str) -> Vec<&str> {
@@ -334,9 +538,10 @@ fn saturated_squares(assignments: usize, branches: usize, conditions: usize) -> 
 
 /// `(assignments, branches, conditions)` over the function body.
 fn count_abc(body: &str, params: Vec<String>) -> (usize, usize, usize) {
+    let body = blank_bitstrings(body);
     let mut scope = params;
-    collect_scope(body, &mut scope);
-    let ranges = lhs_ranges(body);
+    collect_scope(&body, &mut scope);
+    let ranges = lhs_ranges(&body);
     let mut counter = Counter {
         scope: &scope,
         ranges: &ranges,
@@ -344,8 +549,77 @@ fn count_abc(body: &str, params: Vec<String>) -> (usize, usize, usize) {
         branches: 0,
         conditions: 0,
     };
-    counter.scan(body);
+    counter.scan(&body);
     (counter.assignments, counter.branches, counter.conditions)
+}
+
+/// Blank balanced `<<...>>` bitstring spans: upstream prunes them before
+/// traversal. A `<<` continuing an expression (`a << b`) is a bit-shift
+/// operator and is left alone.
+fn blank_bitstrings(body: &str) -> String {
+    let bytes = body.as_bytes();
+    let mut out = body.as_bytes().to_vec();
+    let mut idx = 0_usize;
+    while idx < bytes.len() {
+        if bytes[idx] == b'<'
+            && bytes.get(idx + 1) == Some(&b'<')
+            && !continues_expression(bytes, idx)
+        {
+            let mut depth = 0_usize;
+            let mut close = idx;
+            while close + 1 < bytes.len() {
+                if bytes[close] == b'<' && bytes.get(close + 1) == Some(&b'<') {
+                    depth += 1;
+                    close += 2;
+                } else if bytes[close] == b'>' && bytes.get(close + 1) == Some(&b'>') {
+                    depth -= 1;
+                    close += 2;
+                    if depth == 0 {
+                        break;
+                    }
+                } else {
+                    close += 1;
+                }
+            }
+            if depth == 0 {
+                blank_span(&mut out, idx, close);
+                idx = close;
+                continue;
+            }
+        }
+        idx += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| body.to_owned())
+}
+
+/// Whether `<<` at `idx` continues an expression (bit-shift): the previous
+/// non-blank byte on the same line can end a value.
+fn continues_expression(bytes: &[u8], idx: usize) -> bool {
+    let mut back = idx;
+    while back > 0 {
+        back -= 1;
+        if bytes[back] == b'\n' {
+            return false;
+        }
+        if !bytes[back].is_ascii_whitespace() {
+            return bytes[back].is_ascii_alphanumeric()
+                || matches!(
+                    bytes[back],
+                    b'_' | b'?' | b'!' | b')' | b']' | b'}' | b'"' | b'\''
+                );
+        }
+    }
+    false
+}
+
+/// Spaces (newlines kept) over `[start, end)`.
+fn blank_span(out: &mut [u8], start: usize, end: usize) {
+    let len = out.len();
+    for slot in &mut out[start..end.min(len)] {
+        if *slot != b'\n' {
+            *slot = b' ';
+        }
+    }
 }
 
 /// All assignment target ranges in the body.
@@ -364,12 +638,16 @@ fn lhs_ranges(body: &str) -> Vec<(usize, usize)> {
 }
 
 /// Assigned names and `->` head variables enter the variable scope.
+/// `=` inside a `->` head never scopes (its whole head is discarded
+/// upstream), so those are skipped via their head spans.
 fn collect_scope(body: &str, scope: &mut Vec<String>) {
+    let heads = arrow_head_spans(body);
     let bytes = body.as_bytes();
     let mut idx = 0_usize;
     while idx < bytes.len() {
         if is_plain_assign(body, idx) {
-            if let Some((start, end)) = lhs_range(body, idx)
+            if !heads.iter().any(|(start, end)| *start <= idx && idx < *end)
+                && let Some((start, end)) = lhs_range(body, idx)
                 && let Some(name) = bare_ident(body.get(start..end).unwrap_or(""))
                 && !scope.contains(&name)
             {
@@ -379,7 +657,8 @@ fn collect_scope(body: &str, scope: &mut Vec<String>) {
         } else if body.get(idx..).is_some_and(|rest| rest.starts_with("->"))
             && word_boundary(bytes, idx + 2)
         {
-            for name in head_vars(body_head_before(body, idx)) {
+            let start = head_start_idx(body, idx);
+            for name in head_vars(body.get(start..idx).unwrap_or("")) {
                 if !scope.contains(&name) {
                     scope.push(name);
                 }
@@ -391,7 +670,28 @@ fn collect_scope(body: &str, scope: &mut Vec<String>) {
     }
 }
 
-fn body_head_before(body: &str, arrow: usize) -> &str {
+/// `[head_start, arrow)` spans of every `->` in the body.
+fn arrow_head_spans(body: &str) -> Vec<(usize, usize)> {
+    let bytes = body.as_bytes();
+    let mut out = Vec::new();
+    let mut idx = 0_usize;
+    while idx + 2 <= bytes.len() {
+        if body.get(idx..).is_some_and(|rest| rest.starts_with("->"))
+            && word_boundary(bytes, idx + 2)
+        {
+            out.push((head_start_idx(body, idx), idx));
+            idx += 2;
+        } else {
+            idx += 1;
+        }
+    }
+    out
+}
+
+/// Start of the `->` head at `arrow`: back over balanced brackets and
+/// commas to an opening bracket, head keyword, `;` or newline. Commas
+/// never stop the scan: every `fn` parameter scopes.
+fn head_start_idx(body: &str, arrow: usize) -> usize {
     let bytes = body.as_bytes();
     let mut idx = arrow;
     let mut depth = 0_usize;
@@ -399,22 +699,20 @@ fn body_head_before(body: &str, arrow: usize) -> &str {
         idx -= 1;
         match bytes[idx] {
             b')' | b']' | b'}' => depth += 1,
-            b'(' | b'[' | b'{' | b',' | b'|' | b'=' => {
+            b'(' | b'[' | b'{' => {
                 if depth == 0 {
-                    return body.get(idx + 1..arrow).unwrap_or("");
+                    return idx + 1;
                 }
-                if !matches!(bytes[idx], b'=' | b',') {
-                    depth -= 1;
-                }
+                depth -= 1;
             }
-            b'\n' if depth == 0 => return body.get(idx + 1..arrow).unwrap_or(""),
+            b'\n' | b';' if depth == 0 => return idx + 1,
             _ => {}
         }
         if depth == 0 && is_head_stop(body, idx) {
-            return body.get(idx + 1..arrow).unwrap_or("");
+            return idx + 1;
         }
     }
-    body.get(..arrow).unwrap_or("")
+    0
 }
 
 fn is_head_stop(body: &str, idx: usize) -> bool {
@@ -437,6 +735,11 @@ fn is_head_stop(body: &str, idx: usize) -> bool {
 }
 
 fn head_vars(segment: &str) -> Vec<String> {
+    // A match head (`=` at depth zero) scopes nothing upstream: the
+    // whole head node maps to nil.
+    if has_top_assign(segment) {
+        return Vec::new();
+    }
     let trimmed = segment.trim();
     let inner = strip_paren_layer(trimmed).unwrap_or(trimmed);
     let mut out = Vec::new();
@@ -446,6 +749,20 @@ fn head_vars(segment: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// Whether the segment holds `=` outside brackets.
+fn has_top_assign(segment: &str) -> bool {
+    let mut depth = 0_usize;
+    for byte in segment.bytes() {
+        match byte {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth = depth.saturating_sub(1),
+            b'=' if depth == 0 => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 /// The `fn` argument parentheses enclosing the whole head, if present.
@@ -556,6 +873,8 @@ impl Counter<'_> {
         let bytes = body.as_bytes();
         let rest = body.get(*idx..).unwrap_or("");
         let mut matched: Option<&str> = None;
+        // `=>` pairs are plain tuples upstream: consumed, never counted.
+        // `->` stays a branch.
         for op in [
             "|>", "->", "<-", "=>", "==", "!=", "=~", "<=", ">=", "&&", "||", "<>", "++", "**",
             "//", "..",
@@ -566,7 +885,7 @@ impl Counter<'_> {
             }
         }
         if let Some(op) = matched {
-            if !matches!(op, "|>" | "==") {
+            if !matches!(op, "|>" | "==" | "=>") {
                 self.branches += 1;
             }
             *idx += op.len();
@@ -580,7 +899,21 @@ impl Counter<'_> {
             }
             return false;
         }
+        // `a["k"]` is `Access.get`: every other `[` opens a literal.
+        if byte == b'[' && is_index_target(body, *idx) {
+            self.branches += 1;
+            *idx += 1;
+            return true;
+        }
         if matches!(byte, b'%' | b'^' | b'#') {
+            // Named structs (`%Foo{}`) are calls upstream; `%{}` is not.
+            if byte == b'%'
+                && bytes
+                    .get(*idx + 1)
+                    .is_some_and(|next| next.is_ascii_uppercase() || *next == b'_')
+            {
+                self.branches += 1;
+            }
             *idx += 1;
             return true;
         }
@@ -615,8 +948,10 @@ impl Counter<'_> {
         true
     }
 
-    /// Dot calls count unless the receiver is a bare variable, an alias path
-    /// segment, or a float point. Returns whether the dot was consumed.
+    /// Dots mirror upstream dot heads: every `.` counts once, except a
+    /// bare-variable receiver (`a.b`) and alias-path middles (`A.B.c`
+    /// counts once for the whole path). Call chains (`a.b.c`) count every
+    /// dot past the first.
     fn scan_dot(&mut self, body: &str, idx: usize) -> bool {
         let bytes = body.as_bytes();
         if bytes.get(idx + 1).is_some_and(u8::is_ascii_digit)
@@ -641,20 +976,34 @@ impl Counter<'_> {
             return true;
         }
         let receiver = body.get(start..idx).unwrap_or("");
-        if receiver
+        let continued = start > 0 && bytes[start - 1] == b'.';
+        // Dotted captures (`& &1.k`): the counter is no bare variable.
+        if !receiver.is_empty()
+            && receiver.bytes().all(|byte| byte.is_ascii_digit())
+            && capture_before(bytes, start)
+        {
+            self.branches += 1;
+            return true;
+        }
+        if !receiver
             .chars()
             .next()
             .is_some_and(|c| c.is_ascii_uppercase())
         {
-            // Alias path (`Foo.Bar`): no branch.
-            if start > 0 && bytes[start - 1] == b'.' {
-                return true;
+            // Bare-variable receiver: silent at path start, the counted
+            // outer head of a call chain (`a.b.c`) afterwards.
+            if continued {
+                self.branches += 1;
             }
-            self.branches += 1;
             return true;
         }
-        // Bare-variable receiver (`user.name`): no branch (the variable
-        // itself still counts when visited).
+        // Alias-path middle (`A.B.c`): already decided at path start.
+        if continued {
+            return true;
+        }
+        if alias_path_call(bytes, idx) {
+            self.branches += 1;
+        }
         true
     }
 
@@ -673,10 +1022,25 @@ impl Counter<'_> {
         }
         let word = body.get(*idx..end).unwrap_or("");
         *idx = end;
+        // Inside a numeric literal (`0x0FFF`): integers count nothing.
+        if *idx > word.len() && bytes[*idx - word.len() - 1].is_ascii_digit() {
+            return true;
+        }
         if word.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
             return true;
         }
         if word.starts_with('_') {
+            return true;
+        }
+        if prev_is_dot_or_colon(bytes, *idx - word.len()) {
+            return true;
+        }
+        if start_is_module_attr(bytes, *idx - word.len()) {
+            return true;
+        }
+        // Keyword keys (`case: :lower`) and atom literals are tuple
+        // elements upstream: never branches, not even reserved words.
+        if follows_colon(body, end) {
             return true;
         }
         if is_reserved(word) {
@@ -688,12 +1052,6 @@ impl Counter<'_> {
             ) {
                 self.branches += 1;
             }
-            return true;
-        }
-        if prev_is_dot_or_colon(bytes, *idx - word.len()) {
-            return true;
-        }
-        if start_is_module_attr(bytes, *idx - word.len()) {
             return true;
         }
         self.scan_call_tail(body, word, end);
@@ -728,6 +1086,74 @@ impl Counter<'_> {
 
 fn prev_is_dot_or_colon(bytes: &[u8], start: usize) -> bool {
     start > 0 && matches!(bytes[start - 1], b'.' | b':')
+}
+
+/// Whether the alias path starting at the dot `idx` continues into a
+/// counted call head: swallow every uppercase `.Segment`; a lowercase
+/// `.fun` continuing the path (or directly) counts.
+fn alias_path_call(bytes: &[u8], idx: usize) -> bool {
+    let mut tail = idx;
+    loop {
+        let mut seg = tail + 1;
+        while seg < bytes.len() && (bytes[seg].is_ascii_alphanumeric() || bytes[seg] == b'_') {
+            seg += 1;
+        }
+        if seg == tail + 1 {
+            return false;
+        }
+        if !bytes[tail + 1].is_ascii_uppercase() {
+            return true;
+        }
+        if bytes.get(seg) == Some(&b'.') && bytes.get(seg + 1).is_some_and(u8::is_ascii_uppercase) {
+            tail = seg;
+            continue;
+        }
+        // Path ends here: count only a lowercase call continuation.
+        return bytes.get(seg) == Some(&b'.')
+            && bytes
+                .get(seg + 1)
+                .is_some_and(|b| b.is_ascii_lowercase() || *b == b'_');
+    }
+}
+
+/// Whether the word ending at `end` is a keyword key (`key:` but not `::`).
+fn follows_colon(body: &str, end: usize) -> bool {
+    let bytes = body.as_bytes();
+    bytes.get(end) == Some(&b':') && bytes.get(end + 1) != Some(&b':')
+}
+
+/// Whether `[` at `idx` indexes a value (`Access.get` upstream): the
+/// previous value-ending byte, with keyword-led lines (`do [..]`) ruled
+/// out. Anything else opens a list literal.
+fn is_index_target(body: &str, idx: usize) -> bool {
+    let bytes = body.as_bytes();
+    let mut back = idx;
+    while back > 0 && bytes[back - 1].is_ascii_whitespace() {
+        back -= 1;
+    }
+    if back == 0 {
+        return false;
+    }
+    let prev = bytes[back - 1];
+    if prev.is_ascii_alphanumeric() || matches!(prev, b'_' | b'?' | b'!') {
+        let mut start = back - 1;
+        while start > 0 && is_ident_byte(bytes[start - 1]) {
+            start -= 1;
+        }
+        let word = body.get(start..back - 1).unwrap_or("");
+        return !is_reserved(word);
+    }
+    matches!(prev, b')' | b']' | b'}' | b'"' | b'\'')
+}
+
+/// Whether the digit receiver at `start` is an `&N` capture counter: a
+/// lone `&` (never `&&`) stands before it across blanks.
+fn capture_before(bytes: &[u8], start: usize) -> bool {
+    let mut back = start;
+    while back > 0 && matches!(bytes[back - 1], b' ' | b'\t') {
+        back -= 1;
+    }
+    back > 0 && bytes[back - 1] == b'&' && (back < 2 || bytes[back - 2] != b'&')
 }
 
 fn start_is_module_attr(bytes: &[u8], start: usize) -> bool {
@@ -870,6 +1296,24 @@ mod tests {
         assert!(!check_prepared(&crate::batch::Prepared::lazy(&src), &BTreeMap::new()).is_empty());
     }
     #[test]
+    fn interpolation_calls_do_not_count() {
+        // Upstream ignores string interpolation (`:<<>>` binaries): calls
+        // inside `"#{...}"` add no branches.
+        let src = "def f(a, b) do\n  x = \"#{encode(a)}=#{encode(b)}\"\n  y = g(x) |> h()\n  {x, y}\nend\n";
+        // Without interpolation blanking the two `encode/1` calls push
+        // size from 3 to 6; with it the function stays at 3.
+        for max in ["3", "4", "5"] {
+            let params: BTreeMap<String, String> = [("max_size".to_owned(), max.to_owned())]
+                .into_iter()
+                .collect();
+            assert!(
+                check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty(),
+                "max_size {max}"
+            );
+        }
+    }
+
+    #[test]
     fn reports_exact_size_like_upstream() {
         // EX4001.upstream.violation: ABC size is 5, column points at the name.
         let src = "def some_function do\n  if true == true or false == 2 do\n    my_options = MyHash.create\n  end\n  my_options\n  |> Enum.each(fn(key, value) ->\n    IO.puts key\n    IO.puts value\n  end)\nend\n";
@@ -897,5 +1341,154 @@ mod tests {
         let mut params = max;
         params.insert("excluded_functions".to_owned(), "[\"foo\"]".to_owned());
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+
+    /// Six assignment-heavy pad lines shared by the parity probes below.
+    fn pads() -> String {
+        use std::fmt::Write as _;
+        let mut pads = String::new();
+        for i in 1..=3 {
+            let _ = writeln!(
+                pads,
+                "    t{i} = a + b + c + foo({i}) + bar({i}) + baz({i})"
+            );
+        }
+        for i in 1..=3 {
+            let _ = writeln!(pads, "    u{i} = a + b + c + foo({i}) + bar({i})");
+        }
+        pads
+    }
+
+    fn size_of(src: &str) -> String {
+        let params: BTreeMap<String, String> = [("max_size".to_owned(), "0".to_owned())]
+            .into_iter()
+            .collect();
+        let found = check_prepared(&crate::batch::Prepared::lazy(src), &params);
+        assert_eq!(found.len(), 1);
+        found[0].message.clone()
+    }
+
+    #[test]
+    fn fat_arrow_pairs_are_not_branches() {
+        // ABC-O4: `=>` pairs are plain tuples upstream.
+        let src = format!(
+            "defmodule M do\n  def f(a, b, c) do\n{}    m1 = %{{\"k1\" => a, \"k2\" => b}}\n    m2 = %{{\"k3\" => c, \"k4\" => a}}\n  end\nend\n",
+            pads()
+        );
+        assert_eq!(
+            size_of(&src),
+            "Function is too complex (ABC size is 43, max is 0)."
+        );
+    }
+    #[test]
+    fn unparenthesized_ecto_calls_are_pruned() {
+        // ABC-O1: excluded calls prune the whole call without parens too.
+        let src = "defmodule M do\n  import Ecto.Query\n  def f(x) do\n    q1 = from u in User, where: u.id == x, select: u\n    q2 = from u in User, where: u.id == x, select: u\n    q3 = from u in User, where: u.id == x, select: u\n  end\nend\n";
+        assert_eq!(
+            size_of(src),
+            "Function is too complex (ABC size is 3, max is 0)."
+        );
+    }
+    #[test]
+    fn multi_arg_fn_heads_scope_every_param() {
+        // ABC-O5: `fn event, acc ->` scopes both parameters.
+        let src = "defmodule M do\n  def f(l) do\n    r1 = Enum.reduce(l, 0, fn event, acc -> event + acc end)\n    r2 = Enum.reduce(l, 0, fn event, acc -> event + acc end)\n    r3 = Enum.reduce(l, 0, fn event, acc -> event + acc end)\n  end\nend\n";
+        assert_eq!(
+            size_of(src),
+            "Function is too complex (ABC size is 9, max is 0)."
+        );
+    }
+    #[test]
+    fn bitstrings_kwargs_and_hex_are_plain() {
+        // ABC-O2/O3/O6: `<<>>` pruned, reserved kwargs and hex plain.
+        let src = format!(
+            "defmodule M do\n  def f(a, b, c) do\n{}    <<first::binary-size(2), rest::binary>> = a\n    x = Base.encode16(b, case: :lower)\n    y = Base.encode16(c, case: :lower)\n    d = 0x0FFF\n    e = 0x5000\n  end\nend\n",
+            pads()
+        );
+        assert_eq!(
+            size_of(&src),
+            "Function is too complex (ABC size is 45, max is 0)."
+        );
+    }
+    #[test]
+    fn bare_alias_paths_are_not_calls() {
+        // ABC-O7: `Foo.Bar` without a call is an alias, not a branch.
+        let src = format!(
+            "defmodule M do\n  def f(a, b, c) do\n{}    bar(Foo.Bar)\n    bar(Baz.Qux)\n    bar(Quux.Corge)\n    bar(Grault.Garply)\n  end\nend\n",
+            pads()
+        );
+        assert_eq!(
+            size_of(&src),
+            "Function is too complex (ABC size is 46, max is 0)."
+        );
+    }
+    #[test]
+    fn multiline_def_head_keeps_its_body() {
+        // ABC-U7: a continued head must not empty the body.
+        let src = "defmodule M do\n  def f(\n    a,\n    b\n  ) when is_list(a) do\n    t1 = a + b + c + foo(1) + bar(1) + baz(1)\n    t2 = a + b + c + foo(2) + bar(2) + baz(2)\n    t3 = a + b + c + foo(3) + bar(3) + baz(3)\n    t4 = a + b + c + foo(4) + bar(4) + baz(4)\n    t5 = a + b + c + foo(5) + bar(5) + baz(5)\n    t6 = a + b + c + foo(6) + bar(6) + baz(6)\n  end\nend\n";
+        assert_eq!(
+            size_of(src),
+            "Function is too complex (ABC size is 66, max is 0)."
+        );
+    }
+    #[test]
+    fn guard_head_params_stay_unscoped() {
+        // ABC-U1: `when` heads scope nothing upstream.
+        let src = format!(
+            "defmodule M do\n  def f(attrs, x) when is_map(attrs) do\n    a = attrs\n    b = attrs\n    c = attrs\n    d = attrs\n{}  end\nend\n",
+            pads()
+        );
+        assert_eq!(
+            size_of(&src),
+            "Function is too complex (ABC size is 47, max is 0)."
+        );
+    }
+    #[test]
+    fn bracket_access_is_a_call() {
+        // ABC-U2: `a["k"]` is `Access.get`.
+        let src = format!(
+            "defmodule M do\n  def f(a, b, c) do\n{}    v1 = a[\"k1\"]\n    v2 = a[\"k2\"]\n    v3 = a[\"k3\"]\n    v4 = a[\"k4\"]\n  end\nend\n",
+            pads()
+        );
+        assert_eq!(
+            size_of(&src),
+            "Function is too complex (ABC size is 47, max is 0)."
+        );
+    }
+    #[test]
+    fn capture_receivers_are_calls() {
+        // ABC-U3: `&1.k` is a dotted capture, not a bare variable.
+        let src = format!(
+            "defmodule M do\n  def f(a, b, c) do\n{}    r = Enum.map(a, & &1.k)\n    s = Enum.map(b, & &1.k)\n    t = Enum.map(c, & &1.k)\n    u = Enum.map(a, & &1.j)\n  end\nend\n",
+            pads()
+        );
+        assert_eq!(
+            size_of(&src),
+            "Function is too complex (ABC size is 59, max is 0)."
+        );
+    }
+    #[test]
+    fn arrow_head_matches_stay_unscoped() {
+        // ABC-U4: `=` inside `->` heads scopes nothing upstream.
+        let src = format!(
+            "defmodule M do\n  def f(l) do\n{}    r = Enum.map(l, fn {{:ok, x}} = y -> y end)\n    s = Enum.map(l, fn {{:ok, x}} = y -> y end)\n  end\nend\n",
+            pads()
+        );
+        assert_eq!(
+            size_of(&src),
+            "Function is too complex (ABC size is 69, max is 0)."
+        );
+    }
+    #[test]
+    fn named_structs_are_calls() {
+        // ABC-U5: `%Foo{}` is a call upstream.
+        let src = format!(
+            "defmodule M do\n  def f(a, b, c) do\n{}    s1 = %T{{k: a}}\n    s2 = %T{{k: b}}\n    s3 = %T{{k: c}}\n    s4 = %T{{k: a}}\n  end\nend\n",
+            pads()
+        );
+        assert_eq!(
+            size_of(&src),
+            "Function is too complex (ABC size is 47, max is 0)."
+        );
     }
 }

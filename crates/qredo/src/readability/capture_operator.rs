@@ -167,4 +167,20 @@ mod tests {
         let src = "defmodule M do\n  def f do\n    y = & &1\n  end\nend\n";
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
     }
+    #[test]
+    fn reports_capture_inside_interpolation() {
+        // CAP-A: `#{...}` is code, so `&scalar/1` flags like unwrapped code.
+        let src = "x = \"(#{Enum.map_join(list, &scalar/1)})\"\n";
+        let out = check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new());
+        assert_eq!(out.len(), 1);
+    }
+    #[test]
+    fn quote_cocktail_does_not_hide_later_capture() {
+        // CAP-B minimal repro: quotes nested in interpolation must not desync
+        // the masker and hide the capture on the next line.
+        let src = "x = \"'#{f(a, \"'\", \"''\")}'\"\ny = Enum.map(z, & &1[\"as\"])\n";
+        let out = check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new());
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].line, 2);
+    }
 }

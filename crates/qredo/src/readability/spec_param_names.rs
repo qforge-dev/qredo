@@ -80,7 +80,8 @@ fn find_attr(chars: &[char]) -> Option<usize> {
                 }
                 let mut name_end = end;
                 while name_end < chars.len()
-                    && (chars[name_end].is_alphanumeric() || chars[name_end] == '_')
+                    && (chars[name_end].is_alphanumeric()
+                        || matches!(chars[name_end], '_' | '?' | '!'))
                 {
                     name_end += 1;
                 }
@@ -533,6 +534,15 @@ mod tests {
         assert_eq!(findings.len(), 2);
         assert_eq!(findings[0].column, Some(19));
         assert_eq!(findings[1].column, Some(26));
+    }
+    #[test]
+    fn bang_and_predicate_names_are_checked() {
+        // Triage P-A: `?`/`!` suffixes must not skip the whole spec.
+        let src = "@spec fetch!(atom()) :: term()\n@spec expired?(t()) :: boolean()\n";
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src));
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].column, Some(14));
+        assert_eq!(findings[1].column, Some(16));
     }
     #[test]
     fn decoy_substrings_do_not_scan() {

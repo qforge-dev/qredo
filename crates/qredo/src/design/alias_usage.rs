@@ -725,6 +725,32 @@ mod tests {
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params()).is_empty());
     }
     #[test]
+    fn reports_module_call_inside_interpolation() {
+        // AU-A: `#{Ecto.UUID.generate()}` is code, not string content.
+        let src = "defmodule T do\n  def f do\n    \"#{Ecto.UUID.generate()}\"\n  end\nend\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &params()),
+            vec![Finding::with_trigger(
+                3,
+                Some(8),
+                "Nested modules could be aliased at the top of the invoking module.",
+                "Ecto.UUID",
+            )]
+        );
+    }
+    #[test]
+    fn quote_cocktail_does_not_hide_later_usage() {
+        // AU-B: quotes nested in interpolation must not desync the masker
+        // and hide the module calls on the following lines.
+        let src = "defmodule T do\n  def f(path) do\n    x = 'p#{String.replace(path, \"'\", \"''\")}'\n    Labqoat.Config.get()\n    Labqoat.DuckDB.open()\n  end\nend\n";
+        let out = check_prepared(&crate::batch::Prepared::lazy(src), &params());
+        assert_eq!(
+            out.iter().map(|f| f.line).collect::<Vec<_>>(),
+            vec![4, 5],
+            "findings were: {out:?}"
+        );
+    }
+    #[test]
     fn multibyte_prefix_keeps_columns_and_slices() {
         // Byte offsets must track char columns past multibyte content.
         let src = "defmodule T do\n  # héllo wörld\n  Foo.Qux.baz()\nend\n";

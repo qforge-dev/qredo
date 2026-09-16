@@ -89,9 +89,9 @@ fn def_head(after_op: &str) -> Option<DefHead> {
     })
 }
 
-/// A head takes arguments unless its parenthesized list (if any) holds only
-/// word characters, mirroring upstream's `[{_, _, [_ | _]}]` skip plus the
-/// `^\((\w*)\)` paren test.
+/// A head takes arguments unless its parenthesized list (if any) is
+/// empty or blank, mirroring upstream's `[{_, _, [_ | _]}]` skip: any
+/// actual argument (including a single bare variable) counts.
 fn declared_args(tail: &str) -> bool {
     if !tail.starts_with('(') {
         return false;
@@ -101,7 +101,7 @@ fn declared_args(tail: &str) -> bool {
     if !closed {
         return false;
     }
-    inner.chars().any(|c| !(c.is_alphanumeric() || c == '_'))
+    !inner.trim().is_empty()
 }
 
 /// Upstream `~r/^\((\w*)\)(.)*/` on the line remainder after the name.
@@ -131,6 +131,26 @@ fn word_boundary(line: &str, base: usize, op_len: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn single_simple_argument_is_not_zero_arity() {
+        // `defp fetch_fields(attrs)` carries an argument (upstream AST
+        // `[_ | _]` skip); only truly empty heads report.
+        assert!(
+            check_prepared(
+                &crate::batch::Prepared::lazy("defp fetch_fields(attrs), do: attrs\n"),
+                &BTreeMap::new()
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            check_prepared(
+                &crate::batch::Prepared::lazy("def foo(), do: 1\n"),
+                &BTreeMap::new()
+            )
+            .len(),
+            1
+        );
+    }
     #[test]
     fn no_parens_by_default_is_clean() {
         assert!(

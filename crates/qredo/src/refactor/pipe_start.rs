@@ -289,6 +289,28 @@ fn start_is_call(segment: &str, excluded_functions: &[String], excluded_types: &
     if start.is_empty() {
         return false;
     }
+    // Leading `:` is either a `do:`/`key:` separator (`: value`) or an
+    // Erlang call/atom (`:mod.fun(...)` / `:atom`). Atoms are raw values.
+    if let Some(stripped) = start.strip_prefix(':') {
+        let after = stripped.trim_start();
+        if stripped.starts_with([' ', '\t']) {
+            if after.is_empty() {
+                return false;
+            }
+            return start_is_call(after, excluded_functions, excluded_types);
+        }
+        if let Some((callee, args)) = split_paren_call(start) {
+            return !excluded(&callee, args, excluded_functions, excluded_types);
+        }
+        if let Some((callee, first_arg)) = split_space_call(start) {
+            return !excluded(&callee, first_arg, excluded_functions, excluded_types);
+        }
+        return false;
+    }
+    // `key: value` keyword/map value as chain start: classify the value.
+    if let Some(value) = keyword_value(start) {
+        return start_is_call(value, excluded_functions, excluded_types);
+    }
     let first = start.chars().next().unwrap_or(' ');
     if is_value_prefix(first) {
         return false;
@@ -397,11 +419,37 @@ fn is_callee_char(c: char) -> bool {
 }
 
 fn is_excluded_rest_start(rest: &str) -> bool {
-    const OPERATOR_STARTS: &[char] = &['<', '>', '=', '|', ',', ';', ')', ']', '}'];
+    const OPERATOR_STARTS: &[char] = &[
+        '<', '>', '=', '|', ',', ';', ')', ']', '}', '+', '-', '*', '/', '&', '~', '^',
+    ];
     if rest.starts_with(OPERATOR_STARTS) {
         return true;
     }
     starts_with_word(rest, &["and", "or", "not", "in"])
+}
+
+/// Leading `key:` in `key: value` chain starts: the value after the colon.
+fn keyword_value(text: &str) -> Option<&str> {
+    let mut idx = 0_usize;
+    for (byte, c) in text.char_indices() {
+        if c.is_alphanumeric() || c == '_' || c == '?' || c == '!' {
+            idx = byte + c.len_utf8();
+        } else {
+            break;
+        }
+    }
+    if idx == 0 {
+        return None;
+    }
+    let rest = text.get(idx..)?;
+    if !rest.starts_with(':') || rest[1..].starts_with(':') {
+        return None;
+    }
+    let after = rest[1..].trim_start();
+    if after.is_empty() {
+        return None;
+    }
+    Some(after)
 }
 
 fn has_value_operator(text: &str) -> bool {
@@ -844,5 +892,38 @@ mod tests {
             )
             .is_empty()
         );
+    }
+    #[test]
+    fn erlang_call_start_reports() {
+        let findings = check_prepared(
+            &crate::batch::Prepared::lazy(":crypto.hash(:sha256, x) |> Base.encode16()\n"),
+            &BTreeMap::new(),
+        );
+        assert_eq!(findings.len(), 1);
+    }
+    #[test]
+    fn do_colon_call_start_reports() {
+        let findings = check_prepared(
+            &crate::batch::Prepared::lazy("def kinds, do: Map.keys(@queries) |> Enum.sort()\n"),
+            &BTreeMap::new(),
+        );
+        assert_eq!(findings.len(), 1);
+    }
+    #[test]
+    fn keyword_value_start_is_clean() {
+        assert!(
+            check_prepared(
+                &crate::batch::Prepared::lazy(
+                    "%{timestamp: DateTime.utc_now() |> DateTime.to_iso8601()}\n"
+                ),
+                &BTreeMap::new()
+            )
+            .is_empty()
+        );
+    }
+    #[test]
+    fn operator_rest_start_is_clean() {
+        let src = "def d(groups, measures) do\n  group_cols = Enum.map(groups, &quote_identifier/1)\n  (group_cols ++ Enum.map(measures, &grouped_measure/1)) |> Enum.join(\", \")\nend\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
     }
 }

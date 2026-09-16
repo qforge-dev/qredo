@@ -76,25 +76,6 @@ impl<'a> Scan<'a> {
         idx == 0 || !matches!(self.bytes[idx - 1], b'.' | b':' | b'@')
     }
 
-    fn match_paren(&self, open: usize) -> Option<usize> {
-        let mut depth = 0_i64;
-        let mut idx = open;
-        while idx < self.bytes.len() {
-            match self.bytes[idx] {
-                b'(' | b'[' | b'{' => depth += 1,
-                b')' | b']' | b'}' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        return Some(idx);
-                    }
-                }
-                _ => {}
-            }
-            idx += 1;
-        }
-        None
-    }
-
     /// End of the guard: `do` / `do:` / `->` at bracket depth zero.
     fn guard_end(&self, from: usize) -> usize {
         let mut depth = 0_i64;
@@ -116,29 +97,61 @@ impl<'a> Scan<'a> {
         self.bytes.len()
     }
 
-    /// `!is_nil(` / `not is_nil(` inside the guard span.
+    /// The leftmost guard conjunct's negation, if any. Upstream recurses
+    /// into the first operand while passing the rest as a list, which
+    /// matches neither walk clause, so only the leftmost atom can report.
+    /// Calls (including the leading `and`/`or` operands) descend into
+    /// their first argument; anything else ends the search clean.
     fn negations(&self, from: usize, to: usize) -> Vec<(usize, &'static str)> {
-        let mut out = Vec::new();
-        let mut idx = from;
-        while idx < to {
-            if self.bytes[idx] == b'!'
-                && self.bytes.get(idx + 1).is_none_or(|b| *b != b'=')
-                && let Some(open) = self.guarded_call(idx + 1, to)
-            {
-                out.push((idx, "!"));
-                idx = self.match_paren(open).map_or(open + 1, |c| c + 1);
-                continue;
+        let mut pos = from;
+        for _ in 0..32 {
+            pos = self.skip_transparent(pos, to);
+            if pos >= to {
+                return Vec::new();
             }
-            if self.at_word(idx, "not")
-                && let Some(open) = self.guarded_call(idx + "not".len(), to)
+            if self.bytes[pos] == b'!'
+                && self.bytes.get(pos + 1).is_none_or(|b| *b != b'=')
+                && self.guarded_call(pos + 1, to).is_some()
             {
-                out.push((idx, "not"));
-                idx = self.match_paren(open).map_or(open + 1, |c| c + 1);
-                continue;
+                return vec![(pos, "!")];
             }
-            idx += 1;
+            if self.at_word(pos, "not") && self.guarded_call(pos + "not".len(), to).is_some() {
+                return vec![(pos, "not")];
+            }
+            if self.bytes[pos] == b'!' || self.at_word(pos, "not") {
+                return Vec::new();
+            }
+            if self.bytes[pos].is_ascii_alphabetic() || self.bytes[pos] == b'_' {
+                let mut end = pos;
+                while end < to && is_name_byte(self.bytes[end]) {
+                    end += 1;
+                }
+                let mut next = end;
+                while next < to && self.bytes[next].is_ascii_whitespace() {
+                    next += 1;
+                }
+                if next < to && self.bytes[next] == b'(' {
+                    pos = next + 1;
+                    continue;
+                }
+            }
+            return Vec::new();
         }
-        out
+        Vec::new()
+    }
+
+    /// Skip whitespace and transparent grouping parens.
+    fn skip_transparent(&self, mut pos: usize, to: usize) -> usize {
+        loop {
+            while pos < to && self.bytes[pos].is_ascii_whitespace() {
+                pos += 1;
+            }
+            if pos < to && self.bytes[pos] == b'(' {
+                pos += 1;
+            } else {
+                return pos;
+            }
+        }
     }
 
     /// `is_nil(` call starting at `from` (after whitespace and transparent
@@ -229,5 +242,23 @@ mod tests {
     fn body_negation_is_clean() {
         let src = "defmodule M do\n  def f(%{parameter1: parameter2, id: id}) when is_binary(parameter2) do\n    something = not is_nil(parameter2)\n  end\nend\n";
         assert!(check_prepared(&crate::batch::Prepared::lazy(src)).is_empty());
+    }
+    #[test]
+    fn only_leftmost_and_conjunct_reported() {
+        // Upstream recursion passes the remaining conjuncts as a list, which
+        // matches neither walk clause, so only the leftmost is reported.
+        let found = check_prepared(&crate::batch::Prepared::lazy(
+            "defmodule M do\n  def f(a, b) when not is_nil(a) and not is_nil(b), do: {a, b}\nend\n",
+        ));
+        assert_eq!(found.len(), 1);
+    }
+    #[test]
+    fn non_leftmost_negation_is_clean() {
+        // The leftmost conjunct is not a negation, so the later `not
+        // is_nil(b)` is dropped with the rest of the list upstream.
+        let found = check_prepared(&crate::batch::Prepared::lazy(
+            "defmodule M do\n  def f(a, b) when is_binary(a) and not is_nil(b), do: {a, b}\nend\n",
+        ));
+        assert!(found.is_empty());
     }
 }

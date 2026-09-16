@@ -3,9 +3,10 @@ use std::collections::BTreeMap;
 
 /// `EX3025`: public functions should have `@spec`.
 ///
-/// Each `@spec name/arity` only covers same-arity definitions below it;
-/// a non-`false` `@impl` covers every definition below it. Definitions
-/// inside `quote` blocks are not checked.
+/// Each `@spec name/arity` covers same-arity definitions below it; a
+/// non-`false` `@impl` is consumed by exactly one following definition
+/// (which also records its `{name, arity}` for later same-head clauses).
+/// Definitions inside `quote` blocks are not checked.
 pub(crate) fn check_prepared(
     prepared: &crate::batch::Prepared<'_>,
     params: &BTreeMap<String, String>,
@@ -15,7 +16,7 @@ pub(crate) fn check_prepared(
     let lines: Vec<&str> = masked.split('\n').collect();
     let mut findings = Vec::new();
     let mut specs: Vec<(String, usize)> = Vec::new();
-    let mut impl_covers = false;
+    let mut pending_impl = false;
     let mut blocks: Vec<bool> = Vec::new();
     for (idx, line) in lines.iter().enumerate() {
         // Substring gates: each scan below needs one of these ASCII
@@ -27,27 +28,32 @@ pub(crate) fn check_prepared(
             specs.push((name, arity));
         }
         if line.contains("impl") && is_impl_cover(line) {
-            impl_covers = true;
+            pending_impl = true;
         }
-        if !blocks.iter().any(|quoted| *quoted)
-            && line.contains("def")
+        if line.contains("def")
             && let Some((op, name, arity)) = def_head(line)
         {
+            // Upstream consumes one `:impl` marker per definition even
+            // inside `quote` (which never reports): otherwise a quoted
+            // `@impl`+`def` pair leaks coverage onto the next outer def.
+            if pending_impl {
+                // Upstream consumes one `:impl` marker per definition and
+                // records that head for later same-head clauses.
+                specs.push((name.clone(), arity));
+                pending_impl = false;
+            }
             let private = op == "defp";
-            if !private || include_defp {
-                let covered = impl_covers
-                    || specs
-                        .iter()
-                        .any(|known| known.0 == name && known.1 == arity);
-                if !covered {
-                    let column = trigger_column(line, &name).unwrap_or(1);
-                    findings.push(Finding::with_trigger(
-                        idx + 1,
-                        Some(column),
-                        "Functions should have a @spec type specification.",
-                        name,
-                    ));
-                }
+            let covered = specs
+                .iter()
+                .any(|known| known.0 == name && known.1 == arity);
+            if !blocks.iter().any(|quoted| *quoted) && (!private || include_defp) && !covered {
+                let column = trigger_column(line, &name).unwrap_or(1);
+                findings.push(Finding::with_trigger(
+                    idx + 1,
+                    Some(column),
+                    "Functions should have a @spec type specification.",
+                    name,
+                ));
             }
         }
         if line.contains("do") || line.contains("fn") || line.contains("end") {
@@ -97,12 +103,27 @@ fn spec_arity(chars: &[char], mut i: usize) -> usize {
 }
 
 /// Count top-level comma-separated items in the parens at `open`.
+/// Any single pattern (tuple, list, map, bitstring) is one argument;
+/// `<<...>>` sections are opaque so their commas never split arguments.
 fn count_args(chars: &[char], open: usize) -> usize {
     let mut depth = 0_usize;
+    let mut angle = 0_usize;
     let mut commas = 0_usize;
     let mut nonempty = false;
     let mut i = open;
     while i < chars.len() {
+        if chars[i] == '<' && chars.get(i + 1) == Some(&'<') {
+            // A bitstring pattern is one argument, even when empty.
+            angle += 1;
+            nonempty = true;
+            i += 2;
+            continue;
+        }
+        if chars[i] == '>' && chars.get(i + 1) == Some(&'>') && angle > 0 {
+            angle -= 1;
+            i += 2;
+            continue;
+        }
         match chars[i] {
             '(' | '[' | '{' => depth += 1,
             ')' | ']' | '}' => {
@@ -111,8 +132,8 @@ fn count_args(chars: &[char], open: usize) -> usize {
                     break;
                 }
             }
-            ',' if depth == 1 => commas += 1,
-            c if depth == 1 && !c.is_whitespace() => nonempty = true,
+            ',' if depth == 1 && angle == 0 => commas += 1,
+            c if depth >= 1 && angle == 0 && !c.is_whitespace() => nonempty = true,
             _ => {}
         }
         i += 1;
@@ -383,6 +404,43 @@ mod tests {
     #[test]
     fn impl_true_needs_no_spec() {
         let src = "defmodule M do\n  @impl true\n  def foo(a), do: a\nend\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+    }
+    #[test]
+    fn quoted_impl_pair_does_not_cover_outer_def() {
+        // `@impl`+`def` inside `quote` consume each other silently; the
+        // next outer definition still needs its own `@spec`.
+        let src = "defmodule M do\n  def researcher do\n    quote do\n      @impl true\n      def terminate(r, s), do: :ok\n    end\n  end\n  def html do\n    quote do\n      use Phoenix.Component\n    end\n  end\nend\n";
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new());
+        let lines: Vec<usize> = findings.iter().map(|finding| finding.line).collect();
+        assert!(lines.contains(&8), "outer def html reports: {lines:?}");
+        assert!(!lines.contains(&5), "quoted def stays silent: {lines:?}");
+    }
+
+    #[test]
+    fn impl_covers_only_next_def() {
+        // Triage S-A: `@impl` is consumed by exactly one following `def`.
+        let src = "defmodule Probe do\n  @impl true\n  def init(x), do: {:ok, x}\n\n  def uncovered(y), do: y\nend\n";
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new());
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].line, 5);
+    }
+    #[test]
+    fn impl_records_arity_for_later_clauses() {
+        // The impl-covered head covers later same-name/arity clauses.
+        let src = "defmodule M do\n  @impl true\n  def foo(a), do: a\n  def foo(b), do: b\nend\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+    }
+    #[test]
+    fn single_tuple_arg_matches_arity_one_spec() {
+        // Triage S-B: one composite pattern is one argument.
+        let src = "@spec now(t()) :: integer()\ndef now({module, context}), do: module.monotonic_ms(context)\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+    }
+    #[test]
+    fn bitstring_arg_counts_as_one() {
+        // Triage S-B: `<<a, b>>` is one argument, not two.
+        let src = "@spec f(binary()) :: binary()\ndef f(<<a, b>>), do: <<a, b>>\n";
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
     }
     #[test]

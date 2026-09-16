@@ -38,9 +38,23 @@ pub(crate) fn check_prepared(
 
 /// Resolved per-module inventory: dependencies, exclusions, resolutions.
 struct ModuleInventory {
-    deps: Vec<String>,
-    exclusions: Vec<String>,
+    deps: Vec<DepRef>,
+    rules: Vec<DirectiveRule>,
     resolutions: Vec<String>,
+}
+
+/// One dotted alias reference with its end byte for order-sensitive rules.
+struct DepRef {
+    name: String,
+    end: u32,
+}
+
+/// Removal names of one `alias` directive. Upstream removes them only from
+/// previously collected entries (postwalk order), so a rule applies to a
+/// reference exactly when the reference does not start after the directive.
+struct DirectiveRule {
+    end: u32,
+    removals: Vec<String>,
 }
 
 /// Dependency finding for one `defmodule`, or `None` when within limits.
@@ -56,9 +70,21 @@ fn check_module(
         return None;
     }
     let inventory = module_inventory(module, source, facts);
-    let mut deps = inventory.deps;
-    deps.retain(|dep| dep != &name);
-    deps.retain(|dep| !inventory.exclusions.iter().any(|excluded| excluded == dep));
+    let mut deps: Vec<String> = inventory
+        .deps
+        .into_iter()
+        .filter(|dep| {
+            !inventory.rules.iter().any(|rule| {
+                dep.end <= rule.end && rule.removals.iter().any(|name| name == &dep.name)
+            })
+        })
+        .map(|dep| dep.name)
+        .collect();
+    // Upstream `--` drops a single occurrence (the module head), so a body
+    // self-reference still counts.
+    if let Some(pos) = deps.iter().position(|dep| dep == &name) {
+        deps.remove(pos);
+    }
     let mut deps: Vec<String> = deps
         .into_iter()
         .map(|dep| resolve(&dep, &inventory.resolutions))
@@ -95,8 +121,11 @@ struct Limits {
 }
 
 /// Per-module inventory by span containment, in walk order: every dotted
-/// alias text plus alias-directive exclusions and short-name resolutions.
-/// Document order matches the upstream prewalk.
+/// alias text plus `alias`-directive removal rules and short-name
+/// resolutions. Only `alias` heads contribute rules or resolutions: upstream
+/// `find_dependent_modules` matches `{:alias, _, ...}` alone, so `use`,
+/// `import` and `require` targets always count. Document order matches the
+/// upstream prewalk.
 fn module_inventory(
     module: &crate::facts::ModuleFact,
     source: &str,
@@ -104,7 +133,7 @@ fn module_inventory(
 ) -> ModuleInventory {
     let mut inventory = ModuleInventory {
         deps: Vec::new(),
-        exclusions: Vec::new(),
+        rules: Vec::new(),
         resolutions: Vec::new(),
     };
     for (start, end) in &facts.aliases {
@@ -112,36 +141,71 @@ fn module_inventory(
             && *end <= module.end
             && let Some(text) = slice(source, *start, *end)
         {
-            inventory.deps.push(text.to_owned());
+            inventory.deps.push(DepRef {
+                name: text.to_owned(),
+                end: *end,
+            });
         }
     }
     for directive in &facts.alias_directives {
         if directive.start < module.start || directive.end > module.end {
             continue;
         }
-        if directive.has_top_comma {
-            continue;
-        }
-        if let Some((start, end)) = directive.single
-            && let Some(target) = slice(source, start, end)
-        {
-            inventory.exclusions.push(target.to_owned());
-            inventory.resolutions.push(target.to_owned());
-        }
-        if let Some(grouped) = &directive.grouped_top {
-            let Some(base) = slice(source, grouped.base_start, grouped.base_end) else {
-                continue;
-            };
-            inventory.exclusions.push(base.to_owned());
-            for (part_start, part_end) in &grouped.parts {
-                if let Some(part) = slice(source, *part_start, *part_end) {
-                    inventory.exclusions.push(part.to_owned());
-                    inventory.resolutions.push(format!("{base}.{part}"));
-                }
-            }
+        if let Some(contrib) = directive_contrib(directive, source) {
+            inventory.rules.push(DirectiveRule {
+                end: directive.end,
+                removals: contrib.removals,
+            });
+            inventory.resolutions.extend(contrib.resolutions);
         }
     }
     inventory
+}
+
+/// One `alias` directive's removals and short-name resolutions, if it is a
+/// plain `alias` head without options. `use`/`import`/`require` heads and
+/// option directives contribute nothing: their targets always count.
+struct DirectiveContrib {
+    removals: Vec<String>,
+    resolutions: Vec<String>,
+}
+
+fn directive_contrib(
+    directive: &crate::facts::AliasDirectiveFact,
+    source: &str,
+) -> Option<DirectiveContrib> {
+    if slice(source, directive.head_start, directive.head_end) != Some("alias") {
+        return None;
+    }
+    if directive.has_top_comma {
+        return None;
+    }
+    let mut contrib = DirectiveContrib {
+        removals: Vec::new(),
+        resolutions: Vec::new(),
+    };
+    if let Some((start, end)) = directive.single
+        && let Some(target) = slice(source, start, end)
+    {
+        contrib.removals.push(target.to_owned());
+        contrib.resolutions.push(target.to_owned());
+    }
+    if let Some(grouped) = &directive.grouped_top {
+        let Some(base) = slice(source, grouped.base_start, grouped.base_end) else {
+            return Some(contrib);
+        };
+        // Upstream removes the base and each short part from previously
+        // collected entries; later body short refs survive and resolve
+        // through the full expansions below.
+        contrib.removals.push(base.to_owned());
+        for (part_start, part_end) in &grouped.parts {
+            if let Some(part) = slice(source, *part_start, *part_end) {
+                contrib.removals.push(part.to_owned());
+                contrib.resolutions.push(format!("{base}.{part}"));
+            }
+        }
+    }
+    Some(contrib)
 }
 
 /// Resolve a short dependency through `alias` targets: the first target
@@ -249,5 +313,49 @@ mod tests {
     #[test]
     fn broken_source_stays_clean() {
         assert!(check("def foo( do\n", &BTreeMap::new()).is_empty());
+    }
+
+    #[test]
+    fn plain_use_require_import_targets_count() {
+        // MD-A: only `alias` directives exclude their targets; `use`,
+        // `require` and `import` targets are ordinary dependencies.
+        let mut src = String::from(
+            "defmodule M do\n  use Foo.Use\n  require Foo.Req\n  import Foo.Imp\n  def f do\n    [\n",
+        );
+        for i in 0..8 {
+            let _ = writeln!(src, "      Mod{i},");
+        }
+        src.push_str("    ]\n  end\nend\n");
+        let findings = check(&src, &BTreeMap::new());
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].message.contains("11 (max is 10)"));
+    }
+
+    #[test]
+    fn grouped_alias_short_refs_in_body_survive() {
+        // MD-B: short refs after a grouped alias resolve to full names and
+        // count; only previously collected entries are removed upstream.
+        let mut src = String::from("defmodule M do\n  alias Foo.{Bar, Baz}\n  def f do\n    [\n");
+        for i in 0..9 {
+            let _ = writeln!(src, "      Mod{i},");
+        }
+        src.push_str("    ]\n    Bar.check()\n    Baz.go()\n  end\nend\n");
+        let findings = check(&src, &BTreeMap::new());
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].message.contains("11 (max is 10)"));
+    }
+
+    #[test]
+    fn own_name_self_ref_counts() {
+        // MD-C: upstream `--` removes a single occurrence (the head), so a
+        // body self-reference still counts.
+        let mut src = String::from("defmodule M do\n  def f do\n    [\n");
+        for i in 0..10 {
+            let _ = writeln!(src, "      Mod{i},");
+        }
+        src.push_str("    ]\n    M.helper()\n  end\nend\n");
+        let findings = check(&src, &BTreeMap::new());
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].message.contains("11 (max is 10)"));
     }
 }

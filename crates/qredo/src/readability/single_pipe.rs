@@ -11,19 +11,29 @@ pub(crate) fn check_prepared(
     params: &BTreeMap<String, String>,
 ) -> Vec<Finding> {
     let source = prepared.source();
-    let masked: Vec<&str> = prepared.masked().split('\n').collect();
+    let masked_string = prepared.masked();
+    let masked: Vec<&str> = masked_string.split('\n').collect();
     let raw: Vec<&str> = source.split('\n').collect();
+    let pipes = pipe_positions(masked_string);
+    let chars: Vec<char> = masked_string.chars().collect();
+    let bytes: Vec<usize> = masked_string.char_indices().map(|(byte, _)| byte).collect();
+    let starts = line_starts(masked_string);
     let mut findings = Vec::new();
-    for group in group_pipe_lines(&masked) {
-        let total: usize = group
-            .iter()
-            .map(|line| masked[*line].matches("|>").count())
-            .sum();
-        if total != 1 {
+    let chains = group_pipe_chains(&chars, &bytes, &pipes);
+    let lone: Vec<usize> = chains
+        .iter()
+        .filter(|chain| chain.len() == 1)
+        .map(|chain| chain[0])
+        .collect();
+    for pipe in &lone {
+        // Lone singles at the same level rejoin across balanced `fn`
+        // bodies: link-following for chains like
+        // `pod |> update_in(..., fn ... end) |> update_in(...)`, where the
+        // inner pipes group separately but the outers form one chain.
+        if joins_lone_neighbor(&chars, &bytes, &lone, *pipe) {
             continue;
         }
-        let line_idx = group[0];
-        let pipe_at = masked[line_idx].find("|>").unwrap_or(0);
+        let (line_idx, pipe_at) = line_pipe_at(&starts, &masked, *pipe);
         if let Some(finding) = single_issue(&masked, &raw, line_idx, pipe_at, params) {
             findings.push(finding);
         }
@@ -32,25 +42,38 @@ pub(crate) fn check_prepared(
     findings
 }
 
-/// Lines holding `|>` clustered into chains: neighbours join across blank
-/// lines when the lower starts with `|>` or the upper ends with one.
-fn group_pipe_lines(masked: &[&str]) -> Vec<Vec<usize>> {
-    let pipe_lines: Vec<usize> = masked
-        .iter()
-        .enumerate()
-        .filter(|(_, line)| line.contains("|>"))
-        .map(|(idx, _)| idx)
-        .collect();
+/// True when a lone pipe joins a neighboring lone pipe across balanced
+/// blocks: same text connectivity as chaining, but ignoring `fn` balance
+/// (the inner groups already account for nesting).
+fn joins_lone_neighbor(chars: &[char], bytes: &[usize], lone: &[usize], pipe: usize) -> bool {
+    let Some(position) = lone.iter().position(|candidate| *candidate == pipe) else {
+        return false;
+    };
+    for neighbor in [position.checked_sub(1), position.checked_add(1)] {
+        let Some(other) = neighbor.and_then(|index| lone.get(index)) else {
+            continue;
+        };
+        let (first, second) = if pipe < *other {
+            (pipe, *other)
+        } else {
+            (*other, pipe)
+        };
+        if pipes_connected_nofn(chars, bytes, first, second) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Byte offsets of `|>` operators in a chain: consecutive pipes join when no
+/// top-level statement boundary lies between them, so multiline arguments
+/// (`[...]`, `(...)`, `fn...end`) no longer split AST chains.
+fn group_pipe_chains(chars: &[char], bytes: &[usize], pipes: &[usize]) -> Vec<Vec<usize>> {
     let mut groups: Vec<Vec<usize>> = Vec::new();
-    for line_idx in pipe_lines {
+    for pipe in pipes {
         let join = groups.last().and_then(|group| {
             let prev = *group.last()?;
-            if masked[prev + 1..line_idx]
-                .iter()
-                .all(|mid| mid.trim().is_empty())
-                && (masked[line_idx].trim_start().starts_with("|>")
-                    || masked[prev].trim_end().ends_with("|>"))
-            {
+            if pipes_connected(chars, bytes, prev, *pipe) {
                 Some(())
             } else {
                 None
@@ -58,13 +81,237 @@ fn group_pipe_lines(masked: &[&str]) -> Vec<Vec<usize>> {
         });
         if join.is_some() {
             if let Some(group) = groups.last_mut() {
-                group.push(line_idx);
+                group.push(*pipe);
             }
         } else {
-            groups.push(vec![line_idx]);
+            groups.push(vec![*pipe]);
         }
     }
     groups
+}
+
+/// Whether two consecutive `|>` byte offsets belong to one chain: the text
+/// between them must not cross a depth-zero statement boundary.
+fn pipes_connected(chars: &[char], bytes: &[usize], prev: usize, curr: usize) -> bool {
+    pipes_connected_inner(chars, bytes, prev, curr, true)
+}
+
+/// Shared connectivity with optional `fn`-balance gating: grouping gates
+/// on it, lone rejoining skips it (inner groups already nest correctly).
+fn pipes_connected_nofn(chars: &[char], bytes: &[usize], prev: usize, curr: usize) -> bool {
+    pipes_connected_inner(chars, bytes, prev, curr, false)
+}
+
+fn pipes_connected_inner(
+    chars: &[char],
+    bytes: &[usize],
+    prev: usize,
+    curr: usize,
+    check_fn: bool,
+) -> bool {
+    let mut start = char_index(bytes, prev) + 2;
+    let end = char_index(bytes, curr);
+    // Pipes inside an unbalanced `fn...end` span belong to the inner
+    // function; complete `fn` arguments stay transparent (see
+    // `fn_depth_delta`).
+    if check_fn && fn_depth_delta(chars, start, end) != 0 {
+        return false;
+    }
+    let mut depth = 0_usize;
+    while start < end && start < chars.len() {
+        match chars[start] {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => {
+                if depth > 0 {
+                    depth -= 1;
+                } else {
+                    return false;
+                }
+            }
+            '\n' if depth == 0 => {
+                if newline_stops(chars, start) {
+                    return false;
+                }
+            }
+            '=' | ',' | ';' if depth == 0 => return false,
+            _ if depth == 0 => {
+                if word_ending_at_con(chars, start) {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+        start += 1;
+    }
+    true
+}
+
+const CHAIN_STOP_WORDS: &[&str] = &[
+    "do", "else", "if", "unless", "case", "cond", "with", "for", "try", "quote", "receive",
+    "catch", "rescue", "after", "when", "in", "not", "and", "or", "end",
+];
+
+/// Net `fn`/`end` word balance over a span: nonzero means the span enters
+/// (or leaves) a function body, so its pipes live at another level.
+/// Complete `fn...end` arguments balance out and stay transparent.
+fn fn_depth_delta(chars: &[char], start: usize, end: usize) -> i32 {
+    let mut delta = 0_i32;
+    let mut idx = start;
+    while idx < end && idx < chars.len() {
+        if word_ending_at(chars, idx, b"fn") {
+            delta += 1;
+        } else if word_ending_at(chars, idx, b"end") {
+            delta -= 1;
+        }
+        idx += 1;
+    }
+    delta
+}
+
+fn word_ending_at_con(chars: &[char], i: usize) -> bool {
+    CHAIN_STOP_WORDS
+        .iter()
+        .any(|w| word_ending_at(chars, i, w.as_bytes()))
+}
+
+/// Whether `word` ends at char `i` with identifier boundaries.
+fn word_ending_at(chars: &[char], i: usize, word: &[u8]) -> bool {
+    if word.is_empty() || i + 1 < word.len() {
+        return false;
+    }
+    if !(chars[i + 1 - word.len()..=i]
+        .iter()
+        .zip(word.iter())
+        .all(|(got, want)| *got == *want as char))
+    {
+        return false;
+    }
+    if i + 1 == word.len() {
+        return true;
+    }
+    let prev = chars[i - word.len()];
+    if is_name_char(prev) || prev == '.' || prev == ':' || prev == '@' {
+        return false;
+    }
+    chars.get(i + 1).is_none_or(|c| !is_name_char(*c))
+}
+
+/// Whether a newline at char `i` ends the previous statement.
+fn newline_stops(chars: &[char], i: usize) -> bool {
+    // A pipe opener on the next line continues the expression, even after a
+    // bare word (`do_something\n    |> ...` is one chain).
+    if let Some((c, at)) = next_non_ws(chars, i)
+        && c == '|'
+        && chars.get(at + 1) == Some(&'>')
+    {
+        return false;
+    }
+    if let Some(c) = prev_non_ws(chars, i) {
+        if is_continuation_char(c) {
+            return false;
+        }
+        if is_name_char(c) {
+            if !prev_word_is(chars, i, b"end") {
+                return true;
+            }
+        } else if !(c == ')' || c == ']' || c == '}' || c == '"' || c == '\'') {
+            return true;
+        }
+    } else {
+        return true;
+    }
+    match next_non_ws(chars, i) {
+        None => true,
+        Some((c, at)) => {
+            if !is_continuation_start(c) {
+                return true;
+            }
+            c == '-' && chars.get(at + 1) == Some(&'>')
+        }
+    }
+}
+
+fn is_continuation_char(c: char) -> bool {
+    matches!(
+        c,
+        '|' | '>' | '<' | '=' | '+' | '*' | '/' | '&' | '.' | '~' | '^' | ',' | '(' | '[' | '{'
+    )
+}
+
+fn is_continuation_start(c: char) -> bool {
+    matches!(
+        c,
+        '|' | '+' | '-' | '*' | '/' | '>' | '<' | '&' | '.' | '~' | '^'
+    )
+}
+
+fn prev_non_ws(chars: &[char], i: usize) -> Option<char> {
+    let mut j = i;
+    while j > 0 {
+        j -= 1;
+        if !chars[j].is_whitespace() {
+            return Some(chars[j]);
+        }
+    }
+    None
+}
+
+fn next_non_ws(chars: &[char], i: usize) -> Option<(char, usize)> {
+    let mut j = i + 1;
+    while j < chars.len() {
+        if !chars[j].is_whitespace() {
+            return Some((chars[j], j));
+        }
+        j += 1;
+    }
+    None
+}
+
+fn prev_word_is(chars: &[char], i: usize, word: &[u8]) -> bool {
+    let mut j = i;
+    while j > 0 && chars[j - 1].is_whitespace() {
+        j -= 1;
+    }
+    j >= word.len()
+        && chars[j - word.len()..j]
+            .iter()
+            .zip(word.iter())
+            .all(|(got, want)| *got == *want as char)
+        && (j < word.len() + 1 || !is_name_char(chars[j - word.len() - 1]))
+}
+
+fn char_index(bytes: &[usize], pos: usize) -> usize {
+    bytes.partition_point(|byte| *byte < pos)
+}
+
+fn pipe_positions(masked: &str) -> Vec<usize> {
+    let mut out = Vec::new();
+    let mut search = 0_usize;
+    while let Some(rel) = masked[search..].find("|>") {
+        out.push(search + rel);
+        search += rel + "|>".len();
+    }
+    out
+}
+
+fn line_starts(masked: &str) -> Vec<usize> {
+    let mut starts = vec![0_usize];
+    for (byte, c) in masked.char_indices() {
+        if c == '\n' {
+            starts.push(byte + 1);
+        }
+    }
+    starts
+}
+
+/// Line index and in-line byte offset of a `|>` byte offset.
+fn line_pipe_at(starts: &[usize], masked: &[&str], pipe: usize) -> (usize, usize) {
+    let line_idx = starts
+        .partition_point(|start| *start <= pipe)
+        .saturating_sub(1);
+    let pipe_at = pipe - starts.get(line_idx).copied().unwrap_or(0);
+    let _ = masked.get(line_idx);
+    (line_idx, pipe_at)
 }
 
 /// Issue for a lone pipe, unless params allow its left-hand shape.
@@ -454,5 +701,37 @@ mod tests {
             )
             .is_empty()
         );
+    }
+    #[test]
+    fn multiline_args_chain_is_clean() {
+        let src = "def f(q, attrs) do\n  q\n  |> cast(attrs, [\n    :a,\n    :b\n  ])\n  |> validate_required([:a])\nend\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+    }
+    #[test]
+    fn fn_block_chain_is_clean() {
+        let src = "def g(headers) do\n  headers\n  |> Enum.reject(fn {name, _value} ->\n    name in [\"x\"]\n  end)\n  |> Enum.map(fn {name, value} -> name end)\nend\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+    }
+    #[test]
+    fn inner_fn_pipes_do_not_merge_outward() {
+        // `pod |> update_in(..., fn ... end) |> update_in(...)`: both
+        // outers form one chain when the block holds no pipes.
+        let src = "def trust(pod, secret) do\n  pod\n  |> update_in([\"a\"], fn c ->\n    Enum.map(c, fn x -> x end)\n  end)\n  |> update_in([\"b\"], &(&1 ++ [secret]))\nend\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+    }
+
+    #[test]
+    fn pipes_inside_fn_body_stay_inner() {
+        // Inner chain (2 pipes) and outer chain (2 pipes) are each clean;
+        // the inner pipes must not join the outer chain into singles.
+        let src = "def trust(pod) do\n  pod\n  |> update_in([\"a\"], fn c ->\n    c\n    |> Enum.map(fn x -> x end)\n    |> Enum.filter(fn x -> x end)\n  end)\n  |> update_in([\"b\"], pod)\nend\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+    }
+    #[test]
+    fn true_single_after_chain_still_reports() {
+        let src = "def f(q, attrs) do\n  q\n  |> cast(attrs, [\n    :a\n  ])\n  |> validate_required([:a])\nend\n\ndef h(x) do\n  x |> foo()\nend\n";
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new());
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].line, 10);
     }
 }
