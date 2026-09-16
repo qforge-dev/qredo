@@ -1236,7 +1236,10 @@ fn is_index_target(body: &str, idx: usize) -> bool {
         while start > 0 && is_ident_byte(bytes[start - 1]) {
             start -= 1;
         }
-        let word = body.get(start..back - 1).unwrap_or("");
+        // The whole preceding word (`start..back`): dropping its last
+        // byte turned every reserved word (`do`, `end`, `if`, ...) into a
+        // non-reserved prefix, miscounting pattern brackets as access.
+        let word = body.get(start..back).unwrap_or("");
         return !is_reserved(word);
     }
     matches!(prev, b')' | b']' | b'}' | b'"' | b'\'')
@@ -1428,6 +1431,30 @@ mod tests {
             .into_iter()
             .collect();
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+
+    #[test]
+    fn list_pattern_bracket_is_not_index_access() {
+        // `[]` after a reserved word (`do`) is a pattern, not `Access.get`
+        // (native sizes 3 and 5 here).
+        for (src, max) in [
+            (
+                "def f(c) do\n  case g(c) do\n    [] -> 1\n  end\nend\n",
+                "3",
+            ),
+            (
+                "def f(c) do\n  case g(c) do\n    [build] -> build\n  end\nend\n",
+                "5",
+            ),
+        ] {
+            let params: BTreeMap<String, String> = [("max_size".to_owned(), max.to_owned())]
+                .into_iter()
+                .collect();
+            assert!(
+                check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty(),
+                "{src:?}"
+            );
+        }
     }
 
     #[test]
