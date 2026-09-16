@@ -311,9 +311,17 @@ fn def_body(lines: &[&str], depths: &[usize], from: usize) -> String {
     if let Some(pos) = line.find(", do:") {
         return line.get(pos + 5..).unwrap_or("").to_owned();
     }
+    // A head continued below (`...,\n    do: ...`) carries its inline
+    // body on the continuation line: first depth-zero `do:` wins.
+    if head_continued(line)
+        && let Some(body) = continued_do_body(lines, from)
+    {
+        return body;
+    }
     if depth_after(lines, depths, from) == depths[from] {
         // No block opens on the head line: a one-liner body, or a
-        // continued head whose body starts after a later `do`.
+        // continued head (`...,\n    do:`, guard `when` below) whose body
+        // starts after a later `do`.
         if let Some(open) = block_opener(lines, depths, from) {
             let end = span_end(lines, depths, open);
             return lines.get((open + 1)..=end).unwrap_or(&[]).join("\n");
@@ -324,10 +332,51 @@ fn def_body(lines: &[&str], depths: &[usize], from: usize) -> String {
     lines.get((from + 1)..=end).unwrap_or(&[]).join("\n")
 }
 
+/// Inline body after a continued head's depth-zero `do:` (`...,\n do:`),
+/// if the head never opens a block.
+fn continued_do_body(lines: &[&str], from: usize) -> Option<String> {
+    let mut depth = 0_i64;
+    for line in lines.iter().skip(from) {
+        let bytes = line.as_bytes();
+        let mut idx = 0_usize;
+        while idx < bytes.len() {
+            match bytes[idx] {
+                b'(' | b'[' | b'{' => depth += 1,
+                b')' | b']' | b'}' => depth -= 1,
+                _ => {}
+            }
+            if depth == 0
+                && line[idx..].starts_with("do")
+                && line[idx + 2..].starts_with(':')
+                && word_boundary(bytes, idx)
+                && word_boundary(bytes, idx + 2)
+            {
+                return line.get(idx + 3..).map(ToOwned::to_owned);
+            }
+            // A bare block opener wins over any later inline body.
+            if depth == 0
+                && line[idx..].starts_with("do")
+                && !line[idx + 2..].starts_with(':')
+                && word_boundary(bytes, idx)
+                && word_boundary(bytes, idx + 2)
+            {
+                return None;
+            }
+            idx += 1;
+        }
+        // Stop at dedent: the head is over without a body opener.
+        if depth < 0 {
+            return None;
+        }
+    }
+    None
+}
+
 /// First later line opening a continued head's block, if the head at
-/// `from` keeps going below its first line.
+/// `from` keeps going below its first line: unbalanced brackets, a
+/// trailing comma/operator, or a guard `when` opening below.
 fn block_opener(lines: &[&str], depths: &[usize], from: usize) -> Option<usize> {
-    if !head_continued(lines[from]) {
+    if !head_continued(lines[from]) && !guard_continued(lines, from) {
         return None;
     }
     let mut idx = from + 1;
@@ -343,8 +392,24 @@ fn block_opener(lines: &[&str], depths: &[usize], from: usize) -> Option<usize> 
     None
 }
 
-/// Whether the head line continues below: unbalanced brackets, a trailing
-/// comma, or a trailing operator.
+/// Whether the head at `from` continues with a guard `when` clause on a
+/// following line (`...)\n    when ... do`): only the first non-blank
+/// line below decides.
+fn guard_continued(lines: &[&str], from: usize) -> bool {
+    let Some(next) = lines
+        .iter()
+        .skip(from + 1)
+        .map(|line| line.trim_start())
+        .find(|trimmed| !trimmed.is_empty())
+    else {
+        return false;
+    };
+    next.starts_with("when")
+        && next["when".len()..]
+            .chars()
+            .next()
+            .is_none_or(|c| !c.is_alphanumeric() && c != '_' && c != '?' && c != '!')
+}
 fn head_continued(line: &str) -> bool {
     let mut depth = 0_i64;
     for byte in line.bytes() {
@@ -1310,6 +1375,30 @@ mod tests {
         // ...while `(v0) = ...` scopes normally and stays clean.
         let src = "def f() do\n  (v0) = pin(v0)\n  v0\nend\n";
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+
+    #[test]
+    fn guard_continued_head_counts_body() {
+        // Guard `when` opening below the head line still scopes the body.
+        let src = "def invoke(a, b) when is_binary(a) and b != \"\" do\n    x = Req.post(a)\n    x\n  end\n";
+        let params: BTreeMap<String, String> = [("max_size".to_owned(), "0".to_owned())]
+            .into_iter()
+            .collect();
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &params);
+        assert_eq!(findings.len(), 1);
+    }
+
+    #[test]
+    fn continued_head_inline_body_counts() {
+        // `,\n    do:` carries the body on the continuation line.
+        let src =
+            "defp fetch_cursor(raw, collection, view),\n    do: decode(raw, collection, view)\n";
+        let params: BTreeMap<String, String> = [("max_size".to_owned(), "0".to_owned())]
+            .into_iter()
+            .collect();
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &params);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].message.contains("ABC size is 1"));
     }
 
     #[test]
