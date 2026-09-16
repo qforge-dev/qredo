@@ -1,0 +1,64 @@
+[
+  {
+    "id": "EX3020.boundary.charlist",
+    "origin": "boundary: semicolon inside a charlist is not code",
+    "source": "x = ';'\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3020.boundary.comment",
+    "origin": "boundary: semicolon inside a comment is not code",
+    "source": "x = 1 # ;\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3020.boundary.multi",
+    "origin": "boundary: several semicolons on one line",
+    "source": "a; b; c\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 2,
+        "line": 1,
+        "message": "Don't use `;` to separate statements and expressions.",
+        "trigger": ";"
+      },
+      {
+        "column": 5,
+        "line": 1,
+        "message": "Don't use `;` to separate statements and expressions.",
+        "trigger": ";"
+      }
+    ]
+  },
+  {
+    "id": "EX3020.boundary.string",
+    "origin": "boundary: semicolon inside a string is not code",
+    "source": "x = \";\"\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3020.upstream.expected-code",
+    "origin": "upstream: it should NOT report expected code",
+    "source": "def fun_name do\n  statement1\n  statement2\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3020.upstream.violation",
+    "origin": "upstream: it should report a violation",
+    "source": "def fun_name() do\n  statement1; statement2\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 13,
+        "line": 2,
+        "message": "Don't use `;` to separate statements and expressions.",
+        "trigger": ";"
+      }
+    ]
+  }
+]

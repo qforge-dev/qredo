@@ -1,0 +1,752 @@
+[
+  {
+    "id": "EX2007.upstream.clean",
+    "origin": "it should NOT report correct behaviour",
+    "assert": "refute_issues",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null,
+    "file_count": 0
+  },
+  {
+    "id": "EX2007.upstream.clean-credo-checks",
+    "origin": "it should NOT report with param :compare_to given as :credo_checks",
+    "assert": "refute_issues",
+    "source": "",
+    "params": {
+      "compare_to": ":credo_checks"
+    },
+    "findings": [],
+    "excluded_reason": null,
+    "file_count": 0
+  },
+  {
+    "id": "EX2007.upstream.clean-enabled-by-default",
+    "origin": "it should NOT report with param :compare_to given as :credo_checks_enabled_by_default",
+    "assert": "refute_issues",
+    "source": "",
+    "params": {
+      "compare_to": ":credo_checks_enabled_by_default"
+    },
+    "findings": [],
+    "excluded_reason": null,
+    "file_count": 0
+  },
+  {
+    "id": "EX2007.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issues(fn issues -> assert Enum.any?(issues, fn issue -> issue.trigger == no_trigger end) end)",
+    "source": "",
+    "params": {},
+    "findings": [
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Consistency.ExceptionNames` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Consistency.LineEndings` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Consistency.ParameterPatternMatching` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Consistency.SpaceAroundOperators` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Consistency.SpaceInParentheses` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Consistency.TabsOrSpaces` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Design.AliasUsage` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Design.TagFIXME` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Design.TagTODO` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Design.DeprecatedChecksConfig` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Design.RedundantConfigComments` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.AliasOrder` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.FunctionNames` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.LargeNumbers` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.MaxLineLength` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.ModuleAttributeNames` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.ModuleDoc` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.ModuleNames` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.ParenthesesInCondition` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.ParenthesesOnZeroArityDefs` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.PipeIntoAnonymousFunctions` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.PredicateFunctionNames` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.PreferImplicitTry` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.RedundantBlankLines` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.Semicolons` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.SpaceAfterCommas` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.SpecParameterNames` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.StringSigils` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.TrailingBlankLine` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.TrailingWhiteSpace` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.UnnecessaryAliasExpansion` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.VariableNames` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.WithSingleClause` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.Apply` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.CondStatements` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.CyclomaticComplexity` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.FilterCount` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.FilterFilter` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.FunctionArity` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.LongQuoteBlocks` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.MapJoin` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.MatchInCondition` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.NegatedConditionsInUnless` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.NegatedConditionsWithElse` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.Nesting` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.RedundantWithClauseResult` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.RejectReject` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.UnlessWithElse` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.UtcNowTruncate` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.WithClauses` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.ApplicationConfigInModuleAttribute` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.BoolOperationOnSameValues` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.Dbg` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.ExpensiveEmptyEnumCheck` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.ForbiddenFunction` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.ForbiddenModule` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.IExPry` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.IoInspect` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.MissedMetadataKeyInLoggerConfig` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.OperationOnSameValues` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.OperationWithConstantResult` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.RaiseInsideRescue` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.SpecWithStruct` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.StructFieldAmount` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.UnsafeExec` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.UnsafeToAtom` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.UnusedEnumOperation` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.UnusedFileOperation` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.UnusedKeywordOperation` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.UnusedListOperation` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.UnusedMapOperation` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.UnusedOperation` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.UnusedPathOperation` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.UnusedRegexOperation` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.UnusedStringOperation` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.UnusedTupleOperation` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.WrongTestFilename` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Consistency.MultiAliasImportRequireUse` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Consistency.UnusedVariableNames` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Design.DuplicatedCode` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Design.SkipTestWithoutComment` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Design.MissingCheckInConfig` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.AliasAs` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.BlockPipe` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.CaptureOperator` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.ImplTrue` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.MultiAlias` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.NestedFunctionCalls` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.OneArityFunctionInPipe` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.OnePipePerLine` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.SeparateAliasRequire` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.SingleFunctionToBlockPipe` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.SinglePipe` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.Specs` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.StrictModuleLayout` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.UnusedFunctionParameterPattern` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Readability.WithCustomTaggedTuple` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.ABCSize` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.AppendSingleItem` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.CondInsteadOfIfElse` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.DoubleBooleanNegation` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.FilterReject` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.IoPuts` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.MapMap` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.ModuleDependencies` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.NegatedIsNil` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.PassAsyncInTestCases` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.PipeChainStart` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.PreferDateTimeShift` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.RejectFilter` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Refactor.VariableRebinding` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.LazyLogging` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.LeakyEnvironment` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.MapGetUnsafePass` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "line": null,
+        "message": "Check `Credo.Check.Warning.MixEnv` missing in config: enable or disable it explicitly.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "excluded_reason": null,
+    "filename": ".credo.exs",
+    "exec_validated_config": {
+      "checks": {
+        "disabled": [],
+        "enabled": [
+          {
+            "check": "Credo.Check.Foo.NonExistentCheck",
+            "params": []
+          },
+          {
+            "check": "Credo.Check.Bar.NonCheck2",
+            "params": []
+          }
+        ]
+      }
+    }
+  }
+]

@@ -1,0 +1,105 @@
+[
+  {
+    "id": "EX2004.upstream.couple",
+    "origin": "upstream: it should report a couple of issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case # FIXME: this is the first\n  @moduledoc \"\"\"\n    this is an example # FIXME: and this is no actual comment\n  \"\"\"\n\n  def some_fun do # FIXME this is the second\n    x = ~s{also: # FIXME: no comment here}\n    assert 2 == x\n    ?\" # FIXME: this is the third\n\n    \"also: # FIXME: no comment here as well\"\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": [
+      {
+        "column": 19,
+        "line": 2,
+        "message": "Found a FIXME tag in a comment: # FIXME: this is the first",
+        "trigger": "# FIXME: this is the first"
+      },
+      {
+        "column": 19,
+        "line": 7,
+        "message": "Found a FIXME tag in a comment: # FIXME this is the second",
+        "trigger": "# FIXME this is the second"
+      },
+      {
+        "column": 8,
+        "line": 10,
+        "message": "Found a FIXME tag in a comment: # FIXME: this is the third",
+        "trigger": "# FIXME: this is the third"
+      }
+    ]
+  },
+  {
+    "id": "EX2004.upstream.couple-docs",
+    "origin": "upstream: it should report a couple of issues when including docstrings",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case # FIXME: this is the first\n\n  @doc \"\"\"\n  FIXME: and this is no actual comment\n  \"\"\"\n  def some_fun do # FIXME this is the second\n    x = ~s{also: # FIXME: no comment here}\n    assert 2 == x\n    ?\" # FIXME: this is the third\n\n    \"also: # FIXME: no comment here as well\"\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": [
+      {
+        "column": 19,
+        "line": 2,
+        "message": "Found a FIXME tag in a comment: # FIXME: this is the first",
+        "trigger": "# FIXME: this is the first"
+      },
+      {
+        "column": 3,
+        "line": 5,
+        "message": "Found a FIXME tag in a comment: FIXME: and this is no actual comment",
+        "trigger": "FIXME: and this is no actual comment"
+      },
+      {
+        "column": 19,
+        "line": 7,
+        "message": "Found a FIXME tag in a comment: # FIXME this is the second",
+        "trigger": "# FIXME this is the second"
+      },
+      {
+        "column": 8,
+        "line": 10,
+        "message": "Found a FIXME tag in a comment: # FIXME: this is the third",
+        "trigger": "# FIXME: this is the third"
+      }
+    ]
+  },
+  {
+    "id": "EX2004.upstream.expected-code",
+    "origin": "upstream: it should NOT report expected code",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX2004.upstream.lowercase",
+    "origin": "upstream: it should report an issue when lower case",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    # fixme blah blah\n    Repo.preload(:comments)\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Found a FIXME tag in a comment: # fixme blah blah",
+        "trigger": "# fixme blah blah"
+      }
+    ]
+  },
+  {
+    "id": "EX2004.upstream.violation",
+    "origin": "upstream: it should report an issue",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case # TODO: this should not appear in the FIXME test\n\n  # FIXME: this should not appear in the # FIXME test\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": [
+      {
+        "column": 3,
+        "line": 4,
+        "message": "Found a FIXME tag in a comment: # FIXME: this should not appear in the # FIXME test",
+        "trigger": "# FIXME: this should not appear in the # FIXME test"
+      }
+    ]
+  }
+]

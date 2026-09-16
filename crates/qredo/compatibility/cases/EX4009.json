@@ -1,0 +1,107 @@
+[
+  {
+    "id": "EX4009.upstream.not-expected",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    Enum.reject([\"a\", \"b\", \"c\"], fn letter ->\n      !String.contains?(letter, \"x\") && String.contains?(letter, \"a\")\n    end)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4009.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    [\"a\", \"b\", \"c\"]\n    |> Enum.filter(&String.contains?(&1, \"x\"))\n    |> Enum.reject(&String.contains?(&1, \"a\"))\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 5,
+        "message": "One `Enum.filter/2` is more efficient than `Enum.filter/2 |> Enum.reject/2`",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4009.upstream.violation-2",
+    "origin": "it should report a violation /2",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5, p6) do\n    Enum.reject(Enum.filter([:a, :b, :c], &String.contains?(&1, \"x\")), &String.contains?(&1, \"a\"))\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": null,
+        "line": 3,
+        "message": "One `Enum.filter/2` is more efficient than `Enum.filter/2 |> Enum.reject/2`",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4009.upstream.violation-3",
+    "origin": "it should report a violation /3",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    [:a, :b, :c]\n    |> Enum.sort()\n    |> Enum.filter(&String.contains?(&1, \"x\"))\n    |> Enum.reject(&String.contains?(&1, \"a\"))\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 6,
+        "message": "One `Enum.filter/2` is more efficient than `Enum.filter/2 |> Enum.reject/2`",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4009.upstream.violation-4",
+    "origin": "it should report a violation /4",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    [:a, :b, :c]\n    |> Enum.sort()\n    |> Enum.filter(&String.contains?(&1, \"x\"))\n    |> Enum.reject(&String.contains?(&1, \"a\"))\n    |> Enum.sort()\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 6,
+        "message": "One `Enum.filter/2` is more efficient than `Enum.filter/2 |> Enum.reject/2`",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4009.upstream.violation-5",
+    "origin": "it should report a violation /5",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    Enum.filter([:a, :b, :c], &String.contains?(&1, \"x\"))\n    |> Enum.reject(&String.contains?(&1, \"a\"))\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 4,
+        "message": "One `Enum.filter/2` is more efficient than `Enum.filter/2 |> Enum.reject/2`",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4009.upstream.violation-6",
+    "origin": "it should report a violation /6",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    Enum.reject([:a, :b, :c] |> Enum.filter(&String.contains?(&1, \"x\")), &String.contains?(&1, \"a\"))\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 30,
+        "line": 3,
+        "message": "One `Enum.filter/2` is more efficient than `Enum.filter/2 |> Enum.reject/2`",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

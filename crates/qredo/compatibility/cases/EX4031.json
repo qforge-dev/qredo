@@ -1,0 +1,308 @@
+[
+  {
+    "id": "EX4031.upstream.ok_non_case_use",
+    "origin": "it ignores `use` statements for modules not ending in 'Case'",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  use SomeModule\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_true_my_app_data_case",
+    "origin": "it allows `use MyApp.DataCase, async: true`",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  use MyApp.DataCase, async: true\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_false_my_app_data_case",
+    "origin": "it allows `use MyApp.DataCase, async: false`",
+    "assert": "refute_issues",
+    "source": "defmodule BlahTest do\n  use MyApp.DataCase, async: false\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_false_comment_my_app_data_case",
+    "origin": "it allows `use MyApp.DataCase, async: false` with a commit",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  # a comment explaining why async is false\n  use MyApp.DataCase, async: false\nend\n",
+    "params": {
+      "force_comment_on_explicit_false": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_fun_call_my_app_data_case",
+    "origin": "it allows `use MyApp.DataCase, async:` with a value from a function call",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  use MyApp.DataCase, async: Application.compile_env(:my_app, :async, true)\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_attr_my_app_data_case",
+    "origin": "it allows `use MyApp.DataCase, async:` with a value from an attribute",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  @async false\n  use MyApp.DataCase, async: @async\nend\n",
+    "params": {
+      "force_comment_on_explicit_false": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.violation_other_opts_my_app_data_case",
+    "origin": "it does not allow `use MyApp.DataCase` with other options but not `async:`",
+    "assert": "assert_issue",
+    "source": "defmodule ThingTest do\n  use MyApp.DataCase, bite_strength: :xtreme\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 2,
+        "message": "Pass an `:async` boolean option to `use` a test case module.",
+        "trigger": "use"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.violation_no_opts_my_app_data_case",
+    "origin": "it does not allow `use MyApp.DataCase` without options",
+    "assert": "assert_issue",
+    "source": "defmodule FooTest do\n  # some comment\n  use MyApp.DataCase\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 3,
+        "message": "Pass an `:async` boolean option to `use` a test case module.",
+        "trigger": "use"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.violation_async_false_my_app_data_case",
+    "origin": "it does not allow `use MyApp.DataCase` with `async: false`",
+    "assert": "assert_issue",
+    "source": "defmodule FooTest do\n  use MyApp.DataCase, async: false\nend\n",
+    "params": {
+      "force_comment_on_explicit_false": true
+    },
+    "findings": [
+      {
+        "column": 3,
+        "line": 2,
+        "message": "Tests with `async: false` need a comment explaining why they can't be run asynchronously.",
+        "trigger": "use"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_true_conn_case",
+    "origin": "it allows `use ConnCase, async: true`",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  use ConnCase, async: true\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_false_conn_case",
+    "origin": "it allows `use ConnCase, async: false`",
+    "assert": "refute_issues",
+    "source": "defmodule BlahTest do\n  use ConnCase, async: false\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_false_comment_conn_case",
+    "origin": "it allows `use ConnCase, async: false` with a commit",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  # a comment explaining why async is false\n  use ConnCase, async: false\nend\n",
+    "params": {
+      "force_comment_on_explicit_false": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_fun_call_conn_case",
+    "origin": "it allows `use ConnCase, async:` with a value from a function call",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  use ConnCase, async: Application.compile_env(:my_app, :async, true)\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_attr_conn_case",
+    "origin": "it allows `use ConnCase, async:` with a value from an attribute",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  @async false\n  use ConnCase, async: @async\nend\n",
+    "params": {
+      "force_comment_on_explicit_false": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.violation_other_opts_conn_case",
+    "origin": "it does not allow `use ConnCase` with other options but not `async:`",
+    "assert": "assert_issue",
+    "source": "defmodule ThingTest do\n  use ConnCase, bite_strength: :xtreme\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 2,
+        "message": "Pass an `:async` boolean option to `use` a test case module.",
+        "trigger": "use"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.violation_no_opts_conn_case",
+    "origin": "it does not allow `use ConnCase` without options",
+    "assert": "assert_issue",
+    "source": "defmodule FooTest do\n  # some comment\n  use ConnCase\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 3,
+        "message": "Pass an `:async` boolean option to `use` a test case module.",
+        "trigger": "use"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.violation_async_false_conn_case",
+    "origin": "it does not allow `use ConnCase` with `async: false`",
+    "assert": "assert_issue",
+    "source": "defmodule FooTest do\n  use ConnCase, async: false\nend\n",
+    "params": {
+      "force_comment_on_explicit_false": true
+    },
+    "findings": [
+      {
+        "column": 3,
+        "line": 2,
+        "message": "Tests with `async: false` need a comment explaining why they can't be run asynchronously.",
+        "trigger": "use"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_true_foo_bar_baz_case",
+    "origin": "it allows `use Foo.Bar.BazCase, async: true`",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  use Foo.Bar.BazCase, async: true\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_false_foo_bar_baz_case",
+    "origin": "it allows `use Foo.Bar.BazCase, async: false`",
+    "assert": "refute_issues",
+    "source": "defmodule BlahTest do\n  use Foo.Bar.BazCase, async: false\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_false_comment_foo_bar_baz_case",
+    "origin": "it allows `use Foo.Bar.BazCase, async: false` with a commit",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  # a comment explaining why async is false\n  use Foo.Bar.BazCase, async: false\nend\n",
+    "params": {
+      "force_comment_on_explicit_false": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_fun_call_foo_bar_baz_case",
+    "origin": "it allows `use Foo.Bar.BazCase, async:` with a value from a function call",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  use Foo.Bar.BazCase, async: Application.compile_env(:my_app, :async, true)\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.ok_async_attr_foo_bar_baz_case",
+    "origin": "it allows `use Foo.Bar.BazCase, async:` with a value from an attribute",
+    "assert": "refute_issues",
+    "source": "defmodule FooTest do\n  @async false\n  use Foo.Bar.BazCase, async: @async\nend\n",
+    "params": {
+      "force_comment_on_explicit_false": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.violation_other_opts_foo_bar_baz_case",
+    "origin": "it does not allow `use Foo.Bar.BazCase` with other options but not `async:`",
+    "assert": "assert_issue",
+    "source": "defmodule ThingTest do\n  use Foo.Bar.BazCase, bite_strength: :xtreme\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 2,
+        "message": "Pass an `:async` boolean option to `use` a test case module.",
+        "trigger": "use"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.violation_no_opts_foo_bar_baz_case",
+    "origin": "it does not allow `use Foo.Bar.BazCase` without options",
+    "assert": "assert_issue",
+    "source": "defmodule FooTest do\n  # some comment\n  use Foo.Bar.BazCase\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 3,
+        "message": "Pass an `:async` boolean option to `use` a test case module.",
+        "trigger": "use"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4031.upstream.violation_async_false_foo_bar_baz_case",
+    "origin": "it does not allow `use Foo.Bar.BazCase` with `async: false`",
+    "assert": "assert_issue",
+    "source": "defmodule FooTest do\n  use Foo.Bar.BazCase, async: false\nend\n",
+    "params": {
+      "force_comment_on_explicit_false": true
+    },
+    "findings": [
+      {
+        "column": 3,
+        "line": 2,
+        "message": "Tests with `async: false` need a comment explaining why they can't be run asynchronously.",
+        "trigger": "use"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

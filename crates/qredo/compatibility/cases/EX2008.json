@@ -1,0 +1,74 @@
+[
+  {
+    "id": "EX2008.upstream.clean",
+    "origin": "it should NOT report correct behaviour",
+    "assert": "refute_issues",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null,
+    "file_count": 0
+  },
+  {
+    "id": "EX2008.upstream.violation-list",
+    "origin": "it should report a violation for giving a list instead of a map for :checks",
+    "assert": "assert_issue(%{trigger: no_trigger, message: ~r/:checks/})",
+    "source": "",
+    "params": {},
+    "findings": [
+      {
+        "column": null,
+        "line": null,
+        "message": "Using a list for `:checks` in Credo's config is deprecated, use a map instead.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "excluded_reason": null,
+    "filename": ".credo.exs",
+    "exec_validated_config": {
+      "checks": [
+        {
+          "check": "Credo.Check.Foo.BarCheck",
+          "params": []
+        },
+        {
+          "check": "Credo.Check.Bar.BazCheck",
+          "params": []
+        }
+      ],
+      "checks_kind": "list"
+    }
+  },
+  {
+    "id": "EX2008.upstream.violation-false",
+    "origin": "it should report a violation for deactivating checks by setting params to `false`",
+    "assert": "assert_issue(%{trigger: no_trigger, message: ~r/false/})",
+    "source": "",
+    "params": {},
+    "findings": [
+      {
+        "column": null,
+        "line": null,
+        "message": "Using `false` for deactivating check `Credo.Check.Foo.BarCheck` in Credo's config is deprecated, move them to `:disabled` instead.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "excluded_reason": null,
+    "filename": ".credo.exs",
+    "exec_validated_config": {
+      "checks": {
+        "enabled": [
+          {
+            "check": "Credo.Check.Foo.BarCheck",
+            "params": false
+          },
+          {
+            "check": "Credo.Check.Bar.BazCheck",
+            "params": []
+          }
+        ]
+      },
+      "checks_kind": "map"
+    }
+  }
+]

@@ -1,0 +1,136 @@
+[
+  {
+    "id": "EX4030.upstream.not-count-2",
+    "origin": "it should NOT report when using Enum.count/2",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    Enum.count([1, 2, 3], fn x -> rem(x, 3) == 0 end)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4030.upstream.not-filter-count-2-pipe",
+    "origin": "it should NOT report when piping list into Enum.filter/2 and piping result of that into Enum.count/2",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    [1, 2, 3]\n    |> Enum.filter(fn x -> rem(x, 3) == 0 end)\n    |> Enum.count(fn x -> x > 2 end)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4030.upstream.not-larger-pipeline-count-2",
+    "origin": "it should NOT report when part of a larger pipeline using Enum.count/2",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    [1, 2, 3]\n    |> Enum.sort()\n    |> Enum.filter(fn x -> rem(x, 3) == 0 end)\n    |> Enum.count(fn x -> x > 2 end)\n    |> then(fn x -> x + 1 end)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4030.upstream.not-filter-param-count-2",
+    "origin": "it should NOT report when piping list into Enum.filter/2 and passing result as parameter to Enum.count/2",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    Enum.count([1, 2, 3] |> Enum.filter(fn x -> rem(x, 3) == 0 end), fn x -> x > 2 end)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4030.upstream.not-filter-args-count-2",
+    "origin": "it should NOT report when applying Enum.filter/2 to two arguments and passing result to Enum.count/2",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5, p6) do\n    Enum.count(Enum.filter([1, 2, 3], fn x -> rem(x, 3) == 0 end), fn x -> x > 2 end)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4030.upstream.not-filter-pipe-count-2",
+    "origin": "it should NOT report when applying Enum.filter/2 to two arguments and piping into Enum.count/2",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    Enum.filter([1, 2, 3], fn x -> rem(x, 3) == 0 end)\n    |> Enum.count(fn x -> x > 2 end)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4030.upstream.violation-pipe",
+    "origin": "it should report a violation when piping list into Enum.filter/2 and piping result of that into Enum.count/1",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    [1, 2, 3]\n    |> Enum.filter(fn x -> rem(x, 3) == 0 end)\n    |> Enum.count()\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 13,
+        "line": 5,
+        "message": "`Enum.count/2` is more efficient than `Enum.filter/2 |> Enum.count/1`.",
+        "trigger": "count"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4030.upstream.violation-larger-pipeline",
+    "origin": "it should report a violation when filter-count pipeline is part of a larger pipeline",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    [1, 2, 3]\n    |> Enum.sort()\n    |> Enum.filter(fn x -> rem(x, 3) == 0 end)\n    |> Enum.count()\n    |> then(fn x -> x + 1 end)\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 13,
+        "line": 6,
+        "message": "`Enum.count/2` is more efficient than `Enum.filter/2 |> Enum.count/1`.",
+        "trigger": "count"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4030.upstream.violation-param",
+    "origin": "it should report a violation when piping list into Enum.filter/2 and passing result as parameter to Enum.count/1",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    Enum.count([1, 2, 3] |> Enum.filter(fn x -> rem(x, 3) == 0 end))\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 10,
+        "line": 3,
+        "message": "`Enum.count/2` is more efficient than `Enum.filter/2 |> Enum.count/1`.",
+        "trigger": "count"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4030.upstream.violation-args",
+    "origin": "it should report a violation when applying Enum.filter/2 to two arguments and passing result to Enum.count/1",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5, p6) do\n    Enum.count(Enum.filter([1, 2, 3], fn x -> rem(x, 3) == 0 end))\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 10,
+        "line": 3,
+        "message": "`Enum.count/2` is more efficient than `Enum.filter/2 |> Enum.count/1`.",
+        "trigger": "count"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4030.upstream.violation-filter-pipe",
+    "origin": "it should report a violation when applying Enum.filter/2 to two arguments and piping into Enum.count/1",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    Enum.filter([1, 2, 3], fn x -> rem(x, 3) == 0 end)\n    |> Enum.count()\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 13,
+        "line": 4,
+        "message": "`Enum.count/2` is more efficient than `Enum.filter/2 |> Enum.count/1`.",
+        "trigger": "count"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

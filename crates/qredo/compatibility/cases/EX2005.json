@@ -1,0 +1,253 @@
+[
+  {
+    "id": "EX2005.upstream.clean",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  # Attempts to soft delete a todo that\n  # belongs to a user with the given user_id.\n  #\n  # Returns `{:ok, todo_id}` on success.\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.clean-doc",
+    "origin": "it should NOT report expected @doc values",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  @doc \"\"\"\n  Attempts to soft delete a todo that\n  belongs to a user with the given user_id.\n\n  Returns `{:ok, todo_id}` on success.\n  \"\"\"\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.clean-moduledoc-strings",
+    "origin": "it should NOT report a couple of issues",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n  @moduledoc \"\"\"\n    this is an example # TODO: and this is an actual TODO\n  \"\"\"\n\n  def some_fun do\n    x = ~s{also: # TODO: no comment here}\n    assert 2 == x\n    ?\"\n\n    \"also: # TODO: no comment here as well\"\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.violation",
+    "origin": "it should report an issue",
+    "assert": "assert_issue(%{line_no: 4, column: 3})",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case # FIXME: this should not appear in the TODO test\n\n  # TODO: this should not appear in the # TODO test\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 4,
+        "message": "Found a TODO tag in a comment: # TODO: this should not appear in the # TODO test",
+        "trigger": "# TODO: this should not appear in the # TODO test"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.doc-tag",
+    "origin": "it should report an issue for @doc tags",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"\"\"\n  FIXME: this should not appear in the test\n  \"\"\"\n\n  @doc \"TODO: this should yield an issue\"\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 9,
+        "line": 6,
+        "message": "Found a TODO tag in a comment: TODO: this should yield an issue",
+        "trigger": "TODO: this should yield an issue"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.moduledoc-tag",
+    "origin": "it should report an issue for @moduledoc tags",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"\"\"\n  TODO: this should not appear in the TODO test\n  \"\"\"\n\n  @doc \"FIXME: this should yield an issue\"\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 3,
+        "message": "Found a TODO tag in a comment: TODO: this should not appear in the TODO test",
+        "trigger": "TODO: this should not appear in the TODO test"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.shortdoc-tag",
+    "origin": "it should report an issue for @shortdoc tags",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  @shortdoc \"\"\"\n  TODO: this should not appear in the TODO test\n  \"\"\"\n\n  @doc \"FIXME: this should yield an issue\"\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 3,
+        "message": "Found a TODO tag in a comment: TODO: this should not appear in the TODO test",
+        "trigger": "TODO: this should not appear in the TODO test"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.not-indented",
+    "origin": "it should report an issue when not indented",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case # FIXME: this should not appear in the TODO test\n\n# TODO: this should appear\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 1,
+        "line": 4,
+        "message": "Found a TODO tag in a comment: # TODO: this should appear",
+        "trigger": "# TODO: this should appear"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.no-spaces",
+    "origin": "it should report an issue when no spaces",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  #TODO: this should appear\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 2,
+        "message": "Found a TODO tag in a comment: #TODO: this should appear",
+        "trigger": "#TODO: this should appear"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.more-spaces-after-hash",
+    "origin": "it should report an issue with more spaces after #",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  #       TODO: this should appear\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 2,
+        "message": "Found a TODO tag in a comment: #       TODO: this should appear",
+        "trigger": "#       TODO: this should appear"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.more-spaces-after-tag",
+    "origin": "it should report an issue with more spaces after tag",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  # TODO:         this should appear\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 2,
+        "message": "Found a TODO tag in a comment: # TODO:         this should appear",
+        "trigger": "# TODO:         this should appear"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.end-of-line-no-space",
+    "origin": "it should report an issue at the end of a line w/o space",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    Repo.preload(:comments)# TODO blah blah\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 28,
+        "line": 3,
+        "message": "Found a TODO tag in a comment: # TODO blah blah",
+        "trigger": "# TODO blah blah"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.lowercase",
+    "origin": "it should report an issue when lower case",
+    "assert": "assert_issue(%{line_no: 3, trigger: \"# todo blah blah\"})",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    # todo blah blah\n    Repo.preload(:comments)\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Found a TODO tag in a comment: # todo blah blah",
+        "trigger": "# todo blah blah"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.couple",
+    "origin": "it should report a couple of issues",
+    "assert": "assert_issues(3)",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case # TODO: this is the first\n  @moduledoc \"\"\"\n    this is an example # TODO: and this is an actual TODO\n  \"\"\"\n\n  def some_fun do # TODO this is the second\n    x = ~s{also: # TODO: no comment here}\n    assert 2 == x\n    ?\" # TODO: this is the third\n\n    \"also: # TODO: no comment here as well\"\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 19,
+        "line": 2,
+        "message": "Found a TODO tag in a comment: # TODO: this is the first",
+        "trigger": "# TODO: this is the first"
+      },
+      {
+        "column": 19,
+        "line": 7,
+        "message": "Found a TODO tag in a comment: # TODO this is the second",
+        "trigger": "# TODO this is the second"
+      },
+      {
+        "column": 8,
+        "line": 10,
+        "message": "Found a TODO tag in a comment: # TODO: this is the third",
+        "trigger": "# TODO: this is the third"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2005.upstream.couple-include-docs",
+    "origin": "it should report a couple of issues when including docs",
+    "assert": "assert_issues(4)",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case # TODO: this is the first\n\n  @doc \"\"\"\n  TODO: and this is an actual TODO\n  \"\"\"\n  def some_fun do # TODO this is the second\n    x = ~s{also: # TODO: no comment here}\n    assert 2 == x\n    ?\" # TODO: this is the third\n\n    \"also: # TODO: no comment here as well\"\n  end\nend\n",
+    "params": {
+      "include_doc": true
+    },
+    "findings": [
+      {
+        "column": 3,
+        "line": 5,
+        "message": "Found a TODO tag in a comment: TODO: and this is an actual TODO",
+        "trigger": "TODO: and this is an actual TODO"
+      },
+      {
+        "column": 19,
+        "line": 2,
+        "message": "Found a TODO tag in a comment: # TODO: this is the first",
+        "trigger": "# TODO: this is the first"
+      },
+      {
+        "column": 19,
+        "line": 7,
+        "message": "Found a TODO tag in a comment: # TODO this is the second",
+        "trigger": "# TODO this is the second"
+      },
+      {
+        "column": 8,
+        "line": 10,
+        "message": "Found a TODO tag in a comment: # TODO: this is the third",
+        "trigger": "# TODO: this is the third"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

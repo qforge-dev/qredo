@@ -1,0 +1,289 @@
+[
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3031.upstream.not-report-expected",
+    "origin": "it should NOT report expected code",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    some_value = parameter1 + parameter2\n    {some_value, _} = parameter1\n    [1, some_value] = parameter1\n    [some_value | tail] = parameter1\n    \"e\" <> some_value = parameter1\n    ^some_value = parameter1\n    %{some_value: some_value} = parameter1\n    ... = parameter1\n    latency_μs = 5\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation",
+    "origin": "it should report a violation",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    someValue = parameter1 + parameter2\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someOtherValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation-2",
+    "origin": "it should report a violation /2",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    someOtherValue = parameter1 + parameter2\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 12,
+        "line": 3,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation-3",
+    "origin": "it should report a violation /3",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    {true, someValue} = parameter1\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 9,
+        "line": 3,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation-4",
+    "origin": "it should report a violation /4",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    [1, someValue] = parameter1\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 6,
+        "line": 3,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation-5",
+    "origin": "it should report a violation /5",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    [someValue | tail] = parameter1\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 12,
+        "line": 3,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation-6",
+    "origin": "it should report a violation /6",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    \"e\" <> someValue = parameter1\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 6,
+        "line": 3,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation-7",
+    "origin": "it should report a violation /7",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    ^someValue = parameter1\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 19,
+        "line": 3,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation-8",
+    "origin": "it should report a violation /8",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    %{some_value: someValue} = parameter1\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 21,
+        "line": 2,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "oneParam"
+      }
+    ],
+    "id": "EX3031.upstream.violation-9",
+    "origin": "it should report a violation /9",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(oneParam, twoParam) do\n    :ok\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 9,
+        "line": 3,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation-11",
+    "origin": "it should report a violation /11",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(param) do\n    for someValue <- param do\n      someValue + 1\n    end\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 7,
+        "line": 6,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation-12",
+    "origin": "it should report a violation /12",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(param) do\n    case param do\n      0 -> :ok\n      1 -> :ok\n      someValue -> :error\n    end\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 7,
+        "line": 6,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation-13",
+    "origin": "it should report a violation /13",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(_param) do\n    try do\n      raise \"oops\"\n    catch\n      someValue -> :error\n    end\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 14,
+        "line": 4,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someJam"
+      }
+    ],
+    "id": "EX3031.upstream.violation-14",
+    "origin": "it should report a violation /14",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(param) do\n    receive do\n      {:get, someJam} -> :ok\n      {:put, ^param} -> :ok\n    end\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 7,
+        "line": 6,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "timeOut"
+      }
+    ],
+    "id": "EX3031.upstream.violation-15",
+    "origin": "it should report a violation /15",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(timeOut) do\n    receive do\n      _ -> :ok\n    after\n      timeOut -> :timeout\n    end\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 9,
+        "line": 3,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "otherParam"
+      }
+    ],
+    "id": "EX3031.upstream.violation-16",
+    "origin": "it should report a violation /16",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(param) do\n    fn (otherParam) -> param + otherParam end\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 16,
+        "line": 5,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation-17",
+    "origin": "it should report a violation /17",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(param) do\n    with {:ok, v1} <- M.f1(param),\n         {:ok, v2} <- M.f2(v1),\n         {:ok, someValue} <- M.f3(v2),\n         do: M.f0(someValue)\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issues",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 43,
+        "line": 3,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "otherValue"
+      },
+      {
+        "column": 19,
+        "line": 3,
+        "message": "Variable names should be written in snake_case.",
+        "trigger": "someValue"
+      }
+    ],
+    "id": "EX3031.upstream.violation-multiple",
+    "origin": "it should report multiple violations",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    %{some_value: someValue, other_value: otherValue} = parameter1\n  end\nend\n"
+  }
+]

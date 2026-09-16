@@ -1,0 +1,118 @@
+[
+  {
+    "id": "EX2005.boundary.doc-excluded",
+    "origin": "boundary: doc tags ignored when include_doc is false",
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"\"\"\n  FIXME: this should not appear in the test\n  \"\"\"\n\n  @doc \"TODO: this should yield an issue\"\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {
+      "include_doc": "false"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX2005.upstream.couple-clean",
+    "origin": "upstream: it should NOT report a couple of issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n  @moduledoc \"\"\"\n    this is an example # TODO: and this is an actual TODO\n  \"\"\"\n\n  def some_fun do\n    x = ~s{also: # TODO: no comment here}\n    assert 2 == x\n    ?\"\n\n    \"also: # TODO: no comment here as well\"\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX2005.upstream.doc-tags",
+    "origin": "upstream: it should report an issue for @doc tags",
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"\"\"\n  FIXME: this should not appear in the test\n  \"\"\"\n\n  @doc \"TODO: this should yield an issue\"\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": [
+      {
+        "column": 9,
+        "line": 6,
+        "message": "Found a TODO tag in a comment: TODO: this should yield an issue",
+        "trigger": "TODO: this should yield an issue"
+      }
+    ]
+  },
+  {
+    "id": "EX2005.upstream.doc-values",
+    "origin": "upstream: it should NOT report expected @doc values",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  @doc \"\"\"\n  Attempts to soft delete a todo that\n  belongs to a user with the given user_id.\n\n  Returns `{:ok, todo_id}` on success.\n  \"\"\"\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX2005.upstream.expected-code",
+    "origin": "upstream: it should NOT report expected code",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  # Attempts to soft delete a todo that\n  # belongs to a user with the given user_id.\n  #\n  # Returns `{:ok, todo_id}` on success.\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX2005.upstream.moduledoc-tags",
+    "origin": "upstream: it should report an issue for @moduledoc tags",
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"\"\"\n  TODO: this should not appear in the TODO test\n  \"\"\"\n\n  @doc \"FIXME: this should yield an issue\"\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": [
+      {
+        "column": 3,
+        "line": 3,
+        "message": "Found a TODO tag in a comment: TODO: this should not appear in the TODO test",
+        "trigger": "TODO: this should not appear in the TODO test"
+      }
+    ]
+  },
+  {
+    "id": "EX2005.upstream.not-indented",
+    "origin": "upstream: it should report an issue when not indented",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case # FIXME: this should not appear in the TODO test\n\n# TODO: this should appear\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": [
+      {
+        "column": 1,
+        "line": 4,
+        "message": "Found a TODO tag in a comment: # TODO: this should appear",
+        "trigger": "# TODO: this should appear"
+      }
+    ]
+  },
+  {
+    "id": "EX2005.upstream.shortdoc-tags",
+    "origin": "upstream: it should report an issue for @shortdoc tags",
+    "source": "defmodule CredoSampleModule do\n  @shortdoc \"\"\"\n  TODO: this should not appear in the TODO test\n  \"\"\"\n\n  @doc \"FIXME: this should yield an issue\"\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": [
+      {
+        "column": 3,
+        "line": 3,
+        "message": "Found a TODO tag in a comment: TODO: this should not appear in the TODO test",
+        "trigger": "TODO: this should not appear in the TODO test"
+      }
+    ]
+  },
+  {
+    "id": "EX2005.upstream.violation",
+    "origin": "upstream: it should report an issue",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case # FIXME: this should not appear in the TODO test\n\n  # TODO: this should not appear in the # TODO test\n\n  def some_fun do\n    assert x == x + 2\n  end\nend\n",
+    "params": {
+      "include_doc": "true"
+    },
+    "findings": [
+      {
+        "column": 3,
+        "line": 4,
+        "message": "Found a TODO tag in a comment: # TODO: this should not appear in the # TODO test",
+        "trigger": "# TODO: this should not appear in the # TODO test"
+      }
+    ]
+  }
+]

@@ -1,0 +1,5 @@
+# id repository commit license_path license_sha256
+credo https://github.com/rrrene/credo.git ea1ccb9023b44eecbe079dc4bfd48cca4e8b0187 LICENSE 18f34501c308339eac23ec684afec7aacc7c3145c12b322b4e94dd1c962b5976
+elixir https://github.com/elixir-lang/elixir.git 545dddf138e4cb1ee874e6f2c26882c9b438f551 LICENSES/Apache-2.0.txt 074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff
+jason https://github.com/michalmuskala/jason.git 926d2ac6cc0271b9a7079b2ec16ae0cf802f7963 LICENSE 6c73f07b2f5abbb4fd00f30cba97e4f358b86977b46ad82d87357964a2d350e0
+ecto https://github.com/elixir-ecto/ecto.git f6eb492964dbd32bc6924d5330d1cc05b41e89a1 LICENSE.md a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9

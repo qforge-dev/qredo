@@ -1,0 +1,109 @@
+[
+  {
+    "id": "EX3022.upstream.01",
+    "origin": "it should NOT report violation for valid pipes",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(arg) do\n    arg\n    |> do_something()\n    |> do_something_else()\n    |> case do\n      :this -> :that\n      :that -> :this\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3022.upstream.02",
+    "origin": "it should NOT report violation for valid pipes to if-expr",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(arg) do\n    arg\n    |> do_something()\n    |> do_something_else()\n    |> if do\n      :that\n    else\n      :this\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3022.upstream.03",
+    "origin": "it should NOT report violation for longer pipes",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(arg) do\n    arg\n    |> do_something()\n    |> case do\n      :this -> :that\n      :that -> :this\n    end\n    |> to_string()\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3022.upstream.04",
+    "origin": "it should report violation for single pipes to block",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  def some_function(arg) do\n    arg\n    |> case do\n      :this -> :that\n      :that -> :this\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 8,
+        "line": 4,
+        "message": "Avoid single pipes to a block",
+        "trigger": "case"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3022.upstream.05",
+    "origin": "it should report violation for single pipes to case with function",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  def some_function(arg) do\n    arg\n    |> do_something()\n    |> case do\n      :this -> :that\n      :that -> :this\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 8,
+        "line": 5,
+        "message": "Avoid single pipes to a block",
+        "trigger": "case"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3022.upstream.06",
+    "origin": "it should report violation for single pipes to if-expr with function",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  def some_function(arg) do\n    arg\n    |> do_something()\n    |> if do\n      :that\n    else\n      :this\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 8,
+        "line": 5,
+        "message": "Avoid single pipes to a block",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3022.upstream.07",
+    "origin": "it should report violation for single pipes starting with a list",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  def some_function(arg) do\n    [arg]\n    |> do_something()\n    |> case do\n      :this -> :that\n      :that -> :this\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 8,
+        "line": 5,
+        "message": "Avoid single pipes to a block",
+        "trigger": "case"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3022.upstream.08",
+    "origin": "it should report violation for single pipes starting with a map",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  def some_function(arg) do\n    %{a: 5}\n    |> do_something()\n    |> case do\n      :this -> :that\n      :that -> :this\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 8,
+        "line": 5,
+        "message": "Avoid single pipes to a block",
+        "trigger": "case"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

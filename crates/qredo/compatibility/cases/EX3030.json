@@ -1,0 +1,52 @@
+[
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3030.upstream.not-report",
+    "origin": "it should NOT report violation",
+    "params": {},
+    "source": "defmodule Test do\n  alias App.Module1\n  alias App.{Module2, Module3}\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3030.upstream.not-report-2",
+    "origin": "it should NOT report violation /2",
+    "params": {},
+    "source": "defmodule MyMacro do\n  defmacro my_macro do\n    quote do\n      defmodule MySubmodule do\n        alias alias!(MyAliasedModule)\n\n        def test do\n          IO.puts(MyAliasedModule)\n        end\n      end\n    end\n  end\n\n  defmacro my_dsl(do: block) do\n    quote do\n      alias __MODULE__.MyAliasedModule\n\n      defmodule MyAliasedModule do\n      end\n\n      unquote(block)\n    end\n  end\nend\n\ndefmodule MyModule do\n  import MyMacro\n\n  my_dsl do\n    my_macro\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 22,
+        "line": 3,
+        "message": "Unnecessary alias expansion for Module3, consider removing braces.",
+        "trigger": "Module3"
+      }
+    ],
+    "id": "EX3030.upstream.violation",
+    "origin": "it should report a violation",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  alias App.Module1\n  alias App.Module2.{Module3}\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 24,
+        "line": 3,
+        "message": "Unnecessary alias expansion for Module3, consider removing braces.",
+        "trigger": "Module3"
+      }
+    ],
+    "id": "EX3030.upstream.violation-double-expansion",
+    "origin": "it should report a violation for double expansion",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  alias App.Module1\n  alias App.{Module2}.{Module3}\nend\n"
+  }
+]

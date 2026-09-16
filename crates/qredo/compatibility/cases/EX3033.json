@@ -1,0 +1,54 @@
+[
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3033.upstream.not-report-expected-a",
+    "origin": "it should NOT report expected code",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    with :ok <- parameter1,\n         _ref = make_ref(),\n         IO.puts(\"Imperative operation\"),\n         :ok <- parameter2 do\n      :ok\n    end\n  end\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3033.upstream.not-report-expected-b",
+    "origin": "it should NOT report expected code",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    with :ok <- parameter1 do\n      parameter2\n    end\n  end\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3033.upstream.not-report-with-call",
+    "origin": "it should NOT report calls to functions called \"with\"",
+    "params": {},
+    "source": "def some_function(parameter1, parameter2) do\n  with(parameter1, parameter2)\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3033.upstream.not-report-unquote-splicing",
+    "origin": "it should NOT report when using unquote_splicing",
+    "params": {},
+    "source": "quote do\n  with unquote_splicing(cases) do\n    {:ok, unquote(ret)}\n  else\n    _ -> :error\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "`with` contains only one <- clause and an `else` branch, consider using `case` instead",
+        "trigger": "with"
+      }
+    ],
+    "id": "EX3033.upstream.violation-single-clause-else",
+    "origin": "it should report a violation for a single <- clause if there's an else branch",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    with :ok <- parameter1 do\n      parameter2\n    else\n      :error ->\n        :error\n    end\n  end\nend\n"
+  }
+]

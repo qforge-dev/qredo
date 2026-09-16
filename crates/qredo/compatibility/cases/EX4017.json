@@ -1,0 +1,109 @@
+[
+  {
+    "id": "EX4017.upstream.ok",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function() do\n    [\n      DateTime,\n      Kernel,\n      GenServer,\n      GenEvent,\n      File,\n      Time,\n      IO,\n      Logger,\n      URI,\n      Path\n    ]\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4017.upstream.ok_aliased",
+    "origin": "it should NOT report expected code when using aliased modules",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  alias Foo.Bar.DateTime\n  alias Foo.Bar.Kernel\n  alias Foo.Bar.GenServer\n  alias Foo.Bar.GenEvent\n  alias Foo.Bar.File\n  alias Foo.Bar.Time\n  alias Foo.Bar.IO\n  alias Foo.Bar.Logger\n\n  def some_function() do\n    [\n      DateTime,\n      Kernel,\n      GenServer,\n      GenEvent,\n      File,\n      Time,\n      IO,\n      Logger,\n      URI,\n      Path\n    ]\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4017.upstream.ok_excluded_paths",
+    "origin": "it should NOT report a violation when using param :excluded_paths",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function() do\n    [\n      DateTime,\n      Kernel,\n      GenServer,\n      GenEvent,\n      File,\n      Time,\n      IO,\n      Logger,\n      URI,\n      Path,\n      String\n    ]\n  end\nend\n",
+    "params": {
+      "excluded_paths": [
+        {
+          "regex": "test/foo"
+        }
+      ]
+    },
+    "findings": [],
+    "excluded_reason": null,
+    "filename": "test/foo/my_test.exs"
+  },
+  {
+    "id": "EX4017.upstream.ok_test_path",
+    "origin": "it should NOT report a violation on test path",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function() do\n    [\n      DateTime,\n      Kernel,\n      GenServer,\n      GenEvent,\n      File,\n      Time,\n      IO,\n      Logger,\n      URI,\n      Path,\n      String\n    ]\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null,
+    "filename": "test/my_test.exs"
+  },
+  {
+    "id": "EX4017.upstream.ok_umbrella_test_path",
+    "origin": "it should NOT report a violation on umbrella test path",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function() do\n    [\n      DateTime,\n      Kernel,\n      GenServer,\n      GenEvent,\n      File,\n      Time,\n      IO,\n      Logger,\n      URI,\n      Path,\n      String\n    ]\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null,
+    "filename": "apps/foo/test/foo/my_test.exs"
+  },
+  {
+    "id": "EX4017.upstream.ok_max_deps",
+    "origin": "it should NOT report a violation when using param :max_deps",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function() do\n    [\n      DateTime,\n      Kernel,\n      GenServer,\n      GenEvent,\n      File,\n      Time,\n      IO,\n      Logger,\n      URI,\n      Path,\n      String\n    ]\n  end\nend\n",
+    "params": {
+      "max_deps": 20
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4017.upstream.ok_excluded_namespaces",
+    "origin": "it should NOT report a violation when using param :excluded_namespaces",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSample.Excluded.Module do\n  def some_function() do\n    [\n      Foo.Bar.DateTime,\n      Foo.Bar.Kernel,\n      Foo.Bar.GenServer,\n      Foo.Bar.GenEvent,\n      Foo.Bar.File,\n      Foo.Bar.Time,\n      Foo.Bar.IO,\n      Foo.Bar.Logger,\n      URI,\n      Path,\n      String\n    ]\n  end\nend\n",
+    "params": {
+      "excluded_namespaces": [
+        "CredoSample.Excluded"
+      ]
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4017.upstream.ok_dependency_namespaces",
+    "origin": "it should NOT report a violation when using param :dependency_namespaces",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSample.Excluded.Module do\n  def some_function() do\n    [\n      Foo.Bar.DateTime,\n      Foo.Bar.Kernel,\n      Foo.Bar.GenServer,\n      Foo.Bar.GenEvent,\n      Foo.Bar.File,\n      Foo.Bar.Time,\n      Foo.Bar.IO,\n      Foo.Bar.Logger,\n      URI,\n      Path,\n      String\n    ]\n  end\nend\n",
+    "params": {
+      "dependency_namespaces": [
+        "Foo.Bar"
+      ]
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4017.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function() do\n    [\n      DateTime,\n      Kernel,\n      GenServer,\n      GenEvent,\n      File,\n      Time,\n      IO,\n      Logger,\n      URI,\n      Path,\n      String\n    ]\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 11,
+        "line": 1,
+        "message": "Module has too many dependencies: 11 (max is 10)",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

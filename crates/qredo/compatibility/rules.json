@@ -1,0 +1,607 @@
+{
+  "schema": 1,
+  "credo_commit": "ea1ccb9023b44eecbe079dc4bfd48cca4e8b0187",
+  "inventory": "../../../tests/compatibility/credo/inventory.json",
+  "rules": [
+    {
+      "id": "Credo.Check.Consistency.ExceptionNames",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Consistency.LineEndings",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Consistency.MultiAliasImportRequireUse",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Consistency.ParameterPatternMatching",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Consistency.SpaceAroundOperators",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Consistency.SpaceInParentheses",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Consistency.TabsOrSpaces",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Consistency.UnusedVariableNames",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Design.AliasUsage",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Design.DeprecatedChecksConfig",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Design.DuplicatedCode",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Design.MissingCheckInConfig",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Design.RedundantConfigComments",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Design.SkipTestWithoutComment",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Design.TagFIXME",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Design.TagTODO",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.AliasAs",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.AliasOrder",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.BlockPipe",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.CaptureOperator",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.FunctionNames",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.ImplTrue",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.LargeNumbers",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.MaxLineLength",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.ModuleAttributeNames",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.ModuleDoc",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.ModuleNames",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.MultiAlias",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.NestedFunctionCalls",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.OneArityFunctionInPipe",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.OnePipePerLine",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.ParenthesesInCondition",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.ParenthesesOnZeroArityDefs",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.PipeIntoAnonymousFunctions",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.PredicateFunctionNames",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.PreferImplicitTry",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.PreferUnquotedAtoms",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.RedundantBlankLines",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.Semicolons",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.SeparateAliasRequire",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.SingleFunctionToBlockPipe",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.SinglePipe",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.SpaceAfterCommas",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.SpecParameterNames",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.Specs",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.StrictModuleLayout",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.StringSigils",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.TrailingBlankLine",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.TrailingWhiteSpace",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.UnnecessaryAliasExpansion",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.UnusedFunctionParameterPattern",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.VariableNames",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.WithCustomTaggedTuple",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Readability.WithSingleClause",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.ABCSize",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.AppendSingleItem",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.Apply",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.CaseTrivialMatches",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.CondInsteadOfIfElse",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.CondStatements",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.CyclomaticComplexity",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.DoubleBooleanNegation",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.FilterCount",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.FilterFilter",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.FilterReject",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.FunctionArity",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.IoPuts",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.LongQuoteBlocks",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.MapInto",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.MapJoin",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.MapMap",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.MatchInCondition",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.ModuleDependencies",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.NegatedConditionsInUnless",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.NegatedConditionsWithElse",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.NegatedIsNil",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.Nesting",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.PassAsyncInTestCases",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.PerceivedComplexity",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.PipeChainStart",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.PreferDateTimeShift",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.RedundantWithClauseResult",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.RejectFilter",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.RejectReject",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.UnlessWithElse",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.UtcNowTruncate",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.VariableRebinding",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Refactor.WithClauses",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.ApplicationConfigInModuleAttribute",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.BoolOperationOnSameValues",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.Dbg",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.ExpensiveEmptyEnumCheck",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.ForbiddenFunction",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.ForbiddenModule",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.IExPry",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.IoInspect",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.LazyLogging",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.LeakyEnvironment",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.MapGetUnsafePass",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.MissedMetadataKeyInLoggerConfig",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.MixEnv",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.OperationOnSameValues",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.OperationWithConstantResult",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.RaiseInsideRescue",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.SpecWithStruct",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.StructFieldAmount",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.UnsafeExec",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.UnsafeToAtom",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.UnusedEnumOperation",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.UnusedFileOperation",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.UnusedKeywordOperation",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.UnusedListOperation",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.UnusedMapOperation",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.UnusedOperation",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.UnusedPathOperation",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.UnusedRegexOperation",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.UnusedStringOperation",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.UnusedTupleOperation",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.WrongTestFileExtension",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    },
+    {
+      "id": "Credo.Check.Warning.WrongTestFilename",
+      "kernel": "verified",
+      "pipeline": "unsupported"
+    }
+  ]
+}

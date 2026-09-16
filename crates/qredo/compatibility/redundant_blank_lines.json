@@ -1,0 +1,60 @@
+[
+  {
+    "id": "EX3019.upstream.expected-code",
+    "origin": "upstream: it should NOT report expected code",
+    "source": "defmodule ModuleWithoutRedundantBlankLines do\n  def a do\n    1\n  end\n\n  # this is a test comment\n\n  def b do\n    foo = \"\n    a\n\n\n    b\n    \"\n\n    2\n  end\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3019.upstream.heredocs",
+    "origin": "upstream: it should NOT report heredocs",
+    "source": "defmodule ModuleWithoutRedundantBlankLines do\n  def a do\n    \"\"\"\n    This is a heredoc (multi-line string)\n\n\n    ---\n\n\n\n\n    White Space seems intentional here.\n    \"\"\"\n  end\n\n  def b do\n    2\n  end\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3019.upstream.no-empty-lines",
+    "origin": "upstream: it should NOT report when file doesn't have empty lines",
+    "source": "defmodule ModuleWithoutEmptyLines do\n  def foo do\n    :bar\n  end\nend",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3019.upstream.param-allow",
+    "origin": "upstream: max_blank_lines param allows (4)",
+    "source": "defmodule ModuleWithManyBlankLines do\n  def a do\n    1\n  end\n\n\n\n\n  def b do\n    1\n  end\nend\n",
+    "params": {
+      "max_blank_lines": "4"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX3019.upstream.param-report",
+    "origin": "upstream: max_blank_lines param reports (3)",
+    "source": "defmodule ModuleWithManyBlankLines do\n  def a do\n    1\n  end\n\n\n\n\n  def b do\n    1\n  end\nend\n",
+    "params": {
+      "max_blank_lines": "3"
+    },
+    "findings": [
+      {
+        "line": 8,
+        "message": "There should be no more than 3 consecutive blank lines.",
+        "trigger": "no_trigger"
+      }
+    ]
+  },
+  {
+    "id": "EX3019.upstream.violation",
+    "origin": "upstream: it should report a violation",
+    "source": "defmodule ModuleWithRedundantBlankLines do\n  def a do\n    1\n  end\n\n\n  def b do\n    1\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "line": 6,
+        "message": "There should be no more than 1 consecutive blank lines.",
+        "trigger": "no_trigger"
+      }
+    ]
+  }
+]

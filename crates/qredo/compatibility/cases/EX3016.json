@@ -1,0 +1,181 @@
+[
+  {
+    "id": "EX3016.upstream.01",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "def valid? do\nend\ndefp has_attachment? do\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3016.upstream.02",
+    "origin": "it should NOT report expected code with arity on function",
+    "assert": "refute_issues",
+    "source": "def valid?(a) do\nend\ndefp has_attachment?(a) do\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3016.upstream.03",
+    "origin": "it should NOT report a violation with defmacro",
+    "assert": "refute_issues",
+    "source": "defmacro is_user(cookie) do\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3016.upstream.04",
+    "origin": "it should NOT report a violation with quote",
+    "assert": "refute_issues",
+    "source": "defmodule ElixirScript.FFI do\n  defmacro __using__(opts) do\n    quote do\n      import ElixirScript.FFI\n      Module.register_attribute __MODULE__, :__foreign_info__, persist: true\n      @__foreign_info__ %{\n        path: Macro.underscore(__MODULE__),\n        name: unquote(Keyword.get(opts, :name, nil)),\n        global: unquote(Keyword.get(opts, :global, false))\n      }\n    end\n  end\n\n  defmacro defexternal({name, _, args}) do\n    args = Enum.map(args, fn\n      {:\\\\, meta0, [{name, meta, atom}, value]} ->\n        name = String.to_atom(\"_\" <> Atom.to_string(name))\n        {:\\\\, meta0, [{name, meta, atom}, value]}\n\n      {name, meta, atom} ->\n        name = String.to_atom(\"_\" <> Atom.to_string(name))\n        {name, meta, atom}\n\n      other ->\n        other\n    end)\n\n    quote do\n      def unquote(name)(unquote_splicing(args)), do: nil\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3016.upstream.05",
+    "origin": "it should NOT report a violation with callback",
+    "assert": "refute_issues",
+    "source": "defmodule Foo do\n  @callback is_bar\n  @callback is_bar(a)\nend\n\ndefmodule FooImpl do\n  @behaviour Foo\n\n  @impl Foo\n  def is_bar do\n  end\n\n  @impl Foo\n  def is_bar(a) when is_binary(a) do\n  end\n\n  @impl Foo\n  def is_bar(a) do\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3016.upstream.06",
+    "origin": "it should report a violation with false negatives",
+    "assert": "assert_issue",
+    "source": "defmodule FooImpl do\n  def impl(false), do: false\n  def impl(true), do: true\n  def is_bar do\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 4,
+        "message": "Predicate function names should not start with 'is', and should end in a question mark.",
+        "trigger": "is_bar"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3016.upstream.07",
+    "origin": "it should report a violation with false negatives /2",
+    "assert": "assert_issue",
+    "source": "defmodule FooImpl do\n  impl(true)\n  def is_bar do\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 3,
+        "message": "Predicate function names should not start with 'is', and should end in a question mark.",
+        "trigger": "is_bar"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3016.upstream.08",
+    "origin": "it should report a violation with false negatives /3",
+    "assert": "assert_issue",
+    "source": "defmodule Foo do\n  @impl is_bar(a)\nend\ndefmodule FooImpl do\n  def is_bar do\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 5,
+        "message": "Predicate function names should not start with 'is', and should end in a question mark.",
+        "trigger": "is_bar"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3016.upstream.09",
+    "origin": "it should report a violation with false negatives /4",
+    "assert": "assert_issue",
+    "source": "defmodule Foo do\n  @impl true\nend\ndefmodule FooImpl do\n  def is_bar do\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 5,
+        "message": "Predicate function names should not start with 'is', and should end in a question mark.",
+        "trigger": "is_bar"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3016.upstream.10",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "def is_valid? do\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 1,
+        "message": "Predicate function names should not start with 'is', and should end in a question mark.",
+        "trigger": "is_valid?"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3016.upstream.11",
+    "origin": "it should report a violation /2",
+    "assert": "assert_issues",
+    "source": "def is_valid do\nend\ndefp is_attachment? do\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 6,
+        "line": 3,
+        "message": "Predicate function names should not start with 'is', and should end in a question mark.",
+        "trigger": "is_attachment?"
+      },
+      {
+        "column": 5,
+        "line": 1,
+        "message": "Predicate function names should not start with 'is', and should end in a question mark.",
+        "trigger": "is_valid"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3016.upstream.12",
+    "origin": "it should report a violation with arity",
+    "assert": "assert_issue",
+    "source": "def is_valid?(a) do\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 1,
+        "message": "Predicate function names should not start with 'is', and should end in a question mark.",
+        "trigger": "is_valid?"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3016.upstream.13",
+    "origin": "it should report a violation with arity /2",
+    "assert": "assert_issue",
+    "source": "def is_valid(a) do\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 1,
+        "message": "Predicate function names should not start with 'is', and should end in a question mark.",
+        "trigger": "is_valid"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

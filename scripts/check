@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Quality gate: formatting, lints, tests.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$root"
+export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
+cargo fmt --all -- --check
+cargo clippy --workspace --locked --all-targets -- -D warnings
+cargo test --workspace --locked

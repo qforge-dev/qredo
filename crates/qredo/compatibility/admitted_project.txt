@@ -1,0 +1,15 @@
+# Admitted project-level corpora
+#
+# Each EXID listed here runs its entry groups (entries sharing `group`, or
+# singletons) through run_project_check once per group, attributing issues
+# back per file. Promote a check here when its groups fully pass; remove it
+# from admitted.txt at the same time if the kernel gate cannot evaluate it.
+EX1002
+EX1001
+EX1003
+EX1004
+EX1005
+EX1006
+EX1007
+EX1008
+EX2002

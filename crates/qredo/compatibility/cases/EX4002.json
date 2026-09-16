@@ -1,0 +1,54 @@
+[
+  {
+    "id": "EX4002.upstream.not-two-items",
+    "origin": "it should NOT report appending 2 items",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    [parameter1] ++ [parameter2]\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4002.upstream.not-prepend",
+    "origin": "it should NOT report prepending an item",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    [parameter1] ++ parameter2\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4002.upstream.not-two-lists",
+    "origin": "it should NOT report on 2 lists",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    parameter1 ++ parameter2\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4002.upstream.not-two-items-existing",
+    "origin": "it should NOT report appending 2 items on a pre-existing list",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(list, parameter1, parameter2) do\n    list ++ [parameter1, parameter2]\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4002.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    parameter1 ++ [parameter2]\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 16,
+        "line": 3,
+        "message": "Appending a single item to a list is inefficient, use `[head | tail]` notation (and `Enum.reverse/1` when order matters).",
+        "trigger": "++"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

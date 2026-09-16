@@ -1,0 +1,150 @@
+[
+  {
+    "id": "EX4006.upstream.not-expected",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "def some_function do\n  x = 1\nend\n",
+    "params": {
+      "max_complexity": 1
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4006.upstream.expected-2",
+    "origin": "it should NOT report expected code /2",
+    "assert": "assert_issue",
+    "source": "def some_function do\n  if x == 0, do: x = 1\nend\n",
+    "params": {
+      "max_complexity": 1
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 1,
+        "message": "Function is too complex (cyclomatic complexity is 2, max is 1).",
+        "trigger": "some_function"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4006.upstream.not-expected-x",
+    "origin": "it should NOT report expected code /x",
+    "assert": "refute_issues",
+    "source": "def some_function do\n  if 1 == 1 or 2 == 2 do\n    my_options = %{}\n  end\nend\n",
+    "params": {
+      "max_complexity": 3
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4006.upstream.not-using-macro",
+    "origin": "it should NOT report a violation for __using__ macro",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Check do\n  defmacro __using__(opts) do\n    quote do\n      def format_issue(issue_meta, opts) do\n        source_file = IssueMeta.source_file(issue_meta)\n        params = IssueMeta.params(issue_meta)\n        priority =\n          if params[:foo] do\n            params[:foo] |> Check.some_fun\n          else\n            base_priority\n          end\n\n        line_no = opts[:line_no]\n        trigger = opts[:trigger]\n        column = opts[:column]\n        severity = opts[:severity] || Severity.default_value\n        issue = %Issue{\n          priority: priority,\n          filename: source_file.filename,\n          message: opts[:message],\n          trigger: trigger,\n          line_no: line_no,\n          column: column,\n          severity: severity\n        }\n        if line_no do\n          {_def, scope} = Credo.Code.scope_for(source_file.ast, line: line_no)\n          issue =\n            %Issue{\n              issue |\n              priority: issue.priority + priority_for(source_file, scope),\n              scope: scope\n            }\n        end\n        if trigger && line_no && !column do\n          issue =\n            %Issue{\n              issue |\n              column: SourceFile.column(source_file, line_no, trigger)\n            }\n        end\n        format_issue(issue)\n      end\n      def format_issue(issue \\\\ %Issue{}) do\n        %Issue{\n          issue |\n          check: __MODULE__,\n          category: category\n        }\n      end\n\n      defp priority_for(source_file, scope) do\n        scope_prio_map = Priority.scope_priorities(source_file)\n        scope_prio_map[scope] || 0\n      end\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4006.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "def first_fun do\n  if first_condition do\n    call_something\n  else\n    if second_condition do\n      call_something\n    else\n      if third_condition, do: call_something\n    end\n    if fourth_condition, do: call_something_else\n  end\nend\n",
+    "params": {
+      "max_complexity": 4
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 1,
+        "message": "Function is too complex (cyclomatic complexity is 5, max is 4).",
+        "trigger": "first_fun"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4006.upstream.violation-def",
+    "origin": "it should report a violation on def rather than when",
+    "assert": "assert_issue",
+    "source": "defmodule CredoTest do\n  defp foobar(v) when is_atom(v) do\n    if first_condition do\n      if second_condition && third_condition, do: call_something\n      if fourth_condition || fifth_condition, do: call_something_else\n    end\n  end\nend\n",
+    "params": {
+      "max_complexity": 4
+    },
+    "findings": [
+      {
+        "column": 8,
+        "line": 2,
+        "message": "Function is too complex (cyclomatic complexity is 6, max is 4).",
+        "trigger": "foobar"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4006.upstream.complexity-no-branches",
+    "origin": "it should return the complexity for a function without branches",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of CyclomaticComplexity.complexity_for/1 via complexity/rounded_complexity helpers: asserts a numeric complexity (integer equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4006.upstream.complexity-single-branch",
+    "origin": "it should return the complexity for a function with a single branch",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of CyclomaticComplexity.complexity_for/1 via complexity/rounded_complexity helpers: asserts a numeric complexity (integer equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4006.upstream.complexity-single-branch-2",
+    "origin": "it should return the complexity for a function with a single branch /2",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of CyclomaticComplexity.complexity_for/1 via complexity/rounded_complexity helpers: asserts a numeric complexity (integer equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4006.upstream.complexity-multiple-branches",
+    "origin": "it should return the complexity for a function with multiple branches",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of CyclomaticComplexity.complexity_for/1 via complexity/rounded_complexity helpers: asserts a numeric complexity (integer equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4006.upstream.complexity-nested",
+    "origin": "it should return the complexity for a function with multiple branches containing other branches",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of CyclomaticComplexity.complexity_for/1 via complexity/rounded_complexity helpers: asserts a numeric complexity (integer equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4006.upstream.complexity-nested-2",
+    "origin": "it should return the complexity for a function with multiple branches containing other branches /2",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of CyclomaticComplexity.complexity_for/1 via complexity/rounded_complexity helpers: asserts a numeric complexity (integer equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4006.upstream.complexity-nested-3",
+    "origin": "it should return the complexity for a function with multiple branches containing other branches /3",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of CyclomaticComplexity.complexity_for/1 via complexity/rounded_complexity helpers: asserts a numeric complexity (integer equality), not check issues; not transcribable to single-file {source, params, findings}."
+  }
+]

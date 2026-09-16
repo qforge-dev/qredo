@@ -1,0 +1,351 @@
+[
+  {
+    "id": "EX4016.upstream.ok",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    # comparison should not affect this check in any way\n    if parameter1 == parameter2 do\n      do_something\n    end\n    # simple wildcard matches/variable assignment should not affect this check\n    if parameter1 = Regex.run(~r/\\d+/, parameter2) do\n      do_something\n    end\n    # simple wildcard wrapped in parens\n    if( parameter1 = foo(bar) ) do\n      do_something\n    end\n\n    # no match in parens\n    if String.match?(name, ~r/^[a-z]/) do\n      mod_name = names |> Enum.slice(0..length(names) - 2) |> Enum.join(\".\")\n      mod_prio = lookup[mod_name]\n      {scope_name, prio + mod_prio}\n    else\n      {scope_name, prio}\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.ok_ecto_query",
+    "origin": "it should NOT report nor crash with ecto query",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n\n  def some_function(parameter1) do\n    query = from if in FooInterface,\n             join: is in assoc(if, :instance),\n             join: d in assoc(if, :device),\n             where: fragment(\"upper(?->>'foo_id') = ?\", if.opts, ^parameter1) and is.driver == ^\"FooBar\",\n             preload: [device: d, instance: is]\n\n    Repo.all(query)\n  end\n\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.ok_bracket_access",
+    "origin": "it should NOT report bracket access",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1) do\n    if token = cookies[@remember_me_cookie] do\n      # ...\n    end\n    if token = cookies[:remember_me] do\n      # ...\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.ok_tagged_tuples_allowed",
+    "origin": "it should NOT report a violation with :allow_tagged_tuples",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if {:foo, value} = parameter1 do\n      do_something\n    end\n  end\nend\n",
+    "params": {
+      "allow_tagged_tuples": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.ok_operators_simple",
+    "origin": "it should NOT report a violation for operators in simple assignments with :allow_operators",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(foo, parameter2) do\n    if baz = Map.get(foo, :bar) || parameter2 do\n      baz\n    end\n  end\nend\n",
+    "params": {
+      "allow_operators": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.ok_operators_fun_call",
+    "origin": "it should NOT report a violation for operators in function calls with :allow_operators",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(foo, parameter2) do\n    if baz = allowed?(foo[:bar] ++ parameter2) do\n      baz\n    end\n  end\nend\n",
+    "params": {
+      "allow_operators": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.ok_operators_fun_call_2",
+    "origin": "it should NOT report a violation for operators in function calls with :allow_operators /2",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(foo, parameter2) do\n    if baz = allowed?(Map.get(foo, :bar) &&& parameter2) do\n      baz\n    end\n  end\nend\n",
+    "params": {
+      "allow_operators": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.ok_operators_fun_call_3",
+    "origin": "it should NOT report a violation for operators in function calls with :allow_operators /3",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(foo, parameter2) do\n    if value = map |> Map.get(key) do\n      value\n    else\n      default\n    end\n  end\nend\n",
+    "params": {
+      "allow_operators": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.ok_operators_fun_call_4",
+    "origin": "it should NOT report a violation for operators in function calls with :allow_operators /4",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(foo, parameter2) do\n    if contents = File.read(input <> \".txt\") do\n      value\n    else\n      default\n    end\n  end\nend\n",
+    "params": {
+      "allow_operators": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if {:ok, value} = parameter1 do\n      do_something\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 21,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_2",
+    "origin": "it should report a violation /2",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if String.match?(name, ~r/^[a-z]/) do\n      mod_name = names |> Enum.slice(0..length(names) - 2) |> Enum.join(\".\")\n      mod_prio = lookup[mod_name]\n      if {:ok, value} = parameter1 do         # <-- this one should be found\n        do_something\n      end\n    else\n      {scope_name, prio}\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 23,
+        "line": 6,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_3",
+    "origin": "it should report a violation /3",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if condition? && {:ok, value} = parameter1 do\n      do_something\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 35,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_4",
+    "origin": "it should report a violation /4",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if (contents = parameter1.contents) && parameter2 do\n      do_something()\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 18,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_5",
+    "origin": "it should report a violation /5",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if contents = parameter1.contents && parameter2 do\n      do_something()\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 17,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_6",
+    "origin": "it should report a violation /6",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(a, b) do\n    if foo = bar(a && b) do\n      do_something()\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 12,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_parens",
+    "origin": "it should report a violation when wrapped in parens",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if( {:ok, value} = parameter1 ) do\n      do_something\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 22,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_unless",
+    "origin": "it should report a violation for :unless",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    unless {:ok, value} = parameter1 do\n      do_something\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 25,
+        "line": 3,
+        "message": "Avoid matches in `unless` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_if_nested",
+    "origin": "it should report a violation for :if with nested match",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if !is_nil(baz = Map.get(foo, :bar)), do: baz\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 20,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_if_nested_2",
+    "origin": "it should report a violation for :if with nested match /2",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if allowed? && !is_nil(baz = Map.get(foo, :bar)) do\n      baz\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 32,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_unless_nested",
+    "origin": "it should report a violation for :unless with nested match",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    unless !(x = Map.get(foo, :bar)), do: x\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 16,
+        "line": 3,
+        "message": "Avoid matches in `unless` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_operators_simple",
+    "origin": "it should report a violation for operators in simple assignments",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(foo, parameter2) do\n    if baz = Map.get(foo, :bar) || parameter2 do\n      baz\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 12,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_operators_fun_call",
+    "origin": "it should report a violation for operators in function calls",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(foo, parameter2) do\n    if baz = allowed?(foo[:bar] ++ parameter2) do\n      baz\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 12,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_operators_fun_call_2",
+    "origin": "it should report a violation for operators in function calls /2",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(foo, parameter2) do\n    if baz = allowed?(Map.get(foo, :bar) &&& parameter2) do\n      baz\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 12,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_operators_fun_call_3",
+    "origin": "it should report a violation for operators in function calls /3",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(foo, parameter2) do\n    if value = map |> Map.get(key) do\n      value\n    else\n      default\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 14,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4016.upstream.violation_operators_fun_call_4",
+    "origin": "it should report a violation for operators in function calls /4",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(foo, parameter2) do\n    if contents = File.read(input <> \".txt\") do\n      value\n    else\n      default\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 17,
+        "line": 3,
+        "message": "Avoid matches in `if` conditions.",
+        "trigger": "="
+      }
+    ],
+    "excluded_reason": null
+  }
+]

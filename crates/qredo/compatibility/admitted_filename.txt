@@ -1,0 +1,10 @@
+# Admitted filename-aware corpora
+#
+# Each entry carrying `filename` in these EXIDs runs once through
+# run_filename_check with its recorded filename. Promote a check here when
+# its filename entries fully pass.
+EX2003
+EX3009
+EX4017
+EX5010
+EX5030

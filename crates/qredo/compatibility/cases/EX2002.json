@@ -1,0 +1,356 @@
+[
+  {
+    "id": "EX2002.upstream.clean-excluded-macros",
+    "origin": "should NOT raise an issue for duplicated code via macros if macros are in :excluded_macros param",
+    "assert": "refute_issues",
+    "params": {
+      "excluded_macros": [
+        ":test"
+      ]
+    },
+    "findings": [],
+    "excluded_reason": null,
+    "source": "",
+    "sources": [
+      {
+        "filename": "m1.ex",
+        "source": "defmodule M1 do\n  test \"something is duplicated\" do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n      if p1 == p2 do\n        p1\n      else\n        p2 + p1\n      end\n    end\n  end\nend\n"
+      },
+      {
+        "filename": "m2.ex",
+        "source": "defmodule M2 do\n  test \"something is duplicated\" do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n      if p1 == p2 do\n        p1\n      else\n        p2 + p1\n      end\n    end\n  end\nend\n"
+      }
+    ]
+  },
+  {
+    "id": "EX2002.upstream.violation",
+    "origin": "should raise an issue for duplicated code",
+    "assert": "assert_issues",
+    "params": {
+      "mass_threshold": 16
+    },
+    "findings": [
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 2,
+        "message": "Duplicate code found in m2.ex:2 (mass: 18).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 2,
+        "message": "Duplicate code found in m2.ex:2 (mass: 19).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 2,
+        "message": "Duplicate code found in m2.ex:2 (mass: 19).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 2,
+        "message": "Duplicate code found in m1.ex:2 (mass: 18).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 2,
+        "message": "Duplicate code found in m1.ex:2 (mass: 19).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 2,
+        "message": "Duplicate code found in m1.ex:2 (mass: 19).",
+        "trigger": "no_trigger"
+      }
+    ],
+    "excluded_reason": null,
+    "source": "",
+    "sources": [
+      {
+        "filename": "m1.ex",
+        "source": "defmodule M1 do\n  def myfun(p1, p2) when is_list(p2) do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n    end\n  end\nend\n"
+      },
+      {
+        "filename": "m2.ex",
+        "source": "defmodule M2 do\n  def myfun(p1, p2) when is_list(p2) do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n    end\n  end\nend\n"
+      }
+    ]
+  },
+  {
+    "id": "EX2002.upstream.violation-macros",
+    "origin": "should raise an issue for duplicated code via macros",
+    "assert": "assert_issues",
+    "params": {
+      "mass_threshold": 16
+    },
+    "findings": [
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 2,
+        "message": "Duplicate code found in m2.ex:2 (mass: 23).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 2,
+        "message": "Duplicate code found in m2.ex:2 (mass: 24).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 2,
+        "message": "Duplicate code found in m2.ex:2 (mass: 24).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 3,
+        "message": "Duplicate code found in m2.ex:3 (mass: 21).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 3,
+        "message": "Duplicate code found in m2.ex:3 (mass: 22).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 3,
+        "message": "Duplicate code found in m2.ex:3 (mass: 22).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 4,
+        "message": "Duplicate code found in m2.ex:4 (mass: 17).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 2,
+        "message": "Duplicate code found in m1.ex:2 (mass: 23).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 2,
+        "message": "Duplicate code found in m1.ex:2 (mass: 24).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 2,
+        "message": "Duplicate code found in m1.ex:2 (mass: 24).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 3,
+        "message": "Duplicate code found in m1.ex:3 (mass: 21).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 3,
+        "message": "Duplicate code found in m1.ex:3 (mass: 22).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 3,
+        "message": "Duplicate code found in m1.ex:3 (mass: 22).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 4,
+        "message": "Duplicate code found in m1.ex:4 (mass: 17).",
+        "trigger": "no_trigger"
+      }
+    ],
+    "excluded_reason": null,
+    "source": "",
+    "sources": [
+      {
+        "filename": "m1.ex",
+        "source": "defmodule M1 do\n  test \"something is duplicated\" do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n      if p1 == p2 do\n        p1\n      else\n        p2 + p1\n      end\n    end\n  end\nend\n"
+      },
+      {
+        "filename": "m2.ex",
+        "source": "defmodule M2 do\n  test \"something is duplicated\" do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n      if p1 == p2 do\n        p1\n      else\n        p2 + p1\n      end\n    end\n  end\nend\n"
+      }
+    ]
+  },
+  {
+    "id": "EX2002.upstream.violation-diff-lines",
+    "origin": "should raise an issue for duplicated code with different line numbers and external function call",
+    "assert": "assert_issues",
+    "params": {
+      "mass_threshold": 16
+    },
+    "findings": [
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 2,
+        "message": "Duplicate code found in m2.ex:3 (mass: 21).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 2,
+        "message": "Duplicate code found in m2.ex:3 (mass: 22).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m1.ex",
+        "line": 2,
+        "message": "Duplicate code found in m2.ex:3 (mass: 22).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 3,
+        "message": "Duplicate code found in m1.ex:2 (mass: 21).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 3,
+        "message": "Duplicate code found in m1.ex:2 (mass: 22).",
+        "trigger": "no_trigger"
+      },
+      {
+        "column": null,
+        "filename": "m2.ex",
+        "line": 3,
+        "message": "Duplicate code found in m1.ex:2 (mass: 22).",
+        "trigger": "no_trigger"
+      }
+    ],
+    "excluded_reason": null,
+    "source": "",
+    "sources": [
+      {
+        "filename": "m1.ex",
+        "source": "defmodule M1 do\n  def myfun(p1, p2) when is_list(p2) do\n    if p1 == p2 do\n      A.f(p1)\n    else\n      p2 + p1\n    end\n  end\nend\n"
+      },
+      {
+        "filename": "m2.ex",
+        "source": "defmodule M2 do\n  # additional line here\n  def myfun(p1, p2) when is_list(p2) do\n    if p1 == p2 do\n      A.f(p1)\n    else\n      p2 + p1\n    end\n  end\nend\n"
+      }
+    ]
+  },
+  {
+    "id": "EX2002.upstream.unit-hashes-prunes-masses",
+    "origin": "returns correct hashes, prunes and masses",
+    "assert": "assert 1 == Enum.count(pruned); assert masses == 19 (internal API)",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test for internal DuplicatedCode.calculate_hashes/4, prune_hashes/2 and add_masses/1, not a check run_check finding; cannot be expressed as single-file source+params findings.",
+    "source": "defmodule M1 do\n  def myfun(p1, p2) when is_list(p2) do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n    end\n  end\nend\n\ndefmodule M2 do\n  def myfun(p1, p2) when is_list(p2) do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n    end\n  end\nend\n"
+  },
+  {
+    "id": "EX2002.upstream.unit-hashes-multi",
+    "origin": "returns correct hashes, prunes and masses for multiple sources",
+    "assert": "assert 1 == Enum.count(pruned); assert masses == 19 (internal API)",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test for internal calculate_hashes/prune/add_masses over two ASTs, not a check run_check finding.",
+    "source": "",
+    "sources": [
+      {
+        "filename": "m1.ex",
+        "source": "defmodule M1 do\n  def myfun(p1, p2) when is_list(p2) do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n    end\n  end\nend\n"
+      },
+      {
+        "filename": "m2.ex",
+        "source": "defmodule M2 do\n  def myfun(p1, p2) when is_list(p2) do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n    end\n  end\nend\n"
+      }
+    ]
+  },
+  {
+    "id": "EX2002.upstream.unit-hashes",
+    "origin": "returns correct hashes",
+    "assert": "DuplicatedCode.calculate_hashes(ast) (no issue assertion; internal API)",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test calling internal calculate_hashes/1 with no issue assertion; not a check finding.",
+    "source": "defmodule M1 do\n  def myfun(p1, p2) when is_list(p2) do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n    end\n  end\nend\n\ndefmodule M2 do\n  def myfun2(p1, p2) do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n    end\n  end\nend\n"
+  },
+  {
+    "id": "EX2002.upstream.unit-mass",
+    "origin": "returns correct mass",
+    "assert": "assert 18 == DuplicatedCode.mass(ast) (x2)",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test for internal DuplicatedCode.mass/1, not a check finding.",
+    "source": "defmodule M1 do\n  def myfun(p1, p2) do\n    if p1 == p2 do\n      p1\n    else\n      p2 + p1\n    end\n  end\nend\n"
+  },
+  {
+    "id": "EX2002.upstream.unit-hash",
+    "origin": "returns correct hash",
+    "assert": "assert expected == DuplicatedCode.to_hash(ast)",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test for internal DuplicatedCode.to_hash/1 hash value, not a check finding.",
+    "source": "if p1 == p2 do\n  p1\nelse\n  p2 + p1\nend\n"
+  },
+  {
+    "id": "EX2002.upstream.unit-hash-mass-2",
+    "origin": "returns correct hash and mass /2",
+    "assert": "assert AST shape match; assert to_hash in [expected_pre_1_20, expected] (internal API)",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test for internal AST shape and to_hash/1 values, not a check finding.",
+    "source": "test \"returns {:ok, result} when reply and :DOWN in message queue\" do\n  task = %Task{ref: make_ref(), owner: self(), pid: nil, mfa: {__MODULE__, :test, 1}}\n  send(self(), {task.ref, :result})\n  send(self(), {:DOWN, task.ref, :process, self(), :abnormal})\n  assert Task.yield_many([task], 0) == [{task, {:ok, :result}}]\n  refute_received {:DOWN, _, _, _, _}\nend\n"
+  },
+  {
+    "id": "EX2002.upstream.unit-hashes-differ",
+    "origin": "returns different hashes for different code snippets",
+    "assert": "assert ast != ast2; assert to_hash(ast) != to_hash(ast2)",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test comparing internal to_hash/1 of two snippets, not a check finding.",
+    "source": "",
+    "sources": [
+      {
+        "filename": "t1.ex",
+        "source": "test \"returns {:ok, result} when reply and :DOWN in message queue\" do\n  task = %Task{ref: make_ref(), owner: self(), pid: nil, mfa: {__MODULE__, :test, 1}}\n  send(self(), {task.ref, :result})\n  send(self(), {:DOWN, task.ref, :process, self(), :abnormal})\n  assert Task.yield_many([task], 0) == [{task, {:ok, :result}}]\n  refute_received {:DOWN, _, _, _, _}\nend\n"
+      },
+      {
+        "filename": "t2.ex",
+        "source": "test \"returns {:ok, result} when reply and :DOWN in message queue\" do\n  task = %Task{ref: make_ref(), owner: self(), pid: nil, mfa: {__MODULE__, :test, 1}}\n  send(self(), {task.ref, :result})\n  send(self(), {:DOWN, task.ref, :process, self(), :abnormal})\n  assert Task.yield(task, 0) == {:ok, :result}\n  refute_received {:DOWN, _, _, _, _}\nend\n"
+      }
+    ]
+  }
+]

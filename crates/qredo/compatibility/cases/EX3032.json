@@ -1,0 +1,33 @@
+[
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3032.upstream.not-report",
+    "origin": "it should NOT report violation",
+    "params": {},
+    "source": "defmodule Test do\n  def run(user, resource) do\n    with {:ok, resource} <- Resource.fetch(user),\n         :ok <- Resource.authorize(resource, user),\n         do: SomeMod.do_something(resource)\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issues:2",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 3,
+        "message": "Avoid using tagged tuples as placeholders in `with` (found: `:resource`).",
+        "trigger": ":resource"
+      },
+      {
+        "column": null,
+        "line": 4,
+        "message": "Avoid using tagged tuples as placeholders in `with` (found: `:authz`).",
+        "trigger": ":authz"
+      }
+    ],
+    "id": "EX3032.upstream.violation",
+    "origin": "it should report a violation",
+    "params": {},
+    "source": "defmodule Test do\n  def run(user, resource) do\n    with {:resource, {:ok, resource}} <- {:resource, Resource.fetch(user)},\n         {:authz, :ok} <- {:authz, Resource.authorize(resource, user)} do\n      SomeMod.do_something(resource)\n    else\n      {:resource, _} -> {:error, :not_found}\n      {:authz, _} -> {:error, :unauthorized}\n    end\n  end\nend\n"
+  }
+]

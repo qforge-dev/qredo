@@ -1,0 +1,29 @@
+[
+  {
+    "id": "EX2003.upstream.not-report-with-comment",
+    "origin": "it should NOT report when comment precedes the tag",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModuleTest do\n  alias ExUnit.Case\n\n  # Happy case: Some comment\n  @tag :skip\n  test \"foo\" do\n    :ok\n  end\n\n  # Some comment\n  @tag :skip\n  # another comment, shouldn't matter\n  test \"foo2\" do\n    :ok\n  end\nend\n",
+    "filename": "foo_test.exs",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2003.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue(%{line_no: 4, trigger: \"@tag :skip\"})",
+    "source": "defmodule CredoSampleModuleTest do\n  alias ExUnit.Case\n\n  @tag :skip\n  test \"foo\" do\n    :ok\n  end\nend\n",
+    "filename": "foo_test.exs",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 4,
+        "message": "Tests tagged to be skipped should have a comment preceding the `@tag :skip`.",
+        "trigger": "@tag :skip"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

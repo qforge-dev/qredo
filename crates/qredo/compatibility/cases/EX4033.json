@@ -1,0 +1,214 @@
+[
+  {
+    "id": "EX4033.upstream.not-if-without-else",
+    "origin": "it should NOT report if without else",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    if allowed? do\n      :ok\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.not-inline-if-without-else",
+    "origin": "it should NOT report inline if without else",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    if allowed?, do: :ok\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.not-cond",
+    "origin": "it should NOT report cond statement",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    cond do\n      x < y -> -1\n      x == y -> 0\n      true -> 1\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.not-multiple-ifs-without-else",
+    "origin": "it should NOT report multiple if statements without else",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    if condition1 do\n      action1()\n    end\n\n    if condition2 do\n      action2()\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.not-module-attr-if",
+    "origin": "it should NOT report module attribute named @if",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  @if true\n\n  def some_fun do\n    @if\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.violation-basic",
+    "origin": "it should report basic if/else block",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    if allowed? do\n      :ok\n    else\n      :error\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Consider using `cond` instead of `if/else`.",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.violation-inline",
+    "origin": "it should report inline if/else",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    if allowed?, do: :ok, else: :error\n\n    cond do\n      allowed? -> :ok\n      true -> :error\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Consider using `cond` instead of `if/else`.",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.violation-complex-cond",
+    "origin": "it should report if/else with complex condition",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun(x, y, z) do\n    if x > y and y < z or z == 0 do\n      :complex\n    else\n      :simple\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Consider using `cond` instead of `if/else`.",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.violation-nested",
+    "origin": "it should report nested if/else within function",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    result = if condition do\n      :yes\n    else\n      :no\n    end\n    result\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 14,
+        "line": 3,
+        "message": "Consider using `cond` instead of `if/else`.",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.violation-multiple",
+    "origin": "it should report multiple if/else blocks",
+    "assert": "assert_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    if condition1 do\n      :a\n    else\n      :b\n    end\n\n    if condition2 do\n      :c\n    else\n      :d\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Consider using `cond` instead of `if/else`.",
+        "trigger": "if"
+      },
+      {
+        "column": 5,
+        "line": 9,
+        "message": "Consider using `cond` instead of `if/else`.",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.violation-line-no",
+    "origin": "it should report correct line number",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    if allowed? do\n      :ok\n    else\n      :error\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Consider using `cond` instead of `if/else`.",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.not-inline-allowed",
+    "origin": "it should NOT report inline if/else when allow_one_liners is true",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    if allowed?, do: :ok, else: :error\n  end\nend\n",
+    "params": {
+      "allow_one_liners": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.violation-block-allowed",
+    "origin": "it should still report block if/else when allow_one_liners is true",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    if allowed? do\n      :ok\n    else\n      :error\n    end\n  end\nend\n",
+    "params": {
+      "allow_one_liners": true
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Consider using `cond` instead of `if/else`.",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.violation-inline-disallowed",
+    "origin": "it should report inline if/else when allow_one_liners is false (default)",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    if allowed?, do: :ok, else: :error\n  end\nend\n",
+    "params": {
+      "allow_one_liners": false
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Consider using `cond` instead of `if/else`.",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4033.upstream.violation-mixed-allowed",
+    "origin": "it should report only block if/else when allow_one_liners is true with mixed code",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    x = if inline?, do: :a, else: :b\n\n    if block? do\n      :c\n    else\n      :d\n    end\n  end\nend\n",
+    "params": {
+      "allow_one_liners": true
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 5,
+        "message": "Consider using `cond` instead of `if/else`.",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

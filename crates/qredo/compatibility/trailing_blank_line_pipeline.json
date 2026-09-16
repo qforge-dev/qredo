@@ -1,0 +1,570 @@
+[
+  {
+    "id": "EX3028.pipeline.upstream.expected-code",
+    "source": "defmodule CredoSampleModule do\nend\n",
+    "filename": "EX3028.upstream.expected-code.ex",
+    "general": {},
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.upstream.violation",
+    "source": "defmodule CredoSampleModule do\nend",
+    "filename": "EX3028.upstream.violation.ex",
+    "general": {},
+    "status": "valid",
+    "issues": [
+      {
+        "category": "readability",
+        "column": null,
+        "exit_status": 4,
+        "line_no": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "priority": -9,
+        "scope": "CredoSampleModule",
+        "trigger": "no_trigger"
+      }
+    ]
+  },
+  {
+    "id": "EX3028.pipeline.empty",
+    "source": "",
+    "filename": "EX3028.empty.ex",
+    "general": {},
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.one-line",
+    "source": "x = 1",
+    "filename": "EX3028.one-line.ex",
+    "general": {},
+    "status": "valid",
+    "issues": [
+      {
+        "category": "readability",
+        "column": null,
+        "exit_status": 4,
+        "line_no": 1,
+        "message": "There should be a final \\n at the end of each file.",
+        "priority": -10,
+        "scope": "",
+        "trigger": "no_trigger"
+      }
+    ]
+  },
+  {
+    "id": "EX3028.pipeline.lf",
+    "source": "x = 1\n",
+    "filename": "EX3028.lf.ex",
+    "general": {},
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.crlf",
+    "source": "x = 1\r\n",
+    "filename": "EX3028.crlf.ex",
+    "general": {},
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.multiple-lf",
+    "source": "x = 1\n\n",
+    "filename": "EX3028.multiple-lf.ex",
+    "general": {},
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.whitespace-final-line",
+    "source": "# comment\n \t",
+    "filename": "EX3028.whitespace-final-line.ex",
+    "general": {},
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trailing-space-on-code",
+    "source": "x = 1 ",
+    "filename": "EX3028.trailing-space-on-code.ex",
+    "general": {},
+    "status": "valid",
+    "issues": [
+      {
+        "category": "readability",
+        "column": null,
+        "exit_status": 4,
+        "line_no": 1,
+        "message": "There should be a final \\n at the end of each file.",
+        "priority": -10,
+        "scope": "",
+        "trigger": "no_trigger"
+      }
+    ]
+  },
+  {
+    "id": "EX3028.pipeline.unicode-before-issue",
+    "source": "# \u03bb\nx = \"\ud83d\ude00\"",
+    "filename": "EX3028.unicode-before-issue.ex",
+    "general": {},
+    "status": "valid",
+    "issues": [
+      {
+        "category": "readability",
+        "column": null,
+        "exit_status": 4,
+        "line_no": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "priority": -10,
+        "scope": "",
+        "trigger": "no_trigger"
+      }
+    ]
+  },
+  {
+    "id": "EX3028.pipeline.comment-final-line",
+    "source": "# first\n# last",
+    "filename": "EX3028.comment-final-line.ex",
+    "general": {},
+    "status": "valid",
+    "issues": [
+      {
+        "category": "readability",
+        "column": null,
+        "exit_status": 4,
+        "line_no": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "priority": -10,
+        "scope": "",
+        "trigger": "no_trigger"
+      }
+    ]
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+0009",
+    "source": "# marker\n\t",
+    "filename": "EX3028.trim.U+0009.ex",
+    "general": {},
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+000A",
+    "source": "# marker\n\n",
+    "filename": "EX3028.trim.U+000A.ex",
+    "general": {},
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+000B",
+    "source": "# marker\n\u000b",
+    "filename": "EX3028.trim.U+000B.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+000C",
+    "source": "# marker\n\f",
+    "filename": "EX3028.trim.U+000C.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+000D",
+    "source": "# marker\n\r",
+    "filename": "EX3028.trim.U+000D.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+0020",
+    "source": "# marker\n ",
+    "filename": "EX3028.trim.U+0020.ex",
+    "general": {},
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+0085",
+    "source": "# marker\n\u0085",
+    "filename": "EX3028.trim.U+0085.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+00A0",
+    "source": "# marker\n\u00a0",
+    "filename": "EX3028.trim.U+00A0.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+1680",
+    "source": "# marker\n\u1680",
+    "filename": "EX3028.trim.U+1680.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+2000",
+    "source": "# marker\n\u2000",
+    "filename": "EX3028.trim.U+2000.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+2001",
+    "source": "# marker\n\u2001",
+    "filename": "EX3028.trim.U+2001.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+2002",
+    "source": "# marker\n\u2002",
+    "filename": "EX3028.trim.U+2002.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+2003",
+    "source": "# marker\n\u2003",
+    "filename": "EX3028.trim.U+2003.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+2004",
+    "source": "# marker\n\u2004",
+    "filename": "EX3028.trim.U+2004.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+2005",
+    "source": "# marker\n\u2005",
+    "filename": "EX3028.trim.U+2005.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+2006",
+    "source": "# marker\n\u2006",
+    "filename": "EX3028.trim.U+2006.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+2007",
+    "source": "# marker\n\u2007",
+    "filename": "EX3028.trim.U+2007.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+2008",
+    "source": "# marker\n\u2008",
+    "filename": "EX3028.trim.U+2008.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+2009",
+    "source": "# marker\n\u2009",
+    "filename": "EX3028.trim.U+2009.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+200A",
+    "source": "# marker\n\u200a",
+    "filename": "EX3028.trim.U+200A.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+2028",
+    "source": "# marker\n\u2028",
+    "filename": "EX3028.trim.U+2028.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+2029",
+    "source": "# marker\n\u2029",
+    "filename": "EX3028.trim.U+2029.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+202F",
+    "source": "# marker\n\u202f",
+    "filename": "EX3028.trim.U+202F.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+205F",
+    "source": "# marker\n\u205f",
+    "filename": "EX3028.trim.U+205F.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.trim.U+3000",
+    "source": "# marker\n\u3000",
+    "filename": "EX3028.trim.U+3000.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.suppression.file-disable",
+    "source": "# credo:disable-for-this-file\ndefmodule M do\nend",
+    "filename": "lib/suppressed.ex",
+    "general": {},
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.suppression.next-line",
+    "source": "defmodule M do\n# credo:disable-for-next-line\nend",
+    "filename": "lib/suppressed-next.ex",
+    "general": {},
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.files.excluded",
+    "source": "defmodule M do\nend",
+    "filename": "lib/a.ex",
+    "general": {
+      "files.excluded": "lib/a.ex"
+    },
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.files.included-match",
+    "source": "defmodule M do\nend",
+    "filename": "lib/a.ex",
+    "general": {
+      "files.included": "lib/a.ex"
+    },
+    "status": "valid",
+    "issues": [
+      {
+        "line_no": 2,
+        "column": null,
+        "scope": "M",
+        "priority": -9,
+        "exit_status": 4,
+        "category": "readability",
+        "trigger": "no_trigger",
+        "message": "There should be a final \\n at the end of each file."
+      }
+    ]
+  },
+  {
+    "id": "EX3028.pipeline.files.included-miss",
+    "source": "defmodule M do\nend",
+    "filename": "lib/a.ex",
+    "general": {
+      "files.included": "lib/other.ex"
+    },
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.general.overrides",
+    "source": "defmodule M do\nend",
+    "filename": "lib/a.ex",
+    "general": {
+      "category": "warning",
+      "priority": "high",
+      "exit_status": "16"
+    },
+    "status": "valid",
+    "issues": [
+      {
+        "line_no": 2,
+        "column": null,
+        "scope": "M",
+        "priority": 11,
+        "exit_status": 16,
+        "category": "warning",
+        "trigger": "no_trigger",
+        "message": "There should be a final \\n at the end of each file."
+      }
+    ]
+  },
+  {
+    "id": "EX3028.pipeline.general.numeric-priority",
+    "source": "defmodule M do\nend",
+    "filename": "lib/a.ex",
+    "general": {
+      "priority": "42"
+    },
+    "status": "valid",
+    "issues": [
+      {
+        "line_no": 2,
+        "column": null,
+        "scope": "M",
+        "priority": 43,
+        "exit_status": 4,
+        "category": "readability",
+        "trigger": "no_trigger",
+        "message": "There should be a final \\n at the end of each file."
+      }
+    ]
+  },
+  {
+    "id": "EX3028.pipeline.invalid.unclosed",
+    "source": "def foo( do\n",
+    "filename": "lib/broken.ex",
+    "general": {},
+    "status": "invalid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.selection.only-match",
+    "source": "defmodule M do\nend",
+    "filename": "lib/a.ex",
+    "general": {},
+    "selection": {
+      "only": [
+        "Credo.Check.Readability.TrailingBlankLine"
+      ],
+      "ignore": []
+    },
+    "config": "default",
+    "outcome": "ran",
+    "status": "valid",
+    "issues": [
+      {
+        "line_no": 2,
+        "column": null,
+        "scope": "M",
+        "priority": -9,
+        "exit_status": 4,
+        "category": "readability",
+        "trigger": "no_trigger",
+        "message": "There should be a final \\n at the end of each file."
+      }
+    ]
+  },
+  {
+    "id": "EX3028.pipeline.selection.only-miss",
+    "source": "defmodule M do\nend",
+    "filename": "lib/a.ex",
+    "general": {},
+    "selection": {
+      "only": [
+        "Credo.Check.Warning.IoInspect"
+      ],
+      "ignore": []
+    },
+    "config": "default",
+    "outcome": "filtered_out",
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.selection.ignore",
+    "source": "defmodule M do\nend",
+    "filename": "lib/a.ex",
+    "general": {},
+    "selection": {
+      "only": [],
+      "ignore": [
+        "Credo.Check.Readability.TrailingBlankLine"
+      ]
+    },
+    "config": "default",
+    "outcome": "filtered_out",
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.config.executable",
+    "source": "defmodule M do\nend",
+    "filename": "lib/a.ex",
+    "general": {},
+    "selection": {
+      "only": [],
+      "ignore": []
+    },
+    "config": "executable:.credo.exs",
+    "outcome": "needs_native_config",
+    "status": "valid",
+    "issues": []
+  },
+  {
+    "id": "EX3028.pipeline.selection.regex-match",
+    "source": "defmodule M do\nend",
+    "filename": "lib/a.ex",
+    "general": {},
+    "selection": {
+      "only": [
+        "trailingblankline"
+      ],
+      "ignore": []
+    },
+    "config": "default",
+    "outcome": "ran",
+    "status": "valid",
+    "issues": [
+      {
+        "line_no": 2,
+        "column": null,
+        "scope": "M",
+        "priority": -9,
+        "exit_status": 4,
+        "category": "readability",
+        "trigger": "no_trigger",
+        "message": "There should be a final \\n at the end of each file."
+      }
+    ]
+  },
+  {
+    "id": "EX3028.pipeline.selection.invalid-pattern",
+    "source": "defmodule M do\nend",
+    "filename": "lib/a.ex",
+    "general": {},
+    "selection": {
+      "only": [
+        "(["
+      ],
+      "ignore": []
+    },
+    "config": "default",
+    "outcome": "invalid_selection",
+    "status": "valid",
+    "issues": []
+  }
+]

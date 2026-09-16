@@ -1,0 +1,148 @@
+[
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3027.upstream.not-report-empty",
+    "origin": "it should NOT report for empty string",
+    "params": {},
+    "source": "defmodule CredoTest do\n  @module_var \"\"\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3027.upstream.not-report-3-quotes",
+    "origin": "it should NOT report when exactly 3 quotes are found",
+    "params": {},
+    "source": "defmodule CredoTest do\n  @module_var \"f\\\"b\\\"\\\"\"\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3027.upstream.not-report-below-max",
+    "origin": "it should NOT report when less than :maximum_allowed_quotes quotes are found",
+    "params": {
+      "maximum_allowed_quotes": 5
+    },
+    "source": "defmodule CredoTest do\n  @module_var \"f\\\"\\\"\\\"\\\"\"\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3027.upstream.not-report-at-max",
+    "origin": "it should NOT report when exactly :maximum_allowed_quotes quotes are found",
+    "params": {
+      "maximum_allowed_quotes": 4
+    },
+    "source": "defmodule CredoTest do\n  @module_var \"f\\\"\\\"\\\"\\\"\"\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3027.upstream.not-report-sigil-s",
+    "origin": "it should NOT report for quotes in sigil_s",
+    "params": {},
+    "source": "defmodule CredoTest do\n  @module_var ~s(f\\\"\\\"b\\\"\\\")\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3027.upstream.not-report-sigil-r",
+    "origin": "it should NOT report for quotes in sigil_r",
+    "params": {},
+    "source": "defmodule CredoTest do\n  @module_var ~r(f\\\"\\\"b\\\"\\\")\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3027.upstream.not-report-heredoc-dq",
+    "origin": "it should NOT report for double quotes in heredoc",
+    "params": {},
+    "source": "defmodule CredoTest do\n  @module_var \"\"\"\n  f\\\"\\\"b\\\"\\\"\n  \"\"\"\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3027.upstream.not-report-heredoc-2",
+    "origin": "it should NOT report for double quotes in heredoc /2",
+    "params": {},
+    "source": "\"\"\"\n{\n\"hello\": \"world\",\n\"foo\": \"bar\"\n}\n\"\"\"\n|> Jason.decode!\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3027.upstream.not-report-heredoc-sq",
+    "origin": "it should NOT report for single quotes in heredoc",
+    "params": {},
+    "source": "defmodule CredoTest do\n  @module_var '''\n  f\\\"\\\"b\\\"\\\"\n  '''\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3027.upstream.not-report-non-utf8",
+    "origin": "it should NOT crash if string contains non utf8 characters",
+    "params": {},
+    "source": "defmodule CredoTest do\n      @module_var \"\\xFF\"\n    end"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3027.upstream.not-report-sq-interp",
+    "origin": "it should NOT crash if string contains singnle quotes and an interpolation",
+    "params": {},
+    "source": "  function.(\"'#{parameter}'\")\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 2,
+        "message": "More than 3 quotes found inside string literal, consider using a sigil instead.",
+        "trigger": "f\"\"b\"\""
+      }
+    ],
+    "id": "EX3027.upstream.violation-quotes",
+    "origin": "should report for more than 3 quotes",
+    "params": {},
+    "source": "defmodule CredoTest do\n  @module_var \"f\\\"\\\"b\\\"\\\"\"\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 2,
+        "message": "More than 5 quotes found inside string literal, consider using a sigil instead.",
+        "trigger": "f\"\"b\"\"\"\""
+      }
+    ],
+    "id": "EX3027.upstream.violation-max-quotes",
+    "origin": "should report for more than :maximum_allowed_quotes quotes",
+    "params": {
+      "maximum_allowed_quotes": 5
+    },
+    "source": "defmodule CredoTest do\n  @module_var \"f\\\"\\\"b\\\"\\\"\\\"\\\"\"\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3027.upstream.not-report-729",
+    "origin": "doesn't crash on #729",
+    "params": {},
+    "source": "defmodule CredoInterpolationError do\n  def foo(env) do\n    case \"#{env}\" do\n      \"A\" <> _ = env -> \"🇿🇼 #{String.upcase(env)}\"\n      \"B\" <> _ = env -> \"🇻🇺 #{String.upcase(env)}\"\n    end\n  end\nend\n"
+  }
+]

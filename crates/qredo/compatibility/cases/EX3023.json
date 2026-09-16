@@ -1,0 +1,258 @@
+[
+  {
+    "id": "EX3023.upstream.01",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    some_val\n    |> do_something\n    |> do_something_else\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.02",
+    "origin": "it should NOT report expected code when piping from a block function/macro",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    for {major, patches} <- versions do\n      # ...\n    end\n    |> Enum.reverse()\n    |> List.flatten()\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.03",
+    "origin": "it should NOT report violation when piping 0-arity function and such functions allowed",
+    "assert": "refute_issues",
+    "source": "defmodule OtherModule do\n  def foo, do: nil\n  def bar(nil), do: nil\nend\n\ndefmodule CredoSampleModule do\n  def test do\n    OtherModule.foo() |> bar()\n    foo() |> OtherModule.bar()\n    foo() |> bar()\n\n    foo_anonymous = fn ->\n      nil\n    end\n\n    foo_anonymous.() |> bar()\n  end\n\n  def foo(), do: nil\n  def bar(nil), do: nil\nend\n",
+    "params": {
+      "allow_0_arity_functions": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.04",
+    "origin": "it should NOT report a violation when piping from a block function/macro with :allow_blocks",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    for {major, patches} <- versions do\n      # ...\n    end\n    |> Enum.reverse()\n\n    Anther.block_op(1, 2, 3) do\n      # ...\n    end\n    |> Enum.reverse()\n\n    SomeOther.block_op do\n      # ...\n    end\n    |> Enum.reverse()\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.05",
+    "origin": "it should NOT report violation when piping a map or a struct and :allow_maps is true",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    %{a: 1, b: 2}\n    |> Map.put(:c, 3)\n\n    %MyStruct{name: \"x\"}\n    |> MyStruct.process()\n  end\nend\n",
+    "params": {
+      "allow_maps": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.06",
+    "origin": "it should NOT report violation when piping a list and :allow_lists is true",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    [key: :value, other: 1]\n    |> Keyword.get(:key)\n\n    [1, 2, 3]\n    |> Enum.sum()\n  end\nend\n",
+    "params": {
+      "allow_lists": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.07",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    some_val |> do_something\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 14,
+        "line": 5,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.08",
+    "origin": "it should report a violation for multiple violations",
+    "assert": "assert_issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    some_val |> do_something\n    some_other_val\n    |> do_something\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 7,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      },
+      {
+        "column": 14,
+        "line": 5,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.09",
+    "origin": "it should report a violation if piping a 0-arity function and such functions not allowed",
+    "assert": "assert_issues",
+    "source": "defmodule CredoSampleModule do\n  defmodule OtherModule do\n    def foo, do: nil\n    def bar(nil), do: nil\n  end\n\n  defmodule CredoSampleModule do\n    def test do\n      OtherModule.foo() |> bar()\n      foo() |> OtherModule.bar()\n      foo() |> bar()\n\n      foo_anonymous = fn ->\n        nil\n      end\n\n      foo_anonymous.() |> bar()\n    end\n\n    def foo(), do: nil\n    def bar(nil), do: nil\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 24,
+        "line": 17,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      },
+      {
+        "column": 13,
+        "line": 11,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      },
+      {
+        "column": 13,
+        "line": 10,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      },
+      {
+        "column": 25,
+        "line": 9,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.10",
+    "origin": "it should report violation when piping non-function and 0-arity functions allowed",
+    "assert": "assert_issues",
+    "source": "defmodule CredoSampleModule do\n  def test do\n    :foo |> bar()\n\n    foo = \"foo\"\n    bar |> foo()\n  end\n\n  def bar(_), do: nil\nend\n",
+    "params": {
+      "allow_0_arity_functions": true
+    },
+    "findings": [
+      {
+        "column": 9,
+        "line": 6,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      },
+      {
+        "column": 10,
+        "line": 3,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.11",
+    "origin": "it should report a violation when piping from a function/macro",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    SomeLibrary.run(&do_run_on_source_file/3, [exec, source_file, params])\n    |> SomeLibrary.append(exec,\n      task: exec.some_task,\n      check: __MODULE__,\n      filename: source_file.filename\n    )\n  end\nend\n",
+    "params": {
+      "allow_blocks": true
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 4,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.12",
+    "origin": "it should report a violation when piping from a block function/macro",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    for {major, patches} <- versions do\n      # ...\n    end\n    |> Enum.reverse()\n  end\nend\n",
+    "params": {
+      "allow_blocks": false
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 6,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.13",
+    "origin": "it should report a violation when piping a map and :allow_maps is not set",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    %{a: 1, b: 2}\n    |> Map.put(:c, 3)\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 4,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.14",
+    "origin": "it should report a violation when piping a struct and :allow_maps is not set",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    %MyStruct{name: \"x\"}\n    |> MyStruct.process()\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 4,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.15",
+    "origin": "it should report a violation when piping a list and :allow_lists is not set",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    [1, 2, 3]\n    |> Enum.sum()\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 4,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3023.upstream.16",
+    "origin": "it should report a violation when piping a keyword list and :allow_lists is not set",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    [key: :value, other: 1]\n    |> Keyword.get(:key)\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 4,
+        "message": "Use a function call when a pipeline is only one function long.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

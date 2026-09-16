@@ -1,0 +1,192 @@
+[
+  {
+    "id": "EX4003.upstream.not-apply-2",
+    "origin": "it should NOT report violation for apply/2",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(fun, args) do\n    apply(fun, args)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-apply-2-args-fun",
+    "origin": "it should NOT report violation for apply/2 when args returnded by a function",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(fun, args) do\n    apply(fun, Enum.reverse(args))\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-apply-2-prepend.a",
+    "origin": "it should NOT report violation for apply/2 when prepend args",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(fun, args) do\n    apply(fun, [:foo | args])\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-apply-2-prepend.b",
+    "origin": "it should NOT report violation for apply/2 when prepend args",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(fun, args) do\n    apply(fun, [:foo, :bar | args])\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-apply-3",
+    "origin": "it should NOT report violation for apply/3",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(module, fun, args) do\n    apply(module, fun, args)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-apply-3-args-fun",
+    "origin": "it should NOT report violation for apply/3 when args returned by a function",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(module, fun, args) do\n    apply(module, fun, Enum.reverse(args))\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-apply-3-prepend.a",
+    "origin": "it should NOT report violation for apply/3 when prepend args",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(module, fun, args) do\n    apply(module, fun, [:foo | args])\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-apply-3-prepend.b",
+    "origin": "it should NOT report violation for apply/3 when prepend args",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(module, fun, args) do\n    apply(module, fun, [:foo, :bar | args])\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-apply-3-module",
+    "origin": "it should NOT report violation for apply/3 when called with __MODULE__",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function do\n    apply(__MODULE__, :foo, [])\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-apply-3-fun-var",
+    "origin": "it should NOT report violation for apply/3 when fun is a var",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(module, fun, arg1, arg2) do\n    apply(module, fun, [arg1, arg2])\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-piped-apply-3-fun-var",
+    "origin": "it should NOT report violation for piped apply/3 when fun is a var",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(module, fun, arg1, arg2) do\n    module\n    |> apply(fun1, [arg1, arg2])\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-apply-3-fun-function",
+    "origin": "it should NOT report violation for apply/3 when fun is a function",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(module, fun, arg1, arg2) do\n    apply(module, String.to_exisiting_atom(\"pre_#{fun}\"), [arg1, arg2])\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-apply-3-args-var",
+    "origin": "it should NOT report violation for apply/3 when args is a var",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(args) when is_list(args) do\n    apply(Module, :fun, args)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.not-apply-2-local-def",
+    "origin": "it should NOT report violation for apply/2 when defining local apply/2",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  @spec apply(fun, [any]) :: any\n  def apply(fun, args) do\n    :erlang.apply(fun, args)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.violation-apply-2-pipe",
+    "origin": "it should report violation for apply/2 in a pipe",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  def some_function(fun, arg1, arg2) do\n    fun2 |> apply([arg1, arg2])\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 13,
+        "line": 3,
+        "message": "Avoid `apply/2` and `apply/3` when the number of arguments is known.",
+        "trigger": "apply"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.violation-apply-3-pipe",
+    "origin": "it should report a violation for apply/3 in a pipe",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  def some_function(module, arg1, arg2) do\n    module |> apply(:fun_name3, [arg1, arg2])\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 15,
+        "line": 3,
+        "message": "Avoid `apply/2` and `apply/3` when the number of arguments is known.",
+        "trigger": "apply"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.violation-apply-2",
+    "origin": "it should report violation for apply/2",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  def some_function(fun, arg1, arg2) do\n    apply(fun, [arg1, arg2])\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Avoid `apply/2` and `apply/3` when the number of arguments is known.",
+        "trigger": "apply"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4003.upstream.violation-apply-3",
+    "origin": "it should report a violation for apply/3",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  def some_function(module, arg1, arg2) do\n    apply(module, :fun_name, [arg1, arg2])\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Avoid `apply/2` and `apply/3` when the number of arguments is known.",
+        "trigger": "apply"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

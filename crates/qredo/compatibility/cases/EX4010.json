@@ -1,0 +1,72 @@
+[
+  {
+    "id": "EX4010.upstream.not-expected",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) when is_nil(p5) do\n    some_value = parameter1 + parameter2\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4010.upstream.not-defp-ignored",
+    "origin": "it should NOT report a violation if defp's are ignored",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  defp some_function(p1, p2, p3, p4, p5, p6, p7, p8, p9) do\n    some_value = parameter1 + parameter2\n  end\nend\n",
+    "params": {
+      "ignore_defp": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4010.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5, p6, p7, p8, p9) do\n    some_value = parameter1 + parameter2\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 2,
+        "message": "Function takes too many parameters (arity is 9, max is 8).",
+        "trigger": "some_function"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4010.upstream.violation-unless",
+    "origin": "it should report a violation for :unless",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    some_value = parameter1 + parameter2\n  end\nend\n",
+    "params": {
+      "max_arity": 4
+    },
+    "findings": [
+      {
+        "column": 7,
+        "line": 2,
+        "message": "Function takes too many parameters (arity is 5, max is 4).",
+        "trigger": "some_function"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4010.upstream.violation-defp",
+    "origin": "it should report a violation for defp's",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  defp some_function(p1, p2, p3, p4, p5, p6, p7, p8, p9) do\n    some_value = parameter1 + parameter2\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 8,
+        "line": 2,
+        "message": "Function takes too many parameters (arity is 9, max is 8).",
+        "trigger": "some_function"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

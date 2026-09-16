@@ -1,0 +1,36 @@
+[
+  {
+    "id": "EX4004.upstream.not-expected",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    case some_value do\n      true -> :one\n      false -> :three\n      nil -> :four\n      _ -> :something_else\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4004.upstream.not-expected-2",
+    "origin": "it should NOT report expected code 2",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    case some_value do\n      ^p1 -> :one\n      ^p2 -> :two\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4004.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5, p6) do\n    case some_value do\n      true -> :one\n      false -> :three\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": null,
+        "line": 3,
+        "message": "Case statements should not only contain `true` and `false`.",
+        "trigger": "cond"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

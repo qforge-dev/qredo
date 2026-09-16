@@ -1,0 +1,56 @@
+[
+  {
+    "id": "EX3018.upstream.01",
+    "origin": "it should NOT report when using an unquoted atom",
+    "assert": "refute_issues",
+    "source": ":unquoted_atom\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3018.upstream.02",
+    "origin": "it should NOT report when using an unquoted keyword identifier",
+    "assert": "refute_issues",
+    "source": "[unquoted_atom: 1]\n%{unquoted_atom: 1}\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3018.upstream.03",
+    "origin": "it should NOT report when required to use a quoted atom",
+    "assert": "refute_issues",
+    "source": ":\"complex\\#{atom}\"\n:\"complex atom\"\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3018.upstream.04",
+    "origin": "it should NOT report when required to use a quoted keyword identifier",
+    "assert": "refute_issues",
+    "source": "[\"complex\\#{atom}\": 1, \"complex atom\": 2]\n%{\"complex\\#{atom}\": 1, \"complex atom\": 2}\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3018.upstream.05",
+    "origin": "it should report cases where a quoted atom is used and could be unquoted",
+    "assert": "assert_issue",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "version-gated upstream: test only compiles when System.version() matches < 1.7.0-dev; skipped on this toolchain (Elixir 1.20.2/OTP 29). Native run of the transcribed source yields 0 issues, disagreeing with the stale assertion (assert_issue line_no 2 for a 1-line source). Unverifiable single-file on this toolchain."
+  },
+  {
+    "id": "EX3018.upstream.06",
+    "origin": "it should report cases where a quoted keyword identifier is used and could be unquoted",
+    "assert": "assert_issues",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "version-gated upstream: test only compiles when System.version() matches < 1.7.0-dev; skipped on this toolchain (Elixir 1.20.2/OTP 29). Native run of the transcribed source yields 0 issues, disagreeing with the stale assertion. Unverifiable single-file on this toolchain."
+  }
+]

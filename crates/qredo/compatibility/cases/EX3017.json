@@ -1,0 +1,68 @@
+[
+  {
+    "id": "EX3017.upstream.01",
+    "origin": "it should NOT report implicit use of `try`",
+    "assert": "refute_issues",
+    "source": "defmodule ModuleWithImplicitTry do\n  def failing_function(first) do\n    to_string(first)\n  rescue\n    _ -> :rescued\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3017.upstream.02",
+    "origin": "it should NOT report a violation in cases where we need `try`",
+    "assert": "refute_issues",
+    "source": "defmodule ModuleWithExplicitTry do\n  def failing_function(first) do\n    other_function()\n\n    str =\n      try do\n        to_string(first)\n      rescue\n        _ -> \"rescued\"\n      end\n\n    to_atom(string)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3017.upstream.03",
+    "origin": "it should report cases where a `try` block is the entire body of the function",
+    "assert": "assert_issue",
+    "source": "defmodule ModuleWithExplicitTry do\n  def failing_function(first) do\n    try do\n      to_string(first)\n    rescue\n      _ -> :rescued\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Prefer using an implicit `try` rather than explicit `try`.",
+        "trigger": "try"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3017.upstream.04",
+    "origin": "it should report cases where a `try` block is the entire body of a private function",
+    "assert": "assert_issue",
+    "source": "defmodule ModuleWithExplicitTry do\n  defp failing_function(first) do\n    try do\n      to_string(first)\n    rescue\n      _ -> :rescued\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Prefer using an implicit `try` rather than explicit `try`.",
+        "trigger": "try"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3017.upstream.05",
+    "origin": "it should report cases where a `try` block is the entire body of macro definition",
+    "assert": "assert_issue",
+    "source": "defmodule ModuleWithExplicitTry do\n  defmacro failing_function(first) do\n    try do\n      to_string(unquote(first))\n    rescue\n      _ -> :rescued\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Prefer using an implicit `try` rather than explicit `try`.",
+        "trigger": "try"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

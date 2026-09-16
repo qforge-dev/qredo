@@ -1,0 +1,59 @@
+[
+  {
+    "id": "EX4019.upstream.ok",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    unless allowed? do\n      something\n    end\n    if !allowed? do\n      something\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4019.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule Mix.Tasks.Credo do\n  def run(argv) do\n    if !allowed? do\n      true\n    else\n      false\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 8,
+        "line": 3,
+        "message": "Avoid negated conditions in if-else blocks.",
+        "trigger": "!"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4019.upstream.violation_parens",
+    "origin": "it should report a violation if used with parentheses",
+    "assert": "assert_issue",
+    "source": "defmodule Mix.Tasks.Credo do\n  def run(argv) do\n    if (!allowed?) do\n      true\n    else\n      false\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 9,
+        "line": 3,
+        "message": "Avoid negated conditions in if-else blocks.",
+        "trigger": "!"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4019.upstream.violation_not",
+    "origin": "it should report a violation with not/2 as well",
+    "assert": "assert_issue",
+    "source": "defmodule Mix.Tasks.Credo do\n  def run(argv) do\n    if not allowed? do\n      true\n    else\n      false\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 8,
+        "line": 3,
+        "message": "Avoid negated conditions in if-else blocks.",
+        "trigger": "not"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

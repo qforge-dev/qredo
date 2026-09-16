@@ -1,0 +1,131 @@
+[
+  {
+    "id": "EX4020.upstream.ok",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, nil) do\n    something\n  end\n  def some_function(parameter1, parameter2) do\n    something\n  end\n  # `is_nil` in guard still works\n  def common_guard(%{a: a, b: b}) when is_nil(b) do\n    something\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4020.upstream.ok_not_is_nil_body",
+    "origin": "it should NOT report a violation - `not is_nil is not part of a guard clause`",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(%{parameter1: parameter2, id: id}) when is_binary(parameter2) do\n    something = not is_nil(parameter2)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4020.upstream.ok_bang_is_nil_body",
+    "origin": "it should NOT report a violation - ` !is_nil is not part of a guard clause`",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(%{parameter1: parameter2, id: id}) when is_binary(parameter2) do\n    something = !is_nil(parameter2)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4020.upstream.violation_not",
+    "origin": "it should report a violation - `when not is_nil`",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) when not is_nil(parameter2) do\n    something\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 50,
+        "line": 2,
+        "message": "Avoid negated `is_nil/1` in guard clauses.",
+        "trigger": "not"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4020.upstream.violation_bang",
+    "origin": "it should report a violation - `when !is_nil`",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) when !is_nil(parameter2) do\n    something\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 50,
+        "line": 2,
+        "message": "Avoid negated `is_nil/1` in guard clauses.",
+        "trigger": "!"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4020.upstream.violation_not_multi",
+    "origin": "it should report a violation - `when not is_nil is part of a multi clause guard`",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(%{parameter1: parameter2, id: id}) when not is_nil(parameter2) and is_binary(parameter2) do\n    something\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 61,
+        "line": 2,
+        "message": "Avoid negated `is_nil/1` in guard clauses.",
+        "trigger": "not"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4020.upstream.violation_bang_multi",
+    "origin": "it should report a violation - `when !is_nil is part of a multi clause guard`",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(%{parameter1: parameter2, id: id}) when !is_nil(parameter2) and is_binary(parameter2) do\n    something\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 61,
+        "line": 2,
+        "message": "Avoid negated `is_nil/1` in guard clauses.",
+        "trigger": "!"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4020.upstream.violation_single_of_many",
+    "origin": "it should report only one violation in a module with multiple functions when only one is problematic",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def hello(a) when not is_nil(a), do: a\n  def foo1(x) when is_integer(x), do: x\n  def foo2(x) when is_integer(x), do: x\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 21,
+        "line": 2,
+        "message": "Avoid negated `is_nil/1` in guard clauses.",
+        "trigger": "not"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4020.upstream.violation_two_of_many",
+    "origin": "it should report two violations in a module with multiple functions when two are problematic",
+    "assert": "assert_issues",
+    "source": "defmodule CredoSampleModule do\n  def hello(a) when not is_nil(a), do: a\n  def foo1(x) when is_integer(x), do: x\n  def foo2(x) when is_integer(x), do: x\n  def hello2(a) when not is_nil(a), do: a\n  def foo3(x) when is_integer(x), do: x\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 22,
+        "line": 5,
+        "message": "Avoid negated `is_nil/1` in guard clauses.",
+        "trigger": "not"
+      },
+      {
+        "column": 21,
+        "line": 2,
+        "message": "Avoid negated `is_nil/1` in guard clauses.",
+        "trigger": "not"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

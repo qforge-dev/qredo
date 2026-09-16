@@ -1,0 +1,114 @@
+[
+  {
+    "id": "EX3013.upstream.01",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    unless allowed? do\n      something\n    end\n\n    if File.exists?(filename) do\n      something\n    else\n      something_else\n    end\n    if !allowed? || (something_in_parentheses == 42) do\n      something\n    end\n    if (something_in_parentheses == 42) || !allowed? do\n      something\n    end\n    if !allowed? == (something_in_parentheses == 42) do\n      something\n    end\n    if (5 - 4) in MapSet.new([1]) do\n      something\n    else\n      something_else\n    end\n    unless (something_in_parentheses != 42) || allowed? do\n      something\n    end\n    boolean |> if(do: :ok, else: :error)\n    boolean |> unless(do: :ok)\n    if(allowed_keyword?(a) || measured_unit?(a), do: a, else: \"\")\n    if (thing && other_thing) || better_thing, do: something\n    if !better_thing && (thing || other_thing), do: something_else\n  end\n\n  import Bitwise\n\n\tdef bar(foo, bar) do\n\t\tif (foo &&& 0b1000) > 0, do: bar, else: nil\n\tend\n\n\tdef foobar(foo) do\n\t\tfoo\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3013.upstream.02",
+    "origin": "it should NOT report expected code /2",
+    "assert": "refute_issues",
+    "source": "props =\n  if(valid?(username), do: [:authorized]) ++\n  unless(admin?(username), do: [:restricted])\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3013.upstream.03",
+    "origin": "it should NOT report expected code /3",
+    "assert": "refute_issues",
+    "source": "if (assocs != [] or prepare != []) and\n   Keyword.get(opts, :skip_transaction) != true and\n   function_exported?(adapter, :transaction, 3) do\n  some_fun()\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3013.upstream.04",
+    "origin": "it should NOT report expected code /4",
+    "assert": "refute_issues",
+    "source": "defmodule Foo do\n  def bar(a, b) do\n    if (a + b) / 100 > threshold(), do: :high, else: :low\n    if (a + b) * 100 > threshold(), do: :high, else: :low\n    if (a + b) + 100 > threshold(), do: :high, else: :low\n    if (a + b) - 100 > threshold(), do: :high, else: :low\n    if (a + b) &&& 100 > threshold(), do: :high, else: :low\n  end\n  def threshold, do: 50\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3013.upstream.05",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule Mix.Tasks.Credo do\n  def run(argv) do\n    if( allowed? ) do\n      true\n    else\n      false\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "The condition of `if` should not be wrapped in parentheses.",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3013.upstream.06",
+    "origin": "it should report violations with one-liners if used with parentheses",
+    "assert": "assert_issues",
+    "source": "defmodule Mix.Tasks.Credo do\n  def run(argv) do\n    if (allowed?), do: true\n    unless (!allowed?), do: true\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "The condition of `if` should not be wrapped in parentheses.",
+        "trigger": "if"
+      },
+      {
+        "column": 5,
+        "line": 4,
+        "message": "The condition of `unless` should not be wrapped in parentheses.",
+        "trigger": "unless"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3013.upstream.07",
+    "origin": "it should report a violation if used with parentheses",
+    "assert": "assert_issue",
+    "source": "defmodule Mix.Tasks.Credo do\n  def run(argv) do\n    unless( !allowed? ) do\n      true\n    else\n      false\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "The condition of `unless` should not be wrapped in parentheses.",
+        "trigger": "unless"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3013.upstream.08",
+    "origin": "it should report violations with spaces before the parentheses",
+    "assert": "assert_issues",
+    "source": "defmodule Mix.Tasks.Credo do\n  def run(argv) do\n    if ( allowed? ) do\n      true\n    else\n      false\n    end\n\n    unless (also_allowed?) do\n      true\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "The condition of `if` should not be wrapped in parentheses.",
+        "trigger": "if"
+      },
+      {
+        "column": 5,
+        "line": 9,
+        "message": "The condition of `unless` should not be wrapped in parentheses.",
+        "trigger": "unless"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

@@ -1,0 +1,165 @@
+[
+  {
+    "id": "EX3024.upstream.binaries",
+    "origin": "upstream: it should NOT report when commas are in binaries",
+    "source": "defmodule SpaceMissingInBinary do\n  custom_sigil =\n    ~X'''\n    '''\n\n  string = \",\"\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3024.upstream.bracket",
+    "origin": "upstream: it requires spaces after commas followed by [",
+    "source": "defmodule CredoSampleModule do\n  @attribute [foo,[bar]]\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 18,
+        "line": 2,
+        "message": "Space missing after comma.",
+        "trigger": ",["
+      }
+    ]
+  },
+  {
+    "id": "EX3024.upstream.interpolations",
+    "origin": "upstream: it should NOT report when commas are in interpolations",
+    "source": "defmodule SpaceMissing1 do\n  @moduledoc false\n\n  @doc false\n  def test_credo do\n    foo = 1\n    bar = 2\n    _ = \"#{foo} #{bar}\"\n    _ = Enum.join([1, 2, 3], \",\")\n    _ = ~r\",\"\n  end\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3024.upstream.many",
+    "origin": "upstream: it should report when there are many commas not followed by spaces",
+    "source": "defmodule CredoSampleModule do\n  @attribute [1,2,\"three\",'4',5]\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 16,
+        "line": 2,
+        "message": "Space missing after comma.",
+        "trigger": ",2"
+      },
+      {
+        "column": 18,
+        "line": 2,
+        "message": "Space missing after comma.",
+        "trigger": ",\""
+      },
+      {
+        "column": 26,
+        "line": 2,
+        "message": "Space missing after comma.",
+        "trigger": ",'"
+      },
+      {
+        "column": 30,
+        "line": 2,
+        "message": "Space missing after comma.",
+        "trigger": ",5"
+      }
+    ]
+  },
+  {
+    "id": "EX3024.upstream.newlines",
+    "origin": "upstream: it should NOT report when commas have newlines",
+    "source": "defmodule CredoSampleModule do\n  defstruct foo: nil,\n            bar: nil\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3024.upstream.question-clean",
+    "origin": "upstream: spaces after commas preceded by ? (clean)",
+    "source": "defmodule CredoSampleModule do\n  @some_char_codes [?,, ?;]\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3024.upstream.question-report",
+    "origin": "upstream: it requires spaces after commas preceded by ?,",
+    "source": "defmodule CredoSampleModule do\n  @some_char_codes [?,,?;]\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 23,
+        "line": 2,
+        "message": "Space missing after comma.",
+        "trigger": ",?"
+      }
+    ]
+  },
+  {
+    "id": "EX3024.upstream.quote-comment",
+    "origin": "upstream: it does not get confused by apostrophe in a comment",
+    "source": "defmodule CredoSampleModule do\n  def fun do\n    # '\n    ','\n  end\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3024.upstream.sigils",
+    "origin": "upstream: it should NOT report commas in sigils",
+    "source": "defmodule CredoSampleModule do\n  def fun(value) do\n    Regex.match?(~r/^\\d{1,2}\\/\\d{1,2}\\/\\d{4}$/, value)\n  end\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3024.upstream.slash2",
+    "origin": "upstream: it should report when commas are not followed by spaces /2",
+    "source": "defmodule CredoSampleModule do\n  @attribute {:foo,{:bar}}\n  @attribute {:foo,[:bar]}\n  @attribute {:foo,%{:bar => true}}\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 19,
+        "line": 2,
+        "message": "Space missing after comma.",
+        "trigger": ",{"
+      },
+      {
+        "column": 19,
+        "line": 3,
+        "message": "Space missing after comma.",
+        "trigger": ",["
+      },
+      {
+        "column": 19,
+        "line": 4,
+        "message": "Space missing after comma.",
+        "trigger": ",%"
+      }
+    ]
+  },
+  {
+    "id": "EX3024.upstream.spaces",
+    "origin": "upstream: it should NOT report when commas have spaces",
+    "source": "# comments should not matter [[[,]]]\ndefmodule CredoSampleModule do\n  @attribute {:foo, :bar}\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3024.upstream.var-question",
+    "origin": "upstream: it requires spaces after commas preceded by variables ending with ?",
+    "source": "defmodule CredoSampleModule do\n  @attribute [question?,answer]\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 24,
+        "line": 2,
+        "message": "Space missing after comma.",
+        "trigger": ",a"
+      }
+    ]
+  },
+  {
+    "id": "EX3024.upstream.violation",
+    "origin": "upstream: it should report when commas are not followed by spaces",
+    "source": "defmodule CredoSampleModule do\n  @attribute {:foo,:bar}\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 19,
+        "line": 2,
+        "message": "Space missing after comma.",
+        "trigger": ",:"
+      }
+    ]
+  }
+]

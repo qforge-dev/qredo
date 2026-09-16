@@ -1,0 +1,58 @@
+[
+  {
+    "id": "EX4005.upstream.not-expected",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    cond do\n      x < x -> -1\n      x == x -> 0\n      true -> 1\n    end\n\n    cond do\n      x < x -> -1\n      x == x -> 0\n      _ -> 1\n    end\n\n    cond do\n      x < x -> -1\n      x == x -> 0\n      _named -> 1\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4005.upstream.not-without-always-true",
+    "origin": "it should NOT report expected code without an always true statement",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    cond do\n      x < x -> -1\n      x == x -> 0\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4005.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    cond do\n      x == x -> 0\n      true -> 1\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 5,
+        "message": "Cond statements should contain at least two conditions besides `true`, consider using `if` instead.",
+        "trigger": "cond"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4005.upstream.violation-multiple",
+    "origin": "it should report a violation for multiple violations",
+    "assert": "assert_issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    cond do\n      x == x -> 0\n      true -> 1\n    end\n    cond do\n      true -> 1\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 5,
+        "message": "Cond statements should contain at least two conditions besides `true`, consider using `if` instead.",
+        "trigger": "cond"
+      },
+      {
+        "column": 5,
+        "line": 9,
+        "message": "Cond statements should contain at least two conditions besides `true`, consider using `if` instead.",
+        "trigger": "cond"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

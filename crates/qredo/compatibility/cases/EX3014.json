@@ -1,0 +1,98 @@
+[
+  {
+    "id": "EX3014.upstream.01",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    parameter1 + parameter2\n  end\n\n  def some_other_function do\n    defp = 18\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3014.upstream.02",
+    "origin": "it should NOT report expected code /2",
+    "assert": "refute_issues",
+    "source": "defmodule Mix.Tasks.Credo do\n  def foo!, do: impl().foo!()\n  def foo?, do: impl().foo?()\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3014.upstream.03",
+    "origin": "it should NOT report a violation with no parens if parens: true",
+    "assert": "refute_issues",
+    "source": "defmodule Mix.Tasks.Credo do\n  def good?() do\n    :ok\n  end\n\n  def bang!() do\n    :nok\n  end\nend\n",
+    "params": {
+      "parens": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3014.upstream.04",
+    "origin": "it should NOT report or crash on macros creating zero arity functions",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  defmacro dynamic_methoder(attribute, value) do\n    quote do\n      def unquote(attribute)(), do: unquote(value)\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3014.upstream.05",
+    "origin": "it should report a violation with no parens if parens: true /2",
+    "assert": "assert_issues",
+    "source": "defmodule Mix.Tasks.Credo do\n  def foo!, do: impl().foo!()\n  def foo?, do: impl().foo?()\nend\n",
+    "params": {
+      "parens": true
+    },
+    "findings": [
+      {
+        "column": 7,
+        "line": 3,
+        "message": "Use parentheses when defining a function which has no arguments.",
+        "trigger": "foo?"
+      },
+      {
+        "column": 7,
+        "line": 2,
+        "message": "Use parentheses when defining a function which has no arguments.",
+        "trigger": "foo!"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3014.upstream.06",
+    "origin": "it should report a violation with parens (by default)",
+    "assert": "assert_issue",
+    "source": "defmodule Mix.Tasks.Credo do\n  def run() do\n    21\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 2,
+        "message": "Do not use parentheses when defining a function which has no arguments.",
+        "trigger": "run"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3014.upstream.07",
+    "origin": "it should report a violation with no parens if parens: true",
+    "assert": "assert_issue",
+    "source": "defmodule Mix.Tasks.Credo do\n  def run do\n    21\n  end\nend\n",
+    "params": {
+      "parens": true
+    },
+    "findings": [
+      {
+        "column": 7,
+        "line": 2,
+        "message": "Use parentheses when defining a function which has no arguments.",
+        "trigger": "run"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

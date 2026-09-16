@@ -1,0 +1,40 @@
+[
+  {
+    "id": "EX5025.native.selected-test-path",
+    "origin": "native: run/2 always reports line 1 no_trigger; execution selects test/**/*_test.ex",
+    "filename": "test/my_module_test.ex",
+    "source": "x = 1\n",
+    "params": {},
+    "findings": [
+      {
+        "line": 1,
+        "column": null,
+        "trigger": "no_trigger",
+        "message": "Test files should end with `_test.exs`."
+      }
+    ]
+  },
+  {
+    "id": "EX5025.native.selected-apps-path",
+    "origin": "native: apps/**/test/**/*_test.ex is also selected by default",
+    "filename": "apps/my_app/test/my_module_test.ex",
+    "source": "x = 1\n",
+    "params": {},
+    "findings": [
+      {
+        "line": 1,
+        "column": null,
+        "trigger": "no_trigger",
+        "message": "Test files should end with `_test.exs`."
+      }
+    ]
+  },
+  {
+    "id": "EX5025.native.unselected-lib-path",
+    "origin": "native: lib files are not selected, so run/2 never executes for them",
+    "filename": "lib/my_module.ex",
+    "source": "x = 1\n",
+    "params": {},
+    "findings": []
+  }
+]

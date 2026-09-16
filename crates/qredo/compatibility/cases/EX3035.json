@@ -1,0 +1,71 @@
+[
+  {
+    "id": "EX3035.upstream.01",
+    "origin": "it should NOT report the expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    1\n    |> Integer.to_string()\n    |> String.to_integer()\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3035.upstream.02",
+    "origin": "it should report a violation that includes rejected module attrs",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    1 |> Integer.to_string() |> String.to_integer()\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 5,
+        "message": "Avoid using multiple pipes (`|>`) on the same line.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3035.upstream.03",
+    "origin": "it should report multiple violations when having multiples pipes",
+    "assert": "assert_issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    \"1\" |> String.to_integer() |> Integer.to_string()\n    1 |> Integer.to_string() |> String.to_integer()\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 6,
+        "message": "Avoid using multiple pipes (`|>`) on the same line.",
+        "trigger": "|>"
+      },
+      {
+        "column": 9,
+        "line": 5,
+        "message": "Avoid using multiple pipes (`|>`) on the same line.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3035.upstream.04",
+    "origin": "it should report multiple violations when having multiples pipes /2",
+    "assert": "assert_issues",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    assert map == ast |> Macro.postwalk([], &{&1, [&1 | &2]}) |> elem(1) |> Enum.reverse()\n    {var |> Atom.to_string() |> string() |> color_doc(:variable, state.inspect_opts), state}\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 10,
+        "line": 6,
+        "message": "Avoid using multiple pipes (`|>`) on the same line.",
+        "trigger": "|>"
+      },
+      {
+        "column": 23,
+        "line": 5,
+        "message": "Avoid using multiple pipes (`|>`) on the same line.",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

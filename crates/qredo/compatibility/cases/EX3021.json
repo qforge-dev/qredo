@@ -1,0 +1,108 @@
+[
+  {
+    "id": "EX3021.upstream.01",
+    "origin": "it should NOT report violation on consecutive aliases",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  alias App.Module1\n  alias App.Module2\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3021.upstream.02",
+    "origin": "it should NOT report violation on consecutive single-line multi-aliases",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  alias App.{Module1, Module2}\n  alias App.Module2\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3021.upstream.03",
+    "origin": "it should NOT report violation on consecutive multi-line multi-aliases",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  alias App\n\n  alias App.{\n    Module1,\n    Module2\n  }\n\n  alias App.Module3\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3021.upstream.04",
+    "origin": "it should NOT report violation on consecutive requires",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  require App.Module1\n  require App.Module2\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3021.upstream.05",
+    "origin": "it should NOT report violation on functions named require or alias",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  alias Foo\n  require Foo\n\n  defp require do\n    :foo\n  end\n\n  defp alias do\n    :foo\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3021.upstream.06",
+    "origin": "it should NOT report violation on multiline alias as",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  alias App.Module1\n\n  alias App.Module2,\n    as: Module3\n\n  alias App.Module4\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3021.upstream.07",
+    "origin": "it should NOT report violation on macro quotes",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  require Foo\n  alias App.Module1\n\n  defmacro __using__ do\n    quote do\n      alias App.Module2\n    end\n  end\n\n  @doc false\n  @impl true\n  def run(%SourceFile{} = source_file, params \\\\ []) do\n    issue_meta = IssueMeta.for(source_file, params)\n\n    Credo.Code.prewalk(source_file, &traverse(&1, &2, issue_meta))\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3021.upstream.08",
+    "origin": "it should NOT report violation on separate requires",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  require App.Module1\n\n  require App.Module2\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3021.upstream.09",
+    "origin": "it should NOT report violation on separate aliases",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  alias App.Module1\n\n  alias App.Module2\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3021.upstream.10",
+    "origin": "it should NOT report violation on separate single-line multi-aliases",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  alias App.{Module1, Module2}\n\n  alias App.Module2\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3021.upstream.11",
+    "origin": "it should report violation on separate multi-line multi-aliases",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  alias App\n\n  alias App.{\n    Module1,\n    Module2\n  }\n\n  require App.Module5\n\n  alias App.Module3\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 3,
+        "line": 11,
+        "message": "`alias` calls should be consecutive within a module.",
+        "trigger": "alias"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

@@ -1,0 +1,85 @@
+[
+  {
+    "id": "EX2006.upstream.clean",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  # credo:disable-for-this-file Credo.Check.Readability.ModuleAttributeNames\n  @someFoobar false\nend\n",
+    "filename": "lib/credo_sample_module.ex",
+    "params": {},
+    "setup": "no_config_comments",
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2006.upstream.violation-this-file",
+    "origin": "it should report a violation when using # credo:disable-for-this-file",
+    "assert": "assert_issue(%{trigger: \"# credo:\", line_no: 2})",
+    "source": "defmodule CredoSampleModule do\n  # credo:disable-for-this-file Credo.Check.Readability.ModuleAttributeNames\n  @some_foobar false\nend\n",
+    "filename": "lib/credo_sample_module.ex",
+    "params": {},
+    "setup": "with_config_comments",
+    "findings": [
+      {
+        "column": 3,
+        "line": 2,
+        "message": "This config comment does not ignore any issue.",
+        "trigger": "# credo:"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2006.upstream.violation-next-line",
+    "origin": "it should report a violation when using # credo:disable-for-next-line",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  # credo:disable-for-next-line Credo.Check.Readability.ModuleAttributeNames\n  @some_foobar false\nend\n",
+    "filename": "lib/credo_sample_module.ex",
+    "params": {},
+    "setup": "with_config_comments",
+    "findings": [
+      {
+        "column": 3,
+        "line": 2,
+        "message": "This config comment does not ignore any issue.",
+        "trigger": "# credo:"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2006.upstream.violation-prev-line",
+    "origin": "it should report a violation when using # credo:disable-for-previous-line",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n\n  @some_foobar false\n  # credo:disable-for-previous-line Credo.Check.Readability.ModuleAttributeNames\nend\n",
+    "filename": "lib/credo_sample_module.ex",
+    "params": {},
+    "setup": "with_config_comments",
+    "findings": [
+      {
+        "column": 3,
+        "line": 4,
+        "message": "This config comment does not ignore any issue.",
+        "trigger": "# credo:"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2006.upstream.violation-lines",
+    "origin": "it should report a violation when using # credo:disable-for-lines:3",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  # credo:disable-for-lines:3 Credo.Check.Readability.ModuleAttributeNames\n  @some_thing_else true\n  @some_foobar false\nend\n",
+    "filename": "lib/credo_sample_module.ex",
+    "params": {},
+    "setup": "with_config_comments",
+    "findings": [
+      {
+        "column": 3,
+        "line": 2,
+        "message": "This config comment does not ignore any issue.",
+        "trigger": "# credo:"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

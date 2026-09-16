@@ -1,0 +1,321 @@
+[
+  {
+    "id": "EX2001.upstream.clean-expected",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  alias ExUnit.Case\n\n  def fun1 do\n    Case.something\n\n    fun_call().Api.Case\n\n    {:error, reason} = __MODULE__.Sup.start_link(fn() -> :foo end)\n\n    [:faint, filename]    # should not throw an error since\n    |> IO.ANSI.format     # IO.ANSI is part of stdlib\n    |> Credo.Foo.Code.run # Code is part of the stdlib, aliasing it would\n                          # override that `Code`, which you probably don't want\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-depth",
+    "origin": "it should NOT report if configured not to complain until a certain depth",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  alias ExUnit.Case\n\n  def fun1 do\n    Credo.Foo.Bar.call\n  end\nend\n",
+    "params": {
+      "if_nested_deeper_than": 3
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-called-often",
+    "origin": "it should NOT report if configured not to complain up to a certain number of calls to the same module",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  alias ExUnit.Case\n\n  def fun1 do\n    Credo.Foo.Bar.call\n  end\nend\n",
+    "params": {
+      "if_called_more_often_than": 1
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-spec",
+    "origin": "it should NOT report violation in `@spec`s",
+    "assert": "refute_issues",
+    "source": "defmodule Sample do\n  alias Sample.Foo\n\n  @spec foo(Sample.Foo.t) :: false\n  def foo(%Foo{} = _), do: false\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-impossible-alias",
+    "origin": "it should NOT report violation on impossible additional alias",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  alias Exzmq.Socket\n  alias Exzmq.Tcp\n\n  def just_an_example do\n    Socket.test1  # Exzmq.Socket.test\n    Tcp.Socket.test2 # Exzmq.Tcp.Socket.test – how can this be further aliased?\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-impossible-alias-2",
+    "origin": "it should NOT report violation on impossible additional alias /2",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  # Modules are\n  #\n  # - AppName.Foo.User\n  # - AppName.Bar.User\n  #\n  alias AppName.Foo.User\n\n  def foo do\n    User.some_fun() # resolves to AppName.Foo.User\n  end\n\n  def bar do\n    AppName.Bar.User.some_other_fun()\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-ambiguous",
+    "origin": "it should NOT report violation in case of ambiguous module deps",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def just_an_example do\n    Switch.Uri.parse Sip.Uri.generate!(uri)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-ambiguous-count",
+    "origin": "it should NOT report violation in case of ambiguous module deps (different modules binary parts count)",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def just_an_example do\n    Switch.Uri.parse Sip.SomeModule.Uri.generate!(uri)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-only-regex",
+    "origin": "it should NOT report violation when module is not included with only parameter",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def just_an_example do\n    Credo.Foo.Bar.call\n  end\nend\n",
+    "params": {
+      "only": {
+        "regex": "^Other.+$"
+      }
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-only-list",
+    "origin": "it should NOT report violation when module is not included with only parameter",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def just_an_example do\n    Credo.Foo.Bar.call\n  end\nend\n",
+    "params": {
+      "only": [
+        {
+          "regex": "^Other.+$"
+        }
+      ]
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-only-excluded-ns",
+    "origin": "it should NOT report violation when module is included in only parameter but is also in excluded_namespaces",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def just_an_example do\n    Credo.Foo.Bar.call\n  end\nend\n",
+    "params": {
+      "excluded_namespaces": [
+        "Credo"
+      ],
+      "only": {
+        "regex": "^Credo.+$"
+      }
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-only-excluded-last",
+    "origin": "it should NOT report violation when module is included in only parameter but is also in excluded_lastnames",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def just_an_example do\n    Credo.Foo.Bar.call\n  end\nend\n",
+    "params": {
+      "excluded_lastnames": [
+        "Bar"
+      ],
+      "only": {
+        "regex": "^Credo.+$"
+      }
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-excluded-last",
+    "origin": "it should NOT report violation when module is covered in excluded_lastnames",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def just_an_example do\n    Credo.Foo.Bar.call\n  end\nend\n",
+    "params": {
+      "excluded_lastnames": [
+        "Bar"
+      ]
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-module-attr",
+    "origin": "it should NOT report with __MODULE__",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  alias __MODULE__.SubModule\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-passed-as-arg",
+    "origin": "it should NOT report when module passed as argument",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def fun1 do\n    fun2(Credo.Foo.Bar)\n  end\n\n  def fun2(mod) do\n    mod.call\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def fun1 do\n    ExUnit.Case.something\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Nested modules could be aliased at the top of the invoking module.",
+        "trigger": "ExUnit.Case"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.violation-depth",
+    "origin": "it should report if configured to complain start at a certain depth",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  alias ExUnit.Case\n\n  def fun1 do\n    something\n    |> Credo.Foo.Bar.Baz.call\n  end\nend\n",
+    "params": {
+      "if_nested_deeper_than": 3
+    },
+    "findings": [
+      {
+        "column": 8,
+        "line": 6,
+        "message": "Nested modules could be aliased at the top of the invoking module.",
+        "trigger": "Credo.Foo.Bar.Baz"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.violation-called-often",
+    "origin": "it should report if configured to complain up to a certain number of calls to the same module",
+    "assert": "assert_issues",
+    "source": "defmodule CredoSampleModule do\n  alias ExUnit.Case\n\n  def fun1 do\n    Credo.Foo.Bar.call\n  end\n\n  def fun1 do\n    Credo.Foo.Bar.call\n  end\nend\n",
+    "params": {
+      "if_called_more_often_than": 1
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 5,
+        "message": "Nested modules could be aliased at the top of the invoking module.",
+        "trigger": "Credo.Foo.Bar"
+      },
+      {
+        "column": 5,
+        "line": 9,
+        "message": "Nested modules could be aliased at the top of the invoking module.",
+        "trigger": "Credo.Foo.Bar"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.violation-only-regex",
+    "origin": "it should report violation when module is included in only parameter",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  def fun1 do\n    Credo.Foo.Bar.call\n  end\n\n  def fun1 do\n    Other.Foo.call\n  end\nend\n",
+    "params": {
+      "only": {
+        "regex": "^Credo.+$"
+      }
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Nested modules could be aliased at the top of the invoking module.",
+        "trigger": "Credo.Foo.Bar"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.violation-only-list",
+    "origin": "it should report violation when module is included in only parameter",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  def fun1 do\n    Credo.Foo.Bar.call\n  end\n\n  def fun1 do\n    Other.Foo.call\n  end\nend\n",
+    "params": {
+      "only": [
+        {
+          "regex": "^Credo.+$"
+        }
+      ]
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Nested modules could be aliased at the top of the invoking module.",
+        "trigger": "Credo.Foo.Bar"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.violation-referenced",
+    "origin": "reports violation when module passed as argument",
+    "assert": "assert_issue(%{line_no: 3, trigger: \"Credo.Foo.Bar\"})",
+    "source": "defmodule Test do\n  def fun1 do\n    fun2(Credo.Foo.Bar)\n  end\n\n  def fun2(mod) do\n    mod.call\n  end\nend\n",
+    "params": {
+      "if_referenced": true
+    },
+    "findings": [
+      {
+        "column": 10,
+        "line": 3,
+        "message": "Nested modules could be aliased at the top of the invoking module.",
+        "trigger": "Credo.Foo.Bar"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-multi-alias",
+    "origin": "it should NOT report violation on multi-use alias",
+    "assert": "refute_issues",
+    "source": "defmodule Sample.App do\n  alias Sample.App.{One, Two}\n  def foo, do: {One.one, Two.two}\nend\n\ndefmodule Sample.App.One do\n  def one, do: \"One\"\nend\n\ndefmodule Sample.App.Two do\n  def two, do: \"Two\"\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.clean-quotes",
+    "origin": "it should NOT report violation in quotes",
+    "assert": "refute_issues",
+    "source": "defmodule Foo.unquote(module).Test do\n  alias Exzmq.{Socket, Tcp}\n  alias Socket.unquote(stuff).test1\n  alias unquote(stuff).Socket.test2\n  alias Socket.unquote(stuff)\n  alias Exzmq.{Socket, unquote(stuff)}\n\n  def just_an_example do\n    Socket.test1  # Exzmq.Socket.test\n    Tcp.Socket.test2 # Exzmq.Tcp.Socket.test – how can this be further aliased?\n  end\n\n  defmacro just_an_example_as_well do\n    quote do\n      defmodule Thing.Foo.unquote(module) do\n        alias Socket.unquote(module).test1\n        alias unquote(module).Socket.test2\n        alias unquote(module)\n        alias Exzmq.{Socket, unquote(stuff)}\n      end\n      defmodule unquote(module).Thing.Foo do\n        alias Socket.unquote(module).test1\n        alias unquote(module).Socket.test2\n        alias unquote(module)\n        alias Exzmq.{Socket, unquote(stuff)}\n      end\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.upstream.violation-multi-alias",
+    "origin": "it should report violation on impossible additional alias when using multi alias",
+    "assert": "assert_issue(%{line_no: 6, trigger: \"Exzmq.Socket\"})",
+    "source": "defmodule Test do\n  alias Exzmq.{Socket, Tcp}\n\n  def just_an_example do\n    Socket.test1\n    Exzmq.Socket.test2\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 6,
+        "message": "Nested modules could be aliased at the top of the invoking module.",
+        "trigger": "Exzmq.Socket"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

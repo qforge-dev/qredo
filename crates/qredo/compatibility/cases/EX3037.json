@@ -1,0 +1,389 @@
+[
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3037.upstream.not-report-named",
+    "origin": "it should NOT report a spec with all named parameters",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec create_user(attrs :: map(), email :: String.t(), source_file :: [SourceFile.t()]) :: {:ok, term()}\n  def create_user(attrs, email, source_file), do: {:ok, {attrs, email}}\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3037.upstream.not-report-zero-arity",
+    "origin": "it should NOT report a zero-arity spec",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec config() :: keyword()\n  def config, do: []\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3037.upstream.not-report-guard-named",
+    "origin": "it should NOT report a guard-style spec with named parameters",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec foo(value :: x, opts :: keyword()) :: x when x: term()\n  def foo(value, _opts), do: value\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3037.upstream.not-report-callback-named",
+    "origin": "it should NOT report a @callback with named parameters",
+    "params": {},
+    "source": "defmodule CredoSampleBehaviour do\n  @callback handle_event(event :: String.t(), params :: map()) :: :ok\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3037.upstream.not-report-remote-named",
+    "origin": "it should NOT report named parameters using remote types",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec list(scope :: Scope.t(), opts :: Keyword.t()) :: [term()]\n  def list(_scope, _opts), do: []\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 15,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "String.t"
+      }
+    ],
+    "id": "EX3037.upstream.violation-single-unnamed",
+    "origin": "it should report a spec with a single unnamed parameter",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec greet(String.t()) :: String.t()\n  def greet(name), do: \"hello \" <> name\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 59,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "SourceFile.t"
+      }
+    ],
+    "id": "EX3037.upstream.violation-unnamed",
+    "origin": "it should report a spec with unnamed parameters",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec create_user(attrs :: map(), email :: String.t(), [SourceFile.t()]) :: {:ok, term()}\n  def create_user(attrs, email, source_file), do: {:ok, {attrs, email}}\nend\n"
+  },
+  {
+    "assert": "assert_issues:3",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 42,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "binary()"
+      },
+      {
+        "column": 29,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "String.t"
+      },
+      {
+        "column": 21,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "parent"
+      }
+    ],
+    "id": "EX3037.upstream.violation-unnamed-2",
+    "origin": "it should report a spec with unnamed parameters /2",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec create_user(parent, String.t(), (binary() -> any())) :: parent\n  def create_user(attrs, email, source_file), do: {:ok, {attrs, email}}\nend\n"
+  },
+  {
+    "assert": "assert_issues:3",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 41,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "list"
+      },
+      {
+        "column": 29,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "String.t"
+      },
+      {
+        "column": 21,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "parent"
+      }
+    ],
+    "id": "EX3037.upstream.violation-unnamed-3",
+    "origin": "it should report a spec with unnamed parameters /3",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec create_user(parent, String.t(), list, (-> any())) :: parent\n  def create_user(attrs, email, source_file), do: {:ok, {attrs, email}}\nend\n"
+  },
+  {
+    "assert": "assert_issues:2",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 28,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "String.t"
+      },
+      {
+        "column": 21,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "map()"
+      }
+    ],
+    "id": "EX3037.upstream.violation-each-unnamed",
+    "origin": "it should report each unnamed parameter in a spec",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec create_user(map(), String.t()) :: {:ok, term()}\n  def create_user(attrs, email), do: {:ok, {attrs, email}}\nend\n"
+  },
+  {
+    "assert": "assert_issues:3",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 42,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "String.t"
+      },
+      {
+        "column": 25,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "Query.t"
+      },
+      {
+        "column": 17,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "parent"
+      }
+    ],
+    "id": "EX3037.upstream.violation-unnamed-4",
+    "origin": "it should report a spec with unnamed parameters /4",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec fill_in(parent, Query.t(), with: String.t()) :: parent\n  def create_user(attrs, email, source_file), do: {:ok, {attrs, email}}\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 37,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "String.t"
+      }
+    ],
+    "id": "EX3037.upstream.violation-mixed",
+    "origin": "it should report only the unnamed parameters in a mixed spec",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec create_user(attrs :: map(), String.t()) :: {:ok, term()}\n  def create_user(attrs, email), do: {:ok, {attrs, email}}\nend\n"
+  },
+  {
+    "assert": "assert_issues:2",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 16,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "keyword()"
+      },
+      {
+        "column": 13,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "x"
+      }
+    ],
+    "id": "EX3037.upstream.violation-guard",
+    "origin": "it should report unnamed parameters in a guard-style spec",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec foo(x, keyword()) :: x when x: term()\n  def foo(value, _opts), do: value\nend\n"
+  },
+  {
+    "assert": "assert_issues:2",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 38,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "map()"
+      },
+      {
+        "column": 26,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "String.t"
+      }
+    ],
+    "id": "EX3037.upstream.violation-callback",
+    "origin": "it should report unnamed parameters in a @callback",
+    "params": {},
+    "source": "defmodule CredoSampleBehaviour do\n  @callback handle_event(String.t(), map()) :: :ok\nend\n"
+  },
+  {
+    "assert": "assert_issues:3",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 13,
+        "line": 5,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "integer()"
+      },
+      {
+        "column": 13,
+        "line": 5,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "integer()"
+      },
+      {
+        "column": 13,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "integer()"
+      }
+    ],
+    "id": "EX3037.upstream.violation-multi-specs",
+    "origin": "it should report across multiple specs in one module",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec one(integer()) :: integer()\n  def one(a), do: a\n\n  @spec two(integer(), integer()) :: integer()\n  def two(a, b), do: a + b\nend\n"
+  },
+  {
+    "assert": "assert_issues:2",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 28,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "Ecto.Query.t"
+      },
+      {
+        "column": 25,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "t"
+      }
+    ],
+    "id": "EX3037.upstream.violation-multi-reasons",
+    "origin": "it should report across multiple specs for different reasons",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @callback assoc_query(t, Ecto.Query.t() | nil, values :: [term]) :: Ecto.Query.t()\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 25,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "Plug.Conn.scheme"
+      }
+    ],
+    "id": "EX3037.upstream.violation-multi-reasons-2",
+    "origin": "it should report across multiple specs for different reasons /2",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @callback server_info(Plug.Conn.scheme()) ::\n    {:ok, {:inet.ip_address(), :inet.port_number()} | :inet.returned_non_ip_address()}\n    | {:error, term()}\nend\n"
+  },
+  {
+    "assert": "assert_issues:2",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 67,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "Keyword.t"
+      },
+      {
+        "column": 19,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "t"
+      }
+    ],
+    "id": "EX3037.upstream.violation-multi-reasons-3",
+    "origin": "it should report across multiple specs for different reasons /3",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @callback build(t, owner :: Ecto.Schema.t(), %{atom => term} | [Keyword.t()]) :: Ecto.Schema.t()\nend\n"
+  },
+  {
+    "assert": "assert_issues:3",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 40,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "value"
+      },
+      {
+        "column": 34,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "key"
+      },
+      {
+        "column": 28,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "data"
+      }
+    ],
+    "id": "EX3037.upstream.violation-multi-reasons-4",
+    "origin": "it should report across multiple specs for different reasons /4",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @callback get_and_update(data, key, (value | nil -> {current_value, new_value :: value} | :pop)) ::\n              {current_value, new_data :: data}\n            when current_value: value, data: container\nend\n"
+  },
+  {
+    "assert": "assert_issues:3",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 43,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "term"
+      },
+      {
+        "column": 35,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "atom()"
+      },
+      {
+        "column": 15,
+        "line": 2,
+        "message": "Spec parameter is missing a name. Use `name :: type` syntax.",
+        "trigger": "DateTime.t"
+      }
+    ],
+    "id": "EX3037.upstream.violation-multi-reasons-5",
+    "origin": "it should report across multiple specs for different reasons /5",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @spec shift(DateTime.t(), list({atom(), term})) :: DateTime.t() | {:error, term}\n  def shift(%DateTime{} = datetime, shifts) when is_list(shifts) do\n  end\nend\n"
+  }
+]

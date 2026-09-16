@@ -1,0 +1,414 @@
+[
+  {
+    "id": "EX3028.upstream.expected-code",
+    "origin": "it should NOT report expected code",
+    "source": "defmodule CredoSampleModule do\nend\n",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.upstream.violation",
+    "origin": "it should report a violation",
+    "source": "defmodule CredoSampleModule do\nend",
+    "findings": [
+      {
+        "line": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.empty",
+    "origin": "boundary",
+    "source": "",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.one-line",
+    "origin": "boundary",
+    "source": "x = 1",
+    "findings": [
+      {
+        "line": 1,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.lf",
+    "origin": "boundary",
+    "source": "x = 1\n",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.crlf",
+    "origin": "boundary",
+    "source": "x = 1\r\n",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.bare-cr",
+    "origin": "boundary",
+    "source": "x = 1\r",
+    "findings": [
+      {
+        "line": 1,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "line-primitive"
+  },
+  {
+    "id": "EX3028.multiple-lf",
+    "origin": "boundary",
+    "source": "x = 1\n\n",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.whitespace-final-line",
+    "origin": "boundary",
+    "source": "# comment\n \t",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trailing-space-on-code",
+    "origin": "boundary",
+    "source": "x = 1 ",
+    "findings": [
+      {
+        "line": 1,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.unicode-before-issue",
+    "origin": "boundary",
+    "source": "# \u03bb\nx = \"\ud83d\ude00\"",
+    "findings": [
+      {
+        "line": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.comment-final-line",
+    "origin": "boundary",
+    "source": "# first\n# last",
+    "findings": [
+      {
+        "line": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+0009",
+    "origin": "boundary",
+    "source": "# marker\n\t",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+000A",
+    "origin": "boundary",
+    "source": "# marker\n\n",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+000B",
+    "origin": "boundary",
+    "source": "# marker\n\u000b",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+000C",
+    "origin": "boundary",
+    "source": "# marker\n\f",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+000D",
+    "origin": "boundary",
+    "source": "# marker\n\r",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+0020",
+    "origin": "boundary",
+    "source": "# marker\n ",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+0085",
+    "origin": "boundary",
+    "source": "# marker\n\u0085",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+00A0",
+    "origin": "boundary",
+    "source": "# marker\n\u00a0",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+1680",
+    "origin": "boundary",
+    "source": "# marker\n\u1680",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+2000",
+    "origin": "boundary",
+    "source": "# marker\n\u2000",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+2001",
+    "origin": "boundary",
+    "source": "# marker\n\u2001",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+2002",
+    "origin": "boundary",
+    "source": "# marker\n\u2002",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+2003",
+    "origin": "boundary",
+    "source": "# marker\n\u2003",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+2004",
+    "origin": "boundary",
+    "source": "# marker\n\u2004",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+2005",
+    "origin": "boundary",
+    "source": "# marker\n\u2005",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+2006",
+    "origin": "boundary",
+    "source": "# marker\n\u2006",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+2007",
+    "origin": "boundary",
+    "source": "# marker\n\u2007",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+2008",
+    "origin": "boundary",
+    "source": "# marker\n\u2008",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+2009",
+    "origin": "boundary",
+    "source": "# marker\n\u2009",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+200A",
+    "origin": "boundary",
+    "source": "# marker\n\u200a",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+2028",
+    "origin": "boundary",
+    "source": "# marker\n\u2028",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+2029",
+    "origin": "boundary",
+    "source": "# marker\n\u2029",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+202F",
+    "origin": "boundary",
+    "source": "# marker\n\u202f",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+205F",
+    "origin": "boundary",
+    "source": "# marker\n\u205f",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.trim.U+3000",
+    "origin": "boundary",
+    "source": "# marker\n\u3000",
+    "findings": [],
+    "oracle": "check"
+  },
+  {
+    "id": "EX3028.non-trim.U+0000",
+    "origin": "boundary",
+    "source": "# marker\n\u0000",
+    "findings": [
+      {
+        "line": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "line-primitive"
+  },
+  {
+    "id": "EX3028.non-trim.U+0008",
+    "origin": "boundary",
+    "source": "# marker\n\b",
+    "findings": [
+      {
+        "line": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "line-primitive"
+  },
+  {
+    "id": "EX3028.non-trim.U+000E",
+    "origin": "boundary",
+    "source": "# marker\n\u000e",
+    "findings": [
+      {
+        "line": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "line-primitive"
+  },
+  {
+    "id": "EX3028.non-trim.U+001F",
+    "origin": "boundary",
+    "source": "# marker\n\u001f",
+    "findings": [
+      {
+        "line": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "line-primitive"
+  },
+  {
+    "id": "EX3028.non-trim.U+007F",
+    "origin": "boundary",
+    "source": "# marker\n\u007f",
+    "findings": [
+      {
+        "line": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "line-primitive"
+  },
+  {
+    "id": "EX3028.non-trim.U+180E",
+    "origin": "boundary",
+    "source": "# marker\n\u180e",
+    "findings": [
+      {
+        "line": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "line-primitive"
+  },
+  {
+    "id": "EX3028.non-trim.U+200B",
+    "origin": "boundary",
+    "source": "# marker\n\u200b",
+    "findings": [
+      {
+        "line": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "line-primitive"
+  },
+  {
+    "id": "EX3028.non-trim.U+2060",
+    "origin": "boundary",
+    "source": "# marker\n\u2060",
+    "findings": [
+      {
+        "line": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "line-primitive"
+  },
+  {
+    "id": "EX3028.non-trim.U+FEFF",
+    "origin": "boundary",
+    "source": "# marker\n\ufeff",
+    "findings": [
+      {
+        "line": 2,
+        "message": "There should be a final \\n at the end of each file.",
+        "trigger": "no_trigger"
+      }
+    ],
+    "oracle": "line-primitive"
+  }
+]

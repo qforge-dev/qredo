@@ -1,0 +1,58 @@
+[
+  {
+    "id": "EX3034.upstream.01",
+    "origin": "it should NOT report violation for a valid pipe",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def some_function(arg) do\n    arg |> foo() |> bar()\n  end\n\n  def other_function(arg) do\n    arg\n    |> foo()\n    |> bar()\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3034.upstream.02",
+    "origin": "it should NOT report violation for a valid pipe with a block",
+    "assert": "refute_issues",
+    "source": "defmodule Test do\n  def other_function(arg) do\n    arg\n    |> foo()\n    |> case do\n      :x -> :y\n      :u -> :u\n    end\n    |> bar()\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3034.upstream.03",
+    "origin": "it should report a violation for missing parentheses",
+    "assert": "assert_issue",
+    "source": "defmodule Test do\n  def some_function(arg) do\n    arg\n    |> foo()\n    |> bar\n    |> baz()\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 8,
+        "line": 5,
+        "message": "One arity functions should have parentheses in pipes.",
+        "trigger": "bar"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3034.upstream.04",
+    "origin": "it should report violations for missing parentheses",
+    "assert": "assert_issues",
+    "source": "defmodule Test do\n  def some_function(arg) do\n    arg\n    |> foo\n    |> bar\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 8,
+        "line": 4,
+        "message": "One arity functions should have parentheses in pipes.",
+        "trigger": "foo"
+      },
+      {
+        "column": 8,
+        "line": 5,
+        "message": "One arity functions should have parentheses in pipes.",
+        "trigger": "bar"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

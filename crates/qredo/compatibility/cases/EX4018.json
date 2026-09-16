@@ -1,0 +1,52 @@
+[
+  {
+    "id": "EX4018.upstream.ok",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    unless allowed? do\n      something\n    end\n    if !allowed? do\n      something\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4018.upstream.ok_2",
+    "origin": "it should NOT report expected code /2",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  @unless !allowed?\n\n  def some_fun do\n    unless = 123\n    :unless\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4018.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    unless !allowed? do\n      something\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 12,
+        "line": 3,
+        "message": "Avoid negated conditions in unless blocks.",
+        "trigger": "!"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4018.upstream.violation_not",
+    "origin": "it should report a violation with not",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    unless not allowed? do\n      something\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 12,
+        "line": 3,
+        "message": "Avoid negated conditions in unless blocks.",
+        "trigger": "not"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

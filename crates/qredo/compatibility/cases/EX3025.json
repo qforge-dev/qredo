@@ -1,0 +1,192 @@
+[
+  {
+    "id": "EX3025.upstream.01",
+    "origin": "it should NOT report functions with specs",
+    "assert": "refute_issues",
+    "source": "defmodule CredoTypespecTest do\n  @spec foo(integer, integer) :: integer\n  @doc \"some docs for foo/2\"\n  def foo(a, b), do: a + b\n\n  @spec foo(integer) :: integer\n  def foo(a), do: a\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.02",
+    "origin": "it should NOT report functions with specs containing a `when` clause",
+    "assert": "refute_issues",
+    "source": "defmodule CredoTypespecTest do\n  @spec foo(a, a) :: a when a: integer\n  @doc \"some docs for foo/2\"\n  def foo(a, b), do: a + b\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.03",
+    "origin": "it should NOT report private functions by default",
+    "assert": "refute_issues",
+    "source": "defmodule CredoTypespecTest do\n  @spec foo(integer) :: integer\n  def foo(a), do: a\n\n  defp foo(a, b), do: a + b\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.04",
+    "origin": "it should NOT report private functions with specs when enabled",
+    "assert": "refute_issues",
+    "source": "defmodule CredoTypespecTest do\n  @spec foo(integer) :: integer\n  def foo(a), do: a\n\n  @spec foo(integer) :: integer\n  defp foo(a), do: a\nend\n",
+    "params": {
+      "include_defp": true
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.05",
+    "origin": "it should NOT report functions with guards and `@impl true`",
+    "assert": "refute_issues",
+    "source": "defmodule CredoTypespecTest do\n  @impl true\n  def foo(a) when is_integer(a), do: a\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.06",
+    "origin": "it should NOT report functions without arguments and `@impl true`",
+    "assert": "refute_issues",
+    "source": "defmodule CredoTypespecTest do\n  @impl true\n  def foo, do: :ok\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.07",
+    "origin": "it should NOT report functions with `@impl SomeMod`",
+    "assert": "refute_issues",
+    "source": "defmodule CredoTypespecTest do\n  @impl SomeMod\n  def foo(a), do: a\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.08",
+    "origin": "it should NOT report function with arity zero and a spec with no parentheses",
+    "assert": "refute_issues",
+    "source": "defmodule CredoTypespecTest do\n  @spec foo :: :ok\n  def foo, do: :ok\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.09",
+    "origin": "it should NOT report functions with `@impl true`",
+    "assert": "refute_issues",
+    "source": "defmodule CredoTypespecTest do\n  @impl true\n  def foo(a), do: a\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.10",
+    "origin": "it should NOT report functions inside `quote`",
+    "assert": "refute_issues",
+    "source": "@spec to_def(t(), atom()) :: Macro.t()\ndef to_def(%__MODULE__{vars: vars, code: code}, name) do\n  quote generated: true do\n    def unquote(name)(unquote_splicing(vars)) do\n      unquote(code)\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.11",
+    "origin": "it should report specs on private functions when enabled",
+    "assert": "assert_issue",
+    "source": "defmodule CredoTypespecTest do\n  @spec foo(integer) :: integer\n  def foo(a), do: a\n\n  defp foo(a, b), do: a + b\nend\n",
+    "params": {
+      "include_defp": true
+    },
+    "findings": [
+      {
+        "column": 8,
+        "line": 5,
+        "message": "Functions should have a @spec type specification.",
+        "trigger": "foo"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.12",
+    "origin": "it should report functions without specs",
+    "assert": "assert_issue",
+    "source": "defmodule CredoTypespecTest do\n  @spec foo(integer) :: integer\n  def foo(a), do: a\n\n  def foo(a, b), do: a + b\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 5,
+        "message": "Functions should have a @spec type specification.",
+        "trigger": "foo"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.13",
+    "origin": "it should report specs with mismatched arity",
+    "assert": "assert_issue",
+    "source": "defmodule CredoTypespecTest do\n  @spec foo(integer) :: integer\n  def foo(a), do: a\n\n  def foo(a, b), do: a + b\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 5,
+        "message": "Functions should have a @spec type specification.",
+        "trigger": "foo"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.14",
+    "origin": "it should report functions with `@impl false`",
+    "assert": "assert_issue",
+    "source": "defmodule CredoTypespecTest do\n  @impl false\n  def foo(a), do: a\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 3,
+        "message": "Functions should have a @spec type specification.",
+        "trigger": "foo"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.15",
+    "origin": "it should report function with arity zero and no parentheses",
+    "assert": "assert_issue",
+    "source": "defmodule CredoTypespecTest do\n  def foo, do: :ok\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 2,
+        "message": "Functions should have a @spec type specification.",
+        "trigger": "foo"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX3025.upstream.16",
+    "origin": "it should report/not crash for unquote/1 calls in the function name",
+    "assert": "assert_issue",
+    "source": "defmodule SpecIssue do\n  function_name = :do_something\n\n  def unquote(function_name)() do\n    :ok\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 7,
+        "line": 4,
+        "message": "Functions should have a @spec type specification.",
+        "trigger": "unquote(function_name)"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

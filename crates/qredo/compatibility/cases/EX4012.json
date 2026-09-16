@@ -1,0 +1,59 @@
+[
+  {
+    "id": "EX4012.upstream.ok",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  defmacro __using__(opts) do\n    quote do\n      def some_fun do\n        some_stuff()\n      end\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4012.upstream.ok_comments_ignored",
+    "origin": "it should NOT report a violation if comments are ignored",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  defmacro __using__(opts) do\n    quote do\n      def some_fun do\n        # This\n        # is\n        # a\n        # rather\n        # long\n        # comment\n        # block\n        # ...\n        some_stuff()\n      end\n\n      def some_fun do\n        some_stuff()\n      end\n    end\n  end\nend\n",
+    "params": {
+      "ignore_comments": true,
+      "max_line_count": 7
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4012.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  defmacro __using__(opts) do\n    quote do\n      def some_fun do\n        some_stuff()\n      end\n\n      def some_fun do\n        some_stuff()\n      end\n    end\n  end\nend\n",
+    "params": {
+      "max_line_count": 2
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Avoid long quote blocks.",
+        "trigger": "quote"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4012.upstream.violation_comments_counted",
+    "origin": "it should report a violation if comments are NOT ignored",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  defmacro __using__(opts) do\n    quote do\n      def some_fun do\n        # This\n        # is\n        # a\n        # rather\n        # long\n        # comment\n        # block\n        # ...\n        some_stuff()\n      end\n\n      def some_fun do\n        some_stuff()\n      end\n    end\n  end\nend\n",
+    "params": {
+      "max_line_count": 7
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Avoid long quote blocks.",
+        "trigger": "quote"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

@@ -1,0 +1,71 @@
+[
+  {
+    "id": "EX4022.native.simple-clean",
+    "origin": "native: trivial function scores 1, clean at default max 9",
+    "source": "def foo(x), do: x\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX4022.native.nine-ifs-violation",
+    "origin": "native: def(1) + 9 ifs = 10 > 9, reports foo at 2:7 with CC message",
+    "source": "defmodule M do\n  def foo(x) do\n    if a, do: 1\n    if b, do: 2\n    if c, do: 3\n    if d, do: 4\n    if e, do: 5\n    if f, do: 6\n    if g, do: 7\n    if h, do: 8\n    if i, do: 1\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "line": 2,
+        "column": 7,
+        "trigger": "foo",
+        "message": "Function is too complex (CC is 10, max is 9)."
+      }
+    ]
+  },
+  {
+    "id": "EX4022.native.eight-ifs-clean",
+    "origin": "native: 1 + 8 = 9 is not > 9",
+    "source": "defmodule M do\n  def foo(x) do\n    if a, do: 1\n    if b, do: 2\n    if c, do: 3\n    if d, do: 4\n    if e, do: 5\n    if f, do: 6\n    if g, do: 7\n    if h, do: 8\n  end\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX4022.native.custom-max-violation",
+    "origin": "native: CC 3 > max 2 at 2:7",
+    "source": "defmodule M do\n  def foo(x) do\n    if a, do: 1\n    if b, do: 2\n  end\nend\n",
+    "params": {
+      "max_complexity": "2"
+    },
+    "findings": [
+      {
+        "line": 2,
+        "column": 7,
+        "trigger": "foo",
+        "message": "Function is too complex (CC is 3, max is 2)."
+      }
+    ]
+  },
+  {
+    "id": "EX4022.native.using-exempt",
+    "origin": "native: defmacro __using__ is exempt even at max 1",
+    "source": "defmodule M do\n  defmacro __using__(_) do\n    if a, do: 1\n    if b, do: 2\n    if c, do: 3\n  end\nend\n",
+    "params": {
+      "max_complexity": "1"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX4022.native.case-weight",
+    "origin": "native: 3-clause case scores round(1 + 0.9) = 2, clean at max 2",
+    "source": "defmodule M do\n  def foo(x) do\n    case x do\n      1 -> :a\n      2 -> :b\n      3 -> :c\n    end\n  end\nend\n",
+    "params": {
+      "max_complexity": "2"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX4022.native.cond-clean",
+    "origin": "native: 2-clause cond scores 3, clean at default max 9",
+    "source": "defmodule M do\n  def foo(x) do\n    cond do\n      x -> 1\n      y -> 2\n    end\n  end\nend\n",
+    "params": {},
+    "findings": []
+  }
+]

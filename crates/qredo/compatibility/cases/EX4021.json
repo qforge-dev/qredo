@@ -1,0 +1,168 @@
+[
+  {
+    "id": "EX4021.upstream.ok",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if parameter1 do\n      do_something\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4021.upstream.ok_same_level",
+    "origin": "it should NOT report when there are multiple if's on the same level",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if parameter1 do\n      do_something\n    end\n    if parameter2 do\n      do_something\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4021.upstream.ok_same_level_2",
+    "origin": "it should NOT report when there are multiple if's on the same level 2",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if parameter1 do\n      case parameter1 do\n        0 -> nil\n        1 -> do_something\n      end\n    end\n    if parameter2 do\n      if parameter1 do\n        do_something\n      end\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4021.upstream.ok_max_nesting",
+    "origin": "it should NOT report when :max_nesting is used properly",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  defp foo() do\n    if true do\n      \"flat\"\n    else\n      if true do\n        if true do\n          if true do\n            \"nested\"\n          end\n        end\n      end\n    end\n  end\nend\n",
+    "params": {
+      "max_nesting": 4
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4021.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if parameter1 do\n      if parameter2 do\n        case parameter1 do\n          0 -> nil\n          1 -> do_something\n        end\n      end\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 9,
+        "line": 5,
+        "message": "Function body is nested too deep (max depth is 2, was 3).",
+        "trigger": "case"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4021.upstream.violation_2",
+    "origin": "it should report a violation /2",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    case parameter1 do\n      0 -> nil\n      1 ->\n        if parameter1 do\n          if parameter2 do\n            do_something\n          end\n        end\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 11,
+        "line": 7,
+        "message": "Function body is nested too deep (max depth is 2, was 3).",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4021.upstream.violation_3",
+    "origin": "it should report a violation /3",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    if parameter1 do\n      case parameter1 do\n        0 -> nil\n        1 ->\n          if parameter2, do: do_something\n      end\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 11,
+        "line": 7,
+        "message": "Function body is nested too deep (max depth is 2, was 3).",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4021.upstream.violation_4",
+    "origin": "it should report a violation /4",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    Enum.reduce(var1, list, fn({_hash, nodes}, list) ->\n      filenames = nodes |> Enum.map(&(&1.filename))\n      Enum.reduce(list, [], fn(item, acc) ->\n        if Enum.member?(filenames, item.filename) do\n          item # this is nested 3 levels deep\n        end\n        acc ++ [item]\n      end)\n    end)\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 9,
+        "line": 6,
+        "message": "Function body is nested too deep (max depth is 2, was 3).",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4021.upstream.violation_5",
+    "origin": "it should report a violation /5",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  defp foo() do\n    if true do\n      if true do\n        if true do\n          if true do\n            \"nested\"\n          end\n        end\n      end\n    else\n      \"flat\"\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 11,
+        "line": 6,
+        "message": "Function body is nested too deep (max depth is 2, was 4).",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4021.upstream.violation_6",
+    "origin": "it should report a violation /6",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  defp foo() do\n    if true do\n      \"flat\"\n    else\n      if true do\n        if true do\n          if true do\n            \"nested\"\n          end\n        end\n      end\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 11,
+        "line": 8,
+        "message": "Function body is nested too deep (max depth is 2, was 4).",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4021.upstream.violation_7",
+    "origin": "it should report a violation /7",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  defp foo() do\n    for a <- list do\n      for b <- a do\n        for c <- b do\n          d * 2\n        end\n      end\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 9,
+        "line": 5,
+        "message": "Function body is nested too deep (max depth is 2, was 3).",
+        "trigger": "for"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4021.upstream.violation_8",
+    "origin": "it should report a violation /8",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  defp foo(p) do\n    with {:ok, a} <- list(p) do\n      for b <- a do\n        if match?({:ok, _}, b) do\n          d * 2\n        end\n      end\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 9,
+        "line": 5,
+        "message": "Function body is nested too deep (max depth is 2, was 3).",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

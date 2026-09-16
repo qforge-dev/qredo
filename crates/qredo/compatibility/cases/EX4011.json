@@ -1,0 +1,81 @@
+[
+  {
+    "id": "EX4011.upstream.ok",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    parameter1 + parameter2\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4011.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    IO.puts parameter1 + parameter2\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "There should be no calls to `IO.puts/1`.",
+        "trigger": "IO.puts"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4011.upstream.violation_two_same_line",
+    "origin": "it should report a violation with two on the same line",
+    "assert": "assert_issues",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    IO.puts(parameter1); IO.puts(parameter2)\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 26,
+        "line": 3,
+        "message": "There should be no calls to `IO.puts/1`.",
+        "trigger": "IO.puts"
+      },
+      {
+        "column": 5,
+        "line": 3,
+        "message": "There should be no calls to `IO.puts/1`.",
+        "trigger": "IO.puts"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4011.upstream.violation_2",
+    "origin": "it should report a violation /2",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(parameter1, parameter2) do\n    parameter1 + parameter2\n    |> IO.puts\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 8,
+        "line": 4,
+        "message": "There should be no calls to `IO.puts/1`.",
+        "trigger": "IO.puts"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4011.upstream.violation_3",
+    "origin": "it should report a violation /3",
+    "assert": "assert_issue",
+    "source": "defmodule CredoSampleModule do\n  def some_function(a, b, c) do\n    map([a,b,c], &IO.puts(&1))\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 19,
+        "line": 3,
+        "message": "There should be no calls to `IO.puts/1`.",
+        "trigger": "IO.puts"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

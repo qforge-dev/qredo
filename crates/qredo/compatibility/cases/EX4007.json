@@ -1,0 +1,113 @@
+[
+  {
+    "id": "EX4007.upstream.not-expected",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "!true\nnot true\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4007.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "!!true\n",
+    "params": {},
+    "findings": [
+      {
+        "column": null,
+        "line": 1,
+        "message": "Double boolean negation found.",
+        "trigger": "!!"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4007.upstream.violation-once",
+    "origin": "it should report a violation just once",
+    "assert": "assert_issue",
+    "source": "!!!true\n",
+    "params": {},
+    "findings": [
+      {
+        "column": null,
+        "line": 1,
+        "message": "Double boolean negation found.",
+        "trigger": "!!"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4007.upstream.violation-twice",
+    "origin": "it should report a violation twice",
+    "assert": "assert_issues",
+    "source": "!!!!true\n",
+    "params": {},
+    "findings": [
+      {
+        "column": null,
+        "line": 1,
+        "message": "Double boolean negation found.",
+        "trigger": "!!"
+      },
+      {
+        "column": null,
+        "line": 1,
+        "message": "Double boolean negation found.",
+        "trigger": "!!"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4007.upstream.violation-2",
+    "origin": "it should report a violation /2",
+    "assert": "assert_issue",
+    "source": "not not true\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 1,
+        "line": 1,
+        "message": "Double boolean negation found.",
+        "trigger": "not not"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4007.upstream.violation-bang-not",
+    "origin": "it should report mixed violation '! not'",
+    "assert": "assert_issue",
+    "source": "! not true\n",
+    "params": {},
+    "findings": [
+      {
+        "column": null,
+        "line": 1,
+        "message": "Double boolean negation found.",
+        "trigger": "! not"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4007.upstream.violation-not-bang",
+    "origin": "it should report mixed violation 'not !'",
+    "assert": "assert_issue",
+    "source": "not ! true\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 1,
+        "line": 1,
+        "message": "Double boolean negation found.",
+        "trigger": "not !"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

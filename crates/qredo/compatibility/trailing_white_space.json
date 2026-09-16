@@ -1,0 +1,160 @@
+[
+  {
+    "id": "EX3029.accented",
+    "origin": "upstream: accented characters",
+    "source": "defmodule CredoSampleModule do\n@test true # voil\u00e0\nend",
+    "ignore_strings": true,
+    "findings": []
+  },
+  {
+    "id": "EX3029.clean-module",
+    "origin": "upstream: it should NOT report expected code",
+    "source": "defmodule CredoSampleModule do\nend\n",
+    "ignore_strings": true,
+    "findings": []
+  },
+  {
+    "id": "EX3029.cr",
+    "origin": "upstream: \\r line endings",
+    "source": "defmodule CredoSampleModule do\r\nend\r\n",
+    "ignore_strings": true,
+    "findings": []
+  },
+  {
+    "id": "EX3029.docs",
+    "origin": "upstream: line endings in docs (abridged)",
+    "source": "defmodule Mix.Tasks.Publish do\n  @moduledoc \"\"\"\n  Publishes the package to hex.pm.\n\n  ## Usage\n\n      mix publish             # Full publish workflow\n  \"\"\"\nend\n",
+    "ignore_strings": true,
+    "findings": []
+  },
+  {
+    "id": "EX3029.dquote-interp-false",
+    "origin": "upstream: double-quoted interpolation if :ignore_strings is false (2 issues)",
+    "source": "defmodule CredoSampleModule do\n  @doc \"\n  Test\n  #{Foo.Bar.something(\n  )\n  }  \n  Foo\n  Bar  \n  \"\nend\n",
+    "ignore_strings": false,
+    "findings": [
+      {
+        "column": 4,
+        "line": 6,
+        "message": "There should be no trailing white-space at the end of a line.",
+        "trigger": "  "
+      },
+      {
+        "column": 6,
+        "line": 8,
+        "message": "There should be no trailing white-space at the end of a line.",
+        "trigger": "  "
+      }
+    ]
+  },
+  {
+    "id": "EX3029.escaped",
+    "origin": "upstream: escaped heredocs in regular heredocs",
+    "source": "defmodule Example do\n  @moduledoc ~S\"\"\"\n  config_yaml = \\\"\\\"\\\"\n  apiVersion: v1\n  \\\"\\\"\\\"\n  \"\"\"\nend\n",
+    "ignore_strings": true,
+    "findings": []
+  },
+  {
+    "id": "EX3029.fencing",
+    "origin": "upstream: fencing # characters",
+    "source": "defmodule CredoSampleModule do\n  ###########################################\n  ## asdf # lorem ipsum                     #\nend\n",
+    "ignore_strings": true,
+    "findings": []
+  },
+  {
+    "id": "EX3029.heredoc",
+    "origin": "upstream: trailing whitespace inside heredocs (ignored by default)",
+    "source": "defmodule CredoSampleModule do\n  @doc '''\n  Foo  \n  Bar\n  '''\nend\n",
+    "ignore_strings": true,
+    "findings": []
+  },
+  {
+    "id": "EX3029.heredoc-false",
+    "origin": "upstream: heredocs if :ignore_strings is false",
+    "source": "defmodule CredoSampleModule do\n  @doc '''\n  Foo  \n  Bar\n  '''\nend\n",
+    "ignore_strings": false,
+    "findings": [
+      {
+        "column": 6,
+        "line": 3,
+        "message": "There should be no trailing white-space at the end of a line.",
+        "trigger": "  "
+      }
+    ]
+  },
+  {
+    "id": "EX3029.indent-only-false",
+    "origin": "upstream: indent-only whitespace with ignore_strings false",
+    "source": "defmodule CredoSampleModule do\n  @doc '''\n  Foo\n\n  Bar\n  '''\nend\n",
+    "ignore_strings": false,
+    "findings": []
+  },
+  {
+    "id": "EX3029.interp",
+    "origin": "upstream: heredocs w/ interpolation at EOL (abridged module)",
+    "source": "# This Source Code Form is subject to the terms of the Mozilla Public\n# License, v. 2.0. If a copy of the MPL was not distributed with this\n# file, You can obtain one at http://mozilla.org/MPL/2.0/.\n\ndefmodule Watermelon.Expression do\n  defstruct [:raw, :match]\n\n  defmodule Type do\n    @moduledoc false\n  end\nend\n",
+    "ignore_strings": true,
+    "findings": []
+  },
+  {
+    "id": "EX3029.interp-ws-false",
+    "origin": "upstream: heredoc interpolation if :ignore_strings is false (2 issues)",
+    "source": "defmodule CredoSampleModule do\n  @doc \"\"\"\n  Test\n  #{Foo.Bar.something(\n  )\n  }  \n  Foo\n  Bar  \n  \"\"\"\nend\n",
+    "ignore_strings": false,
+    "findings": [
+      {
+        "column": 4,
+        "line": 6,
+        "message": "There should be no trailing white-space at the end of a line.",
+        "trigger": "  "
+      },
+      {
+        "column": 6,
+        "line": 8,
+        "message": "There should be no trailing white-space at the end of a line.",
+        "trigger": "  "
+      }
+    ]
+  },
+  {
+    "id": "EX3029.map-parens",
+    "origin": "upstream: false positive after opening parens of a map",
+    "source": "defmodule CredoSampleModule do\n  def something do\n    %{\n      foo: \"bar\"\n    }\n  end\nend\n",
+    "ignore_strings": true,
+    "findings": []
+  },
+  {
+    "id": "EX3029.multi",
+    "origin": "upstream: it should report multiple violations",
+    "source": "defmodule CredoSampleModule do   \n@test true   \nend",
+    "ignore_strings": true,
+    "findings": [
+      {
+        "column": 31,
+        "line": 1,
+        "message": "There should be no trailing white-space at the end of a line.",
+        "trigger": "   "
+      },
+      {
+        "column": 11,
+        "line": 2,
+        "message": "There should be no trailing white-space at the end of a line.",
+        "trigger": "   "
+      }
+    ]
+  },
+  {
+    "id": "EX3029.violation",
+    "origin": "upstream: it should report a violation",
+    "source": "defmodule CredoSampleModule do\n@test true   \nend",
+    "ignore_strings": true,
+    "findings": [
+      {
+        "column": 11,
+        "line": 2,
+        "message": "There should be no trailing white-space at the end of a line.",
+        "trigger": "   "
+      }
+    ]
+  }
+]

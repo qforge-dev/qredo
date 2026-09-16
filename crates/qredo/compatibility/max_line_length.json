@@ -1,0 +1,177 @@
+[
+  {
+    "id": "EX3007.upstream.defs-excluded",
+    "origin": "upstream: definitions excluded",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun({atom, meta, arguments} = ast, issues, source_file, max_complexity) do\n    assert 1 + 1 == 2\n  end\nend\n",
+    "params": {
+      "ignore_definitions": "true",
+      "max_length": "80"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.exec-90",
+    "origin": "upstream: no violation with exec (max 90)",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    assert 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 == 2\n  end\nend\n",
+    "params": {
+      "max_length": "90"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.expected-code",
+    "origin": "upstream: it should NOT report expected code",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    assert 1 + 1 == 2\n  end\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.h-sigil",
+    "origin": "upstream: strings excluded for heredocs /2 (~H)",
+    "source": "defmodule CredoSampleModule do\n  def render(assigns) do\n    ~H\"\"\"\n    My render template\n    \"\"\"\n  end\n\n  def long_string do\n    \"This is a very long string that is after a ~H sigil, I would expect that it is ignored because I set the `ignore_strings` rule to be true.\"\n  end\nend\n",
+    "params": {
+      "max_length": "80"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.heredocs-excluded",
+    "origin": "upstream: heredocs excluded",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    IO.puts 1\n    \"\"\"\n    long string, right? 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 == 2\n    \"\"\"\n    IO.puts 2\n  end\nend\n",
+    "params": {
+      "ignore_heredocs": "true",
+      "max_length": "80"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.interp-heredoc",
+    "origin": "upstream: interpolations in heredocs",
+    "source": "defmodule CredoSampleModule do\n  def render(assigns) do\n    \"\"\"\n    My render template\n\n    #{\n    opts =\n      TOMLConfigProvider.init(\n        \"test/support/mysupercharts/fixture/config/#{platform()}/invalid_config.toml\")}\n    \"\"\"\n  end\nend\n",
+    "params": {
+      "max_length": "80"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.quote-fragment",
+    "origin": "upstream: it should NOT report expected code /2",
+    "source": "defmacro some_macro(type) do\n  quote do\n    fragment(\"CASE\n      WHEN\n        (? = 'some_text'\n        OR ? = 'some_text_2'\n        OR ? = 'some_text_3')\n      THEN '1'\n      ELSE '2'\n    END\", unquote(type), unquote(type), unquote(type))\n  end\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.regex-excluded",
+    "origin": "upstream: regex excluded",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    opts =\n      TOMLConfigProvider.init(\n        \"test/support/mysupercharts/fixture/config/#{platform()}/invalid_config.toml\"\n      )\n\n    assert_raise ArgumentError,\n                 ~r<^Invalid configuration file \"test/support/mysupercharts/fixture/config/(unix|win32)/invalid_config\\.toml\": %\\{\"locations\" =\\> \\[%\\{db: %\\{hostname: \\[\"can't be blank\"\\]\\}\\}, %\\{\\}\\]\\}$>,\n                 fn -> TOMLConfigProvider.load(@config, opts) end\n  end\nend\n",
+    "params": {
+      "max_length": "80"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.sigils-excluded",
+    "origin": "upstream: sigils excluded",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    IO.puts 1\n    ~s(long string, right? 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 == 2)\n    IO.puts 2\n  end\nend\n",
+    "params": {
+      "ignore_sigils": "true",
+      "max_length": "80"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.specs-excluded",
+    "origin": "upstream: specs excluded",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  @spec some_fun(binary, binary, binary, binary, binary, binary, binary, binary, binary)\n  def some_fun(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) do\n    assert 1 + 1 == 2\n  end\nend\n",
+    "params": {
+      "ignore_specs": "true",
+      "max_length": "80"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.strings-excluded",
+    "origin": "upstream: strings excluded",
+    "source": "  defmodule CredoSampleModule do\n    use ExUnit.Case\n\n    def some_fun do\n      IO.puts 1\n      \"long string, right? 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 == 2\"\n      IO.puts 2\n    end\n  end\n",
+    "params": {
+      "ignore_strings": "true",
+      "max_length": "80"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.strings-heredocs",
+    "origin": "upstream: strings excluded for heredocs",
+    "source": "defmodule CredoSampleModule do\n  use ExUnit.Case\n\n  def some_fun do\n    IO.puts 1\n    \"\"\"\n    long string, right? 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 == 2\n    \"\"\"\n    IO.puts 2\n  end\nend\n",
+    "params": {
+      "ignore_strings": "true",
+      "max_length": "80"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.test-name",
+    "origin": "upstream: long test name with string",
+    "source": "test \"it should NOT report a violation when call is buried in else block and is not the last call, but the result is assigned to a variable\" do\n  # ...\nend\n",
+    "params": {},
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.url-report",
+    "origin": "upstream: it should report a violation /3 (urls checked)",
+    "source": "  def fun do\n    # Based on https://github.com/rrrene/credo/blob/7dec9aecdd21ef33fdc20cc4ac6c94efb4bcddc3/lib/credo.ex#L4\n    nil\n  end\n",
+    "params": {
+      "ignore_urls": "false",
+      "max_length": "80"
+    },
+    "findings": [
+      {
+        "column": 81,
+        "line": 2,
+        "message": "Line is too long (max is 80, was 108).",
+        "trigger": "94efb4bcddc3/lib/credo.ex#L4"
+      }
+    ]
+  },
+  {
+    "id": "EX3007.upstream.urls",
+    "origin": "upstream: it should NOT report a violation for URLs",
+    "source": "  def fun do\n    # Based on https://github.com/rrrene/credo/blob/7dec9aecdd21ef33fdc20cc4ac6c94efb4bcddc3/lib/credo.ex#L4\n    nil\n  end\n",
+    "params": {
+      "max_length": "80"
+    },
+    "findings": []
+  },
+  {
+    "id": "EX3007.upstream.violation",
+    "origin": "upstream: it should report a violation",
+    "source": "  defmodule CredoSampleModule do\n    use ExUnit.Case\n\n    def some_fun do\n      assert 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 == 2\n    end\n  end\n",
+    "params": {
+      "max_length": "80"
+    },
+    "findings": [
+      {
+        "column": 81,
+        "line": 5,
+        "message": "Line is too long (max is 80, was 83).",
+        "trigger": "= 2"
+      }
+    ]
+  },
+  {
+    "id": "EX3007.upstream.violation2",
+    "origin": "upstream: it should report a violation /2",
+    "source": "  defmodule CredoSampleModule do\n    use ExUnit.Case\n\n    def some_fun do\n      assert \"1\" <> \"1\" <> \"1\" <> \"1\" <> \"1\" <> \"1\" <> \"1\" <> \"1\" <> \"1\" <> \"1\" <> \"1\" <> \"1\" <> \"1\" <> \"1\" == \"2\"\n    end\n  end\n",
+    "params": {
+      "max_length": "80"
+    },
+    "findings": [
+      {
+        "column": 81,
+        "line": 5,
+        "message": "Line is too long (max is 80, was 114).",
+        "trigger": "<> \"1\" <> \"1\" <> \"1\" <> \"1\" == \"2\""
+      }
+    ]
+  }
+]

@@ -1,0 +1,323 @@
+[
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.no-violation",
+    "origin": "it should NOT report expected code",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"Something\"\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.controller-submodules",
+    "origin": "it should NOT report controller submodules",
+    "params": {},
+    "source": "defmodule MyApp.SomePhoenixController do\n  defmodule SubModule do\n  end\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.exception-modules",
+    "origin": "it should NOT report exception modules",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  defexception message: \"Bad luck\"\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.moduledoc-present",
+    "origin": "it should NOT report modules or submodules when @moduledoc is present",
+    "params": {
+      "ignore_names": []
+    },
+    "source": "defmodule Foo do\n  @moduledoc false\n\n  defmodule Bar do\n    @moduledoc false\n  end\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.ignore-names-atom",
+    "origin": "it should NOT report modules when using :ignore_names matches",
+    "params": {
+      "ignore_names": [
+        ":Elixir.CredoSampleModule"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  def some_fun, do: :ok\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.ignore-names-binary",
+    "origin": "it should NOT report modules when using :ignore_names matches",
+    "params": {
+      "ignore_names": [
+        "CredoSampleModule"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  def some_fun, do: :ok\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.ignore-names-regex",
+    "origin": "it should NOT report modules when using :ignore_names matches",
+    "params": {
+      "ignore_names": [
+        {
+          "regex": "SampleModule$"
+        }
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  def some_fun, do: :ok\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.ignore-names-mixed",
+    "origin": "it should NOT report modules when using :ignore_names matches",
+    "params": {
+      "ignore_names": [
+        ":Elixir.CredoSampleModule",
+        "MyApp.Web",
+        {
+          "regex": "Other"
+        }
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  def some_fun, do: :ok\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.ignore-using-atom",
+    "origin": "it should NOT report modules when using :ignore_modules_using matches",
+    "params": {
+      "ignore_modules_using": [
+        ":Elixir.MyApp.Web"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  use MyApp.Web, :controller\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.ignore-using-binary",
+    "origin": "it should NOT report modules when using :ignore_modules_using matches",
+    "params": {
+      "ignore_modules_using": [
+        "MyApp.Web"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  use MyApp.Web, :controller\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.ignore-using-regex",
+    "origin": "it should NOT report modules when using :ignore_modules_using matches",
+    "params": {
+      "ignore_modules_using": [
+        {
+          "regex": "\\.Web$"
+        }
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  use MyApp.Web, :controller\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.ignore-using-mixed",
+    "origin": "it should NOT report modules when using :ignore_modules_using matches",
+    "params": {
+      "ignore_modules_using": [
+        ":Elixir.GenServer",
+        "MyApp.Web",
+        {
+          "regex": "Other"
+        }
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  use MyApp.Web, :controller\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3009.upstream.ignore-using-submodule",
+    "origin": "it should NOT report submodules when using :ignore_modules_using matches",
+    "params": {
+      "ignore_modules_using": [
+        "MyApp.Web"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"Parent\"\n\n  defmodule Child do\n    use MyApp.Web, :controller\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 11,
+        "line": 1,
+        "message": "Modules should have a @moduledoc tag.",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3009.upstream.violation",
+    "origin": "it should report a violation",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_fun do\n    x = 1; y = 2\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 11,
+        "line": 1,
+        "message": "Modules should have a @moduledoc tag.",
+        "trigger": "Foo"
+      }
+    ],
+    "id": "EX3009.upstream.submodule-only-moduledoc",
+    "origin": "it should report modules when @moduledoc is present in submodules only",
+    "params": {
+      "ignore_names": []
+    },
+    "source": "defmodule Foo do\n  # distinctly no moduledoc here\n  defmodule Bar do\n    @moduledoc false\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 11,
+        "line": 1,
+        "message": "Use `@moduledoc false` if a module will not be documented.",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3009.upstream.empty-string",
+    "origin": "it should report empty strings",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"\"\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 11,
+        "line": 1,
+        "message": "Use `@moduledoc false` if a module will not be documented.",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3009.upstream.empty-multiline-string",
+    "origin": "it should report empty multi line strings",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"\"\"\n\n  \"\"\"\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 11,
+        "line": 1,
+        "message": "Modules should have a @moduledoc tag.",
+        "trigger": "Person"
+      }
+    ],
+    "id": "EX3009.upstream.one-liner",
+    "origin": "it should report slightly unexpected code",
+    "params": {},
+    "source": "defmodule Person, do: def(greet(), do: :howdy)\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 11,
+        "line": 1,
+        "message": "Modules should have a @moduledoc tag.",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3009.upstream.using-no-match",
+    "origin": "it should report modules when using :ignore_modules_using does not match",
+    "params": {
+      "ignore_modules_using": [
+        "MyApp.Web"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  use SomethingElse\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 11,
+        "line": 1,
+        "message": "Modules should have a @moduledoc tag.",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3009.upstream.using-empty",
+    "origin": "it should report modules when using empty :ignore_modules_using",
+    "params": {
+      "ignore_modules_using": []
+    },
+    "source": "defmodule CredoSampleModule do\n  use MyApp.Web, :controller\nend\n"
+  },
+  {
+    "assert": "assert_issues",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 13,
+        "line": 2,
+        "message": "Modules should have a @moduledoc tag.",
+        "trigger": "SubModule"
+      },
+      {
+        "column": 11,
+        "line": 1,
+        "message": "Modules should have a @moduledoc tag.",
+        "trigger": "MyApp.SomePhoenixController"
+      }
+    ],
+    "id": "EX3009.upstream.controller-ignore-names",
+    "origin": "it should report controller submodules when using :ignore_names",
+    "params": {
+      "ignore_names": []
+    },
+    "source": "defmodule MyApp.SomePhoenixController do\n  defmodule SubModule do\n  end\nend\n"
+  },
+  {
+    "id": "EX3009.upstream.exs-scripts",
+    "origin": "it should NOT report .exs scripts",
+    "assert": "refute_issues",
+    "source": "defmodule ModuleTest do\n  defmodule SubModule do\n  end\nend\n",
+    "filename": "module_doc_test_1.exs",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  }
+]

@@ -1,0 +1,250 @@
+[
+  {
+    "id": "EX4001.upstream.not-expected",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "def some_function do\nend\n",
+    "params": {
+      "max_size": 0
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4001.upstream.not-expected-x",
+    "origin": "it should NOT report expected code /x",
+    "assert": "refute_issues",
+    "source": "def some_function do\n  if 1 == 1 or 2 == 2 do\n    my_options = %{}\n  end\nend\n",
+    "params": {
+      "max_size": 3
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4001.upstream.not-using-macro",
+    "origin": "it should NOT report a violation for __using__ macro",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Check do\n  defmacro __using__(opts) do\n    quote do\n      def format_issue(issue_meta, opts) do\n        source_file = IssueMeta.source_file(issue_meta)\n        params = IssueMeta.params(issue_meta)\n        priority =\n          if params[:foo] do\n            params[:foo] |> Check.some_fun\n          else\n            base_priority\n          end\n\n        line_no = opts[:line_no]\n        trigger = opts[:trigger]\n        column = opts[:column]\n        severity = opts[:severity] || Severity.default_value\n        issue = %Issue{\n          priority: priority,\n          filename: source_file.filename,\n          message: opts[:message],\n          trigger: trigger,\n          line_no: line_no,\n          column: column,\n          severity: severity\n        }\n        if line_no do\n          {_def, scope} = Credo.Code.scope_for(source_file.ast, line: line_no)\n          issue =\n            %Issue{\n              issue |\n              priority: issue.priority + priority_for(source_file, scope),\n              scope: scope\n            }\n        end\n        if trigger && line_no && !column do\n          issue =\n            %Issue{\n              issue |\n              column: SourceFile.column(source_file, line_no, trigger)\n            }\n        end\n        format_issue(issue)\n      end\n      def format_issue(issue \\\\ %Issue{}) do\n        %Issue{\n          issue |\n          check: __MODULE__,\n          category: category\n        }\n      end\n\n      defp priority_for(source_file, scope) do\n        scope_prio_map = Priority.scope_priorities(source_file)\n        scope_prio_map[scope] || 0\n      end\n    end\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4001.upstream.not-ecto-imported",
+    "origin": "it should NOT report ecto functions when Ecto.Query is imported",
+    "assert": "refute_issues",
+    "source": "defmodule CredoEctoQueryModule do\n  import Ecto.Query\n\n  def fun() do\n    Favorite\n    |> where(user_id: ^user.id)\n    |> join(:left, [f], t in Template, f.entity_id == t.id and f.entity_type == \"template\")\n    |> join(:left, [f, t], d in Document, f.entity_id == d.id and f.entity_type == \"document\")\n    |> join(:left, [f, t, d], dt in Template, dt.id == d.template_id)\n    |> join(:left, [f, t, d, dt], c in Category, c.id == t.category_id or c.id == dt.category_id)\n    |> select([f, t, d, dt, c], c)\n    |> distinct(true)\n    |> Repo.all()\n  end\nend\n",
+    "params": {
+      "max_size": 3
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4001.upstream.violation-here",
+    "origin": "it should report a violation here",
+    "assert": "assert_issue",
+    "source": "def some_function do\n  x = 1\nend\n",
+    "params": {
+      "max_size": 0
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 1,
+        "message": "Function is too complex (ABC size is 1, max is 0).",
+        "trigger": "some_function"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4001.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "def some_function do\n  if true == true or false == 2 do\n    my_options = MyHash.create\n  end\n  my_options\n  |> Enum.each(fn(key, value) ->\n    IO.puts key\n    IO.puts value\n  end)\nend\n",
+    "params": {
+      "max_size": 3
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 1,
+        "message": "Function is too complex (ABC size is 5, max is 3).",
+        "trigger": "some_function"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4001.upstream.ecto-not-imported",
+    "origin": "it should report count ecto functions when Ecto.Query is NOT imported",
+    "assert": "assert_issue",
+    "source": "defmodule CredoEctoQueryModule do\n\n  def foobar() do\n    Favorite\n    |> where(user_id: ^user.id)\n    |> join(:left, [f], t in Template, f.entity_id == t.id and f.entity_type == \"template\")\n    |> join(:left, [f, t], d in Document, f.entity_id == d.id and f.entity_type == \"document\")\n    |> join(:left, [f, t, d], dt in Template, dt.id == d.template_id)\n    |> join(:left, [f, t, d, dt], c in Category, c.id == t.category_id or c.id == dt.category_id)\n    |> select([f, t, d, dt, c], c)\n    |> distinct(true)\n    |> Repo.all()\n  end\nend\n",
+    "params": {
+      "max_size": 3
+    },
+    "findings": [
+      {
+        "column": 7,
+        "line": 3,
+        "message": "Function is too complex (ABC size is 47, max is 3).",
+        "trigger": "foobar"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4001.upstream.not-excluded-functions",
+    "origin": "it should NOT report count ecto functions when ecto functions are excluded via :excluded_functions",
+    "assert": "refute_issues",
+    "source": "defmodule CredoEctoQueryModule do\n\n  def foobar() do\n    Favorite\n    |> where(user_id: ^user.id)\n    |> join(:left, [f], t in Template, f.entity_id == t.id and f.entity_type == \"template\")\n    |> join(:left, [f, t], d in Document, f.entity_id == d.id and f.entity_type == \"document\")\n    |> join(:left, [f, t, d], dt in Template, dt.id == d.template_id)\n    |> join(:left, [f, t, d, dt], c in Category, c.id == t.category_id or c.id == dt.category_id)\n    |> select([f, t, d, dt, c], c)\n    |> distinct(true)\n    |> Repo.all()\n  end\nend\n",
+    "params": {
+      "excluded_functions": [
+        "where",
+        "from",
+        "select",
+        "join"
+      ],
+      "max_size": 3
+    },
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4001.upstream.abc-size-unquote",
+    "origin": "it should return the same ABC size with and without unquote call",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-module-attr",
+    "origin": "module attributs should always be counted as 1",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-nullary",
+    "origin": "it should return the correct ABC size for nullary function calls",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-regular",
+    "origin": "it should return the correct ABC size for regular function calls",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-assign",
+    "origin": "it should return the correct ABC size for value assignment",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-assign-2",
+    "origin": "it should return the correct ABC size for value assignment 2",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-assign-fun",
+    "origin": "it should return the correct ABC size for assignment to fun call",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-assign-module-fun",
+    "origin": "it should return the correct ABC size for assignment to module fun call",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-3",
+    "origin": "it should return the correct ABC size /3",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-4",
+    "origin": "it should return the correct ABC size /4",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-5",
+    "origin": "it should return the correct ABC size /5",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-dot-access",
+    "origin": "it should NOT count map/struct field access with dot notation for abc size",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-pin",
+    "origin": "it should NOT count pin operators (^) for abc size",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-ignored-funs",
+    "origin": "it should NOT count functions given to ignore for abc size",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4001.upstream.abc-size-equivalent",
+    "origin": "it should return the same ABC size for equivalently complex code",
+    "assert": "excluded",
+    "source": "",
+    "params": {},
+    "findings": [],
+    "excluded_reason": "Unit test of ABCSize.abc_size_for/2 via abc_size/rounded_abc_size helpers: asserts a numeric ABC metric (Float equality), not check issues; not transcribable to single-file {source, params, findings}."
+  }
+]

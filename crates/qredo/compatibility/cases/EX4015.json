@@ -1,0 +1,107 @@
+[
+  {
+    "id": "EX4015.upstream.ok",
+    "origin": "it should NOT report expected code",
+    "assert": "refute_issues",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    Enum.map([:a, :b, :c], fn letter ->\n      letter\n      |> inspect()\n      |> String.upcase()\n    end)\n  end\nend\n",
+    "params": {},
+    "findings": [],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4015.upstream.violation",
+    "origin": "it should report a violation",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    [:a, :b, :c]\n    |> Enum.map(&inspect/1)\n    |> Enum.map(&String.upcase/1)\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 5,
+        "message": "One `Enum.map/2` is more efficient than `Enum.map/2 |> Enum.map/2`",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4015.upstream.violation_2",
+    "origin": "it should report a violation /2",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5, p6) do\n    Enum.map(Enum.map([:a, :b, :c], &inspect/1), &String.upcase/1)\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": null,
+        "line": 3,
+        "message": "One `Enum.map/2` is more efficient than `Enum.map/2 |> Enum.map/2`",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4015.upstream.violation_3",
+    "origin": "it should report a violation /3",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    [:a, :b, :c]\n    |> Enum.sort()\n    |> Enum.map(&inspect/1)\n    |> Enum.map(&String.upcase/1)\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 6,
+        "message": "One `Enum.map/2` is more efficient than `Enum.map/2 |> Enum.map/2`",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4015.upstream.violation_4",
+    "origin": "it should report a violation /4",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    [:a, :b, :c]\n    |> Enum.sort()\n    |> Enum.map(&inspect/1)\n    |> Enum.map(&String.upcase/1)\n    |> Enum.filter(&is_nil/1)\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 6,
+        "message": "One `Enum.map/2` is more efficient than `Enum.map/2 |> Enum.map/2`",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4015.upstream.violation_5",
+    "origin": "it should report a violation /5",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    Enum.map([:a, :b, :c], &inspect/1)\n    |> Enum.map(&String.upcase/1)\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 5,
+        "line": 4,
+        "message": "One `Enum.map/2` is more efficient than `Enum.map/2 |> Enum.map/2`",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX4015.upstream.violation_6",
+    "origin": "it should report a violation /6",
+    "assert": "assert_issue",
+    "source": "defmodule Credo.Sample.Module do\n  def some_function(p1, p2, p3, p4, p5) do\n    Enum.map([:a, :b, :c] |> Enum.map(&inspect/1), &String.downcase/1)\n  end\nend\n",
+    "params": {},
+    "findings": [
+      {
+        "column": 27,
+        "line": 3,
+        "message": "One `Enum.map/2` is more efficient than `Enum.map/2 |> Enum.map/2`",
+        "trigger": "|>"
+      }
+    ],
+    "excluded_reason": null
+  }
+]

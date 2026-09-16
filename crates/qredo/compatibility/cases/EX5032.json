@@ -1,0 +1,144 @@
+[
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX5032.upstream.not-report-used-vars",
+    "origin": "it should NOT report used variables in patterns",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(%{id: id} = user) do\n    id\n  end\n\n  def another_function(user = %{id: id}) do\n    id\n  end\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX5032.upstream.not-report-ignored-vars",
+    "origin": "it should NOT report normal ignored variables",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(_parameter1) do\n    :ok\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 27,
+        "line": 2,
+        "message": "Function parameter has a pattern match but is immediately ignored.",
+        "trigger": "_ignored"
+      }
+    ],
+    "id": "EX5032.upstream.violation-pattern-ignore",
+    "origin": "it should report a violation when pattern matching and ignoring",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(%{} = _ignored) do\n    :ok\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 21,
+        "line": 2,
+        "message": "Function parameter has a pattern match but is immediately ignored.",
+        "trigger": "_ignored"
+      }
+    ],
+    "id": "EX5032.upstream.violation-flipped",
+    "origin": "it should report a violation when pattern matching and ignoring (flipped)",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(_ignored = %{}) do\n    :ok\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 28,
+        "line": 2,
+        "message": "Function parameter has a pattern match but is immediately ignored.",
+        "trigger": "_ignored"
+      }
+    ],
+    "id": "EX5032.upstream.violation-defp",
+    "origin": "it should report a violation in defp",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  defp some_function(%{} = _ignored) do\n    :ok\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 29,
+        "line": 2,
+        "message": "Function parameter has a pattern match but is immediately ignored.",
+        "trigger": "_ignored"
+      }
+    ],
+    "id": "EX5032.upstream.violation-defmacro",
+    "origin": "it should report a violation in defmacro",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  defmacro some_macro(%{} = _ignored) do\n    :ok\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 27,
+        "line": 2,
+        "message": "Function parameter has a pattern match but is immediately ignored.",
+        "trigger": "_ignored"
+      }
+    ],
+    "id": "EX5032.upstream.violation-when-clause",
+    "origin": "it should report a violation with when clause",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(%{} = _ignored) when is_map(_ignored) do\n    :ok\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issues:2",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 46,
+        "line": 2,
+        "message": "Function parameter has a pattern match but is immediately ignored.",
+        "trigger": "_ignored2"
+      },
+      {
+        "column": 27,
+        "line": 2,
+        "message": "Function parameter has a pattern match but is immediately ignored.",
+        "trigger": "_ignored1"
+      }
+    ],
+    "id": "EX5032.upstream.violation-multiple",
+    "origin": "it should report multiple violations",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def some_function(%{} = _ignored1, [%{}] = _ignored2) do\n    :ok\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issues:2",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": 27,
+        "line": 6,
+        "message": "Function parameter has a pattern match but is immediately ignored.",
+        "trigger": "_ignored"
+      },
+      {
+        "column": 26,
+        "line": 2,
+        "message": "Function parameter has a pattern match but is immediately ignored.",
+        "trigger": "_ignored"
+      }
+    ],
+    "id": "EX5032.upstream.violation-nested",
+    "origin": "it should report nested violations",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  def nested_list([%{} = _ignored]) do\n    :ok\n  end\n\n  def nested_tuple({%{} = _ignored, _other}) do\n    :ok\n  end\nend\n"
+  }
+]

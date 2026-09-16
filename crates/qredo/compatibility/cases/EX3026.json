@@ -1,0 +1,382 @@
+[
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3026.upstream.default-success",
+    "origin": "default order: no errors are reported on a successful layout",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @shortdoc \"shortdoc\"\n  @moduledoc \"some doc\"\n\n  @behaviour GenServer\n  @behaviour Supervisor\n\n  use GenServer\n\n  import GenServer\n\n  alias GenServer\n  alias Mod1.{Mod2, Mod3}\n\n  require GenServer\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3026.upstream.default-first-level",
+    "origin": "default order: only first-level parts are analyzed",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @x 1\n\n  def some_fun(), do: @x\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3026.upstream.default-custom-macro",
+    "origin": "default order: custom macro invocations are ignored",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  import Foo\n\n  setup do\n    alias Bar\n    use Foo\n  end\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3026.upstream.default-surface-import",
+    "origin": "default order: no errors are reported on surface import calls",
+    "params": {},
+    "source": "defmodule HygeiaWeb.ImportLive.Header do\n  @moduledoc false\n\n  use HygeiaWeb, :surface_live_component\n\n  alias Hygeia.ImportContext.Import\n  alias Hygeia.ImportContext.Import.Type\n  alias HygeiaWeb.UriActiveContext\n  alias Surface.Components.LiveRedirect\n\n  prop import, :map, required: true\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 3,
+        "message": "shortdoc must appear before moduledoc",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3026.upstream.default-shortdoc",
+    "origin": "default order: shortdoc must appear before moduledoc",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"some doc\"\n  @shortdoc \"shortdoc\"\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 3,
+        "message": "moduledoc must appear before behaviour",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3026.upstream.default-moduledoc",
+    "origin": "default order: moduledoc must appear before behaviour",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  @behaviour GenServer\n  @moduledoc \"some doc\"\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 3,
+        "message": "behaviour must appear before use",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3026.upstream.default-behaviour",
+    "origin": "default order: behaviour must appear before use",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  use GenServer\n  @behaviour GenServer\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 3,
+        "message": "use must appear before import",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3026.upstream.default-use",
+    "origin": "default order: use must appear before import",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  import GenServer\n  use GenServer\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 3,
+        "message": "import must appear before alias",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3026.upstream.default-import",
+    "origin": "default order: import must appear before alias",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  alias GenServer\n  import GenServer\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 3,
+        "message": "alias must appear before require",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3026.upstream.default-alias",
+    "origin": "default order: alias must appear before require",
+    "params": {},
+    "source": "defmodule CredoSampleModule do\n  require GenServer\n  alias GenServer\nend\n"
+  },
+  {
+    "assert": "assert_issues:2",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 5,
+        "message": "public function must appear before callback implementation",
+        "trigger": "CredoSampleModule"
+      },
+      {
+        "column": null,
+        "line": 10,
+        "message": "public function must appear before callback implementation",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3026.upstream.default-callback-impl",
+    "origin": "default order: callback functions and macros are handled by the `:callback_impl` option",
+    "params": {
+      "order": [
+        ":public_fun",
+        ":callback_impl"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  @impl true\n  def foo\n\n  def baz, do: :ok\n\n  @impl true\n  defmacro bar\n\n  def qux, do: :ok\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3026.upstream.custom-success",
+    "origin": "custom order: no errors are reported on a successful layout",
+    "params": {
+      "order": [
+        ":public_fun",
+        ":private_fun"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  def foo, do: :ok\n  defp bar, do: :ok\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3026.upstream.custom-missing-parts",
+    "origin": "custom order: no errors are reported on a custom layout missing parts defined in :order",
+    "params": {
+      "order": [
+        ":public_fun",
+        ":private_fun"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  def foo, do: :ok\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3026.upstream.custom-extra-parts",
+    "origin": "custom order: no errors are reported on a custom layout with extra parts not defined in :order",
+    "params": {
+      "order": [
+        ":public_fun",
+        ":private_fun"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  def foo, do: :ok\n\n  defp bar, do: :ok\n\n  defmacro test, do: :ok\n\n  @moduledoc \"\"\nend\n"
+  },
+  {
+    "assert": "assert_issues:2",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 3,
+        "message": "private function must appear before moduledoc",
+        "trigger": "CredoSampleModule"
+      },
+      {
+        "column": null,
+        "line": 4,
+        "message": "public function must appear before private function",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3026.upstream.custom-errors",
+    "origin": "custom order: reports errors",
+    "params": {
+      "order": [
+        ":public_fun",
+        ":private_fun"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"\"\n  defp bar, do: :ok\n  def foo, do: :ok\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 6,
+        "message": "public guard must appear before private guard",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3026.upstream.custom-guards",
+    "origin": "custom order: reports errors for guards",
+    "params": {
+      "order": [
+        ":moduledoc",
+        ":public_guard",
+        ":private_guard"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"\"\n\n  defguardp is_foo(term) when term == :foo\n\n  defguard is_bar(term) when term == :bar\n\n  defguard is_baz(term) when not is_foo(term) and term == :baz\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 5,
+        "message": "public function must appear before callback implementation",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3026.upstream.custom-callback-fun",
+    "origin": "custom order: treats `:callback_fun` as `:callback_impl` for backward compatibility",
+    "params": {
+      "order": [
+        ":public_fun",
+        ":callback_fun"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  @impl Foo\n  def foo, do: :ok\n\n  def bar, do: :ok\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3026.upstream.ignored-parts",
+    "origin": "ignored parts: no errors are reported on ignored parts",
+    "params": {
+      "ignore": [
+        ":use",
+        ":import"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  alias Foo\n  import Bar\n  use Baz\n  require Qux\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3026.upstream.ignored-attrs",
+    "origin": "ignored parts: no errors are reported on ignored parts for module attributes",
+    "params": {
+      "ignore": [
+        ":type",
+        ":module_attribute"
+      ],
+      "order": [
+        ":moduledoc",
+        ":public_fun"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  @moduledoc \"\"\n\n  @type foo :: :foo\n\n  def hello do\n    :world\n  end\n\n  @foo :foo\n\n  @spec foo() :: foo()\n  def foo() do\n    @foo\n  end\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 5,
+        "message": "alias must appear before require",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3026.upstream.ignored-non-ignored",
+    "origin": "ignored parts: reports errors on non-ignored parts",
+    "params": {
+      "ignore": [
+        ":use",
+        ":import"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  require Qux\n  import Bar\n  use Baz\n  alias Foo\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3026.upstream.modattrs-custom",
+    "origin": "ignored module attributes: ignores custom module attributes",
+    "params": {
+      "ignore_module_attributes": [
+        ":trace"
+      ],
+      "order": [
+        ":use",
+        ":import",
+        ":module_attribute"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  use Baz\n\n  import Bar\n\n  @trace trace_fun()\n  def test_fun() do\n    nil\n  end\n\n  @trace trace_fun()\n  def test() do\n    nil\n  end\nend\n"
+  },
+  {
+    "assert": "refute_issues",
+    "excluded_reason": null,
+    "findings": [],
+    "id": "EX3026.upstream.modattrs-enforce-keys",
+    "origin": "ignored module attributes: ignores enforce_keys module attribute",
+    "params": {
+      "order": [
+        ":defstruct",
+        ":module_attribute"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  @enforce_keys [:bar]\n  defstruct bar: nil\nend\n"
+  },
+  {
+    "assert": "assert_issue",
+    "excluded_reason": null,
+    "findings": [
+      {
+        "column": null,
+        "line": 9,
+        "message": "module attribute must appear before public function",
+        "trigger": "CredoSampleModule"
+      }
+    ],
+    "id": "EX3026.upstream.modattrs-only-set",
+    "origin": "ignored module attributes: only ignores set module attributes",
+    "params": {
+      "ignore_module_attributes": [
+        ":trace"
+      ],
+      "order": [
+        ":import",
+        ":module_attribute"
+      ]
+    },
+    "source": "defmodule CredoSampleModule do\n  import Bar\n\n  @trace trace_fun()\n  def test_fun() do\n    nil\n  end\n\n  @bad_attribute\n  @trace trace_fun()\n  def test() do\n    nil\n  end\nend\n"
+  }
+]
