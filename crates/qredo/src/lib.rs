@@ -17,6 +17,7 @@ pub use check_meta::{
 pub use config_file::{CheckEntry, CredoConfig, FileEntry, UnsupportedConfig, parse_config};
 pub use file_select::{PatternError, check_runs_on_entries, check_runs_on_file, wildcard_match};
 mod batch;
+pub mod check_docs;
 mod check_meta;
 mod config_data;
 mod config_file;
