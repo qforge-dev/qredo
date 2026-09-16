@@ -609,7 +609,10 @@ fn saturated_squares(assignments: usize, branches: usize, conditions: usize) -> 
 /// `(assignments, branches, conditions)` over the function body.
 fn count_abc(body: &str, params: Vec<String>) -> (usize, usize, usize) {
     let body = blank_bitstrings(body);
-    let mut scope = params;
+    // Bindings carry their byte offset: like the native top-down
+    // accumulator, a use counts unless a binding at or before it scopes
+    // the name. Head params bind at 0 (the native initial scope).
+    let mut scope: Vec<(String, usize)> = params.into_iter().map(|name| (name, 0)).collect();
     collect_scope(&body, &mut scope);
     let ranges = lhs_ranges(&body);
     let mut counter = Counter {
@@ -707,10 +710,17 @@ fn lhs_ranges(body: &str) -> Vec<(usize, usize)> {
     ranges
 }
 
+/// Whether `name` is bound at or before byte `at`.
+fn bound_at(scope: &[(String, usize)], name: &str, at: usize) -> bool {
+    scope
+        .iter()
+        .any(|(known, bound)| known == name && *bound <= at)
+}
+
 /// Assigned names and `->` head variables enter the variable scope.
 /// `=` inside a `->` head never scopes (its whole head is discarded
 /// upstream), so those are skipped via their head spans.
-fn collect_scope(body: &str, scope: &mut Vec<String>) {
+fn collect_scope(body: &str, scope: &mut Vec<(String, usize)>) {
     let heads = arrow_head_spans(body);
     let bytes = body.as_bytes();
     let mut idx = 0_usize;
@@ -719,18 +729,21 @@ fn collect_scope(body: &str, scope: &mut Vec<String>) {
             if !heads.iter().any(|(start, end)| *start <= idx && idx < *end)
                 && let Some((start, end)) = lhs_range(body, idx)
                 && let Some(name) = bare_ident(body.get(start..end).unwrap_or(""))
-                && !scope.contains(&name)
+                && !scope.iter().any(|(known, _)| known == &name)
             {
-                scope.push(name);
+                scope.push((name, idx));
             }
             idx += 1;
         } else if body.get(idx..).is_some_and(|rest| rest.starts_with("->"))
             && word_boundary(bytes, idx + 2)
         {
             let start = head_start_idx(body, idx);
+            // Bind at the head start (not the arrow): native visits the
+            // `->` node — adding its head vars — before descending into
+            // the head patterns themselves.
             for name in head_vars(body.get(start..idx).unwrap_or("")) {
-                if !scope.contains(&name) {
-                    scope.push(name);
+                if !scope.iter().any(|(known, _)| known == &name) {
+                    scope.push((name, start));
                 }
             }
             idx += 2;
@@ -935,7 +948,7 @@ fn is_plain_assign(body: &str, idx: usize) -> bool {
 }
 
 struct Counter<'a> {
-    scope: &'a [String],
+    scope: &'a [(String, usize)],
     ranges: &'a [(usize, usize)],
     assignments: usize,
     branches: usize,
@@ -1166,7 +1179,7 @@ impl Counter<'_> {
             }
         } else if !(body.get(end..).is_some_and(|rest| rest.starts_with(':'))
             || self.in_lhs_range(start)
-            || self.scope.contains(&word.to_owned()))
+            || bound_at(self.scope, word, start))
         {
             self.branches += 1;
         }
@@ -1433,6 +1446,31 @@ mod tests {
             .into_iter()
             .collect();
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+
+    #[test]
+    fn use_before_binding_counts() {
+        // Scoping is positional like the native accumulator: a use before
+        // its `=`-binding counts (native sizes 5 and 6 here).
+        for (src, max, size) in [
+            (
+                "def f(a) do\n  with {:ok, m} <- g(a) do\n    m = h(m)\n    m\n  end\nend\n",
+                "4",
+                "ABC size is 5",
+            ),
+            (
+                "def f(a) do\n  with {:ok, m} <- g(a) do\n    x = h(m)\n    x\n  end\nend\n",
+                "5",
+                "ABC size is 6",
+            ),
+        ] {
+            let params: BTreeMap<String, String> = [("max_size".to_owned(), max.to_owned())]
+                .into_iter()
+                .collect();
+            let findings = check_prepared(&crate::batch::Prepared::lazy(src), &params);
+            assert_eq!(findings.len(), 1, "{src:?}");
+            assert!(findings[0].message.contains(size), "{src:?}");
+        }
     }
 
     #[test]
