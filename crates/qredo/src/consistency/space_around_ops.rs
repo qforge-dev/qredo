@@ -20,7 +20,12 @@ pub(crate) fn check_prepared(
         let mut c = 0_usize;
         while c < chars.len() {
             // Multi-char ops: `==`, `!=`, `<=`, `>=`, `|>`, `->`, `=>`, `++`, etc.
+            // `**` is a power-op token, never an operator occurrence.
             let two: String = chars[c..(c + 2).min(chars.len())].iter().collect();
+            if two == "**" {
+                c += 2;
+                continue;
+            }
             let op_len = if [
                 "==", "!=", "<=", ">=", "|>", "->", "=>", "++", "--", "=~", "<>",
             ]
@@ -162,6 +167,21 @@ mod tests {
                 "findings for {source:?}"
             );
         }
+    }
+
+    #[test]
+    fn power_operator_is_not_an_operator() {
+        let findings = check_prepared(
+            &crate::batch::Prepared::lazy("x = 1 + 2\ny = 3 * 2 ** (n - 1)\n"),
+            &BTreeMap::new(),
+        );
+        assert!(
+            findings.iter().all(|finding| !matches!(
+                &finding.trigger,
+                crate::Trigger::Text(text) if text == "*"
+            )),
+            "{findings:?}"
+        );
     }
 
     #[test]

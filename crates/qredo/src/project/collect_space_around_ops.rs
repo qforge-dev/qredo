@@ -873,6 +873,9 @@ fn symbolic_token(rest: &str) -> (Kind, String) {
         "===" | "!==" | "&&&" | "|||" => (Kind::Op, head3),
         "<<<" | ">>>" | "<~>" | "<|>" | "~>>" => (Kind::Arrow, head3),
         _ => match head2.as_str() {
+            // `**` is a power-op token, which native `operator?/1` rejects:
+            // never an operator occurrence.
+            "**" => (Kind::Other, head2),
             "=>" => (Kind::Assoc, head2),
             "|>" | "~>" | "<~" | "|~>" => (Kind::Arrow, head2),
             "::" => (Kind::Type, head2),
@@ -1277,6 +1280,18 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn power_operator_casts_no_votes() {
+        // `**` lexes as one power-op token, which native `operator?/1`
+        // rejects: never an operator occurrence.
+        let votes = collect("x = 2 ** (n - 1)\n");
+        assert!(
+            votes.iter().all(|vote| vote.trigger != "*"),
+            "power votes: {:?}",
+            votes.iter().map(|vote| &vote.trigger).collect::<Vec<_>>()
+        );
+    }
+
     fn remote_operator_calls_cast_no_votes() {
         // Native lexes `Kernel.||` as `{:paren_identifier, …}` — never an
         // operator.
