@@ -1280,7 +1280,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn power_operator_casts_no_votes() {
         // `**` lexes as one power-op token, which native `operator?/1`
         // rejects: never an operator occurrence.
@@ -1292,6 +1291,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn remote_operator_calls_cast_no_votes() {
         // Native lexes `Kernel.||` as `{:paren_identifier, …}` — never an
         // operator.
