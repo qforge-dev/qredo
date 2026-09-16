@@ -312,9 +312,10 @@ fn def_body(lines: &[&str], depths: &[usize], from: usize) -> String {
     if let Some(pos) = line.find(", do:") {
         return line.get(pos + 5..).unwrap_or("").to_owned();
     }
-    // A head continued below (`...,\n    do: ...`) carries its inline
-    // body on the continuation line: first depth-zero `do:` wins.
-    if head_continued(line)
+    // A head continued below (`...,\n    do: ...`, or a guard `when`
+    // opening below) carries an inline body on its continuation line when
+    // a depth-zero `do:` precedes any bare block opener: first `do:` wins.
+    if (head_continued(line) || guard_continued(lines, from))
         && let Some(body) = continued_do_body(lines, from)
     {
         return body;
@@ -501,8 +502,9 @@ fn def_params(lines: &[&str], from: usize) -> Vec<String> {
     let head = head_text(lines, from);
     // Guarded heads scope nothing upstream (`get_parameters` sees the
     // `when` wrapper, not the head tuple). The guard may sit on the def
-    // line itself (past `head_text`'s balanced close) or below it.
-    if has_guard(&head) || has_guard(lines.get(from).unwrap_or(&"")) {
+    // line itself (past `head_text`'s balanced close) or open below it.
+    if has_guard(&head) || has_guard(lines.get(from).unwrap_or(&"")) || guard_continued(lines, from)
+    {
         return Vec::new();
     }
     let Some(open) = head.find('(') else {
@@ -858,7 +860,8 @@ fn lhs_range(body: &str, assign: usize) -> Option<(usize, usize)> {
         return None;
     }
     if matches!(bytes[end - 1], b')' | b']' | b'}') {
-        return match_bracket_back(body, end - 1).map(|open| (open, end));
+        return match_bracket_back(body, end - 1)
+            .map(|open| (struct_prefix_start(body, open).unwrap_or(open), end));
     }
     let mut start = end;
     while start > 0 && is_ident_byte(bytes[start - 1]) {
@@ -868,6 +871,24 @@ fn lhs_range(body: &str, assign: usize) -> Option<(usize, usize)> {
         return None;
     }
     Some((start, end))
+}
+
+/// Start of a `%Alias` prefix immediately before the `{` at `open`, if
+/// any: `%E{...}` patterns belong to the match LHS whole, mirroring
+/// upstream (which never visits `=` left-hand sides).
+fn struct_prefix_start(body: &str, open: usize) -> Option<usize> {
+    if body.as_bytes().get(open) != Some(&b'{') {
+        return None;
+    }
+    let bytes = body.as_bytes();
+    let mut start = open;
+    while start > 0 && is_ident_byte(bytes[start - 1]) {
+        start -= 1;
+    }
+    if start == open || bytes.get(start.wrapping_sub(1)) != Some(&b'%') {
+        return None;
+    }
+    Some(start - 1)
 }
 
 fn match_bracket_back(body: &str, close: usize) -> Option<usize> {
@@ -976,10 +997,13 @@ impl Counter<'_> {
         }
         if matches!(byte, b'%' | b'^' | b'#') {
             // Named structs (`%Foo{}`) are calls upstream; `%{}` is not.
+            // Inside `=` patterns neither counts (upstream never visits
+            // match left-hand sides).
             if byte == b'%'
                 && bytes
                     .get(*idx + 1)
                     .is_some_and(|next| next.is_ascii_uppercase() || *next == b'_')
+                && !self.in_lhs_range(*idx)
             {
                 self.branches += 1;
             }
@@ -996,6 +1020,8 @@ impl Counter<'_> {
     }
 
     /// Single-character operator assignments, attributes and branches.
+    /// A lone `|` inside a `=` pattern is invisible upstream (match
+    /// left-hand sides are never visited); `||` cannot occur there.
     fn scan_sign(&mut self, body: &str, idx: &mut usize) -> bool {
         match body.as_bytes()[*idx] {
             b'=' if is_plain_assign(body, *idx) => {
@@ -1008,6 +1034,7 @@ impl Counter<'_> {
             {
                 self.assignments += 1;
             }
+            b'|' if self.in_lhs_range(*idx) => {}
             b'&' | b'|' | b'+' | b'-' | b'*' | b'/' | b'<' | b'>' | b'!' => {
                 self.branches += 1;
             }
@@ -1383,6 +1410,27 @@ mod tests {
     }
 
     #[test]
+    fn match_pattern_structs_are_invisible() {
+        // Upstream descends only into `=` right-hand sides: a struct on
+        // the pattern side adds no branch (native size 2 here).
+        let src = "def f(a) do\n  %E{} = x\n  x\nend\n";
+        let params: BTreeMap<String, String> = [("max_size".to_owned(), "2".to_owned())]
+            .into_iter()
+            .collect();
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+
+    #[test]
+    fn match_pattern_cons_is_invisible() {
+        // Same for `|` inside `=` patterns (native size 3 here).
+        let src = "def f(a) do\n  [h | t] = foo(a)\n  {h, t}\nend\n";
+        let params: BTreeMap<String, String> = [("max_size".to_owned(), "3".to_owned())]
+            .into_iter()
+            .collect();
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+
+    #[test]
     fn guard_continued_head_counts_body() {
         // Guard `when` opening below the head line still scopes the body.
         let src = "def invoke(a, b) when is_binary(a) and b != \"\" do\n    x = Req.post(a)\n    x\n  end\n";
@@ -1394,10 +1442,36 @@ mod tests {
     }
 
     #[test]
+    fn guard_inline_body_does_not_swallow_next_clause() {
+        // A guard-continued head with an inline `do:` body ends there: the
+        // following clause is a separate function, not its body.
+        let src = "defp validate_source(_d, checkpoint, asset)\n     when not is_nil(checkpoint) and not is_nil(asset),\n     do: {:error, :ambiguous_source}\n\ndefp validate_source(definition, checkpoint, nil) do\n  x = Models.get_version(definition)\n  x\nend\n";
+        let params: BTreeMap<String, String> = [("max_size".to_owned(), "0".to_owned())]
+            .into_iter()
+            .collect();
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &params);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].line, 5);
+    }
+
+    #[test]
     fn single_line_guard_scopes_nothing() {
         // The guard may sit past `head_text`'s balanced close; params
         // still stay unscoped, so later uses count.
         let src = "def f(v) when is_binary(v) do\n    Models.get_version(v)\n  end\n";
+        let params: BTreeMap<String, String> = [("max_size".to_owned(), "1".to_owned())]
+            .into_iter()
+            .collect();
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &params);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].message.contains("ABC size is 2"));
+    }
+
+    #[test]
+    fn multiline_guard_scopes_nothing() {
+        // A `when` opening below the head line still wraps the head
+        // upstream: params stay unscoped, so later uses count.
+        let src = "def f(v)\n    when is_binary(v) do\n    Models.get_version(v)\n  end\n";
         let params: BTreeMap<String, String> = [("max_size".to_owned(), "1".to_owned())]
             .into_iter()
             .collect();
