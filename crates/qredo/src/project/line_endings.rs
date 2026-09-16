@@ -120,4 +120,15 @@ mod tests {
         assert_eq!(issues[0].file, 1);
         assert_eq!(issues[0].line, Some(1));
     }
+
+    #[test]
+    fn tie_breaks_toward_unix_and_blames_windows_file() {
+        // Equal votes (3 unix vs 3 windows): the tie resolves to the
+        // smallest key ("unix"), so the windows file is blamed.
+        let files = vec![file("a\nb\nc\n"), file("a\r\nb\r\nc\r\n")];
+        let issues = run(&files, &BTreeMap::new());
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].file, 1);
+        assert_eq!(issues[0].line, Some(1));
+    }
 }

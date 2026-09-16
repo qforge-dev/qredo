@@ -868,4 +868,24 @@ mod tests {
             ));
         }
     }
+
+    #[test]
+    fn tie_breaks_toward_with_space_and_blames_without_space_file() {
+        // Equal votes (1 with_space vs 1 without_space): the tie resolves
+        // to the smallest key ("with_space"), so the tight-parens file is
+        // blamed.
+        let files = vec![
+            ProjectFile {
+                filename: "a.ex".to_owned(),
+                source: "f( )\n".to_owned(),
+            },
+            ProjectFile {
+                filename: "b.ex".to_owned(),
+                source: "f()\n".to_owned(),
+            },
+        ];
+        let issues = run(&files, &BTreeMap::new());
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].file, 1);
+    }
 }

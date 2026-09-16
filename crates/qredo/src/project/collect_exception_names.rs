@@ -363,6 +363,35 @@ mod tests {
     }
 
     #[test]
+    fn tie_breaks_toward_smallest_prefix_and_blames_other_file() {
+        // Key space is combined `prefix:<first>` + `suffix:<last>` with every
+        // `prefix:*` sorting before every `suffix:*`. Two `Alpha*` votes tie
+        // two `Beta*` votes at 2 (all suffixes stay at 1), so the smallest
+        // key `prefix:Alpha` wins and the non-smallest side (file 1) is blamed.
+        let files = vec![
+            file(
+                "defmodule AlphaOne do\n  defexception [:message]\nend\ndefmodule AlphaTwo do\n  defexception [:message]\nend\n",
+            ),
+            file(
+                "defmodule BetaThree do\n  defexception [:message]\nend\ndefmodule BetaFour do\n  defexception [:message]\nend\n",
+            ),
+        ];
+        let issues = run(&files, &BTreeMap::new());
+        assert_eq!(issues.len(), 2);
+        for issue in &issues {
+            assert_eq!(issue.file, 1);
+            assert!(
+                issue.message.contains("prefix them with `Alpha`"),
+                "unexpected message: {}",
+                issue.message
+            );
+        }
+        let mut triggers: Vec<&str> = issues.iter().map(|issue| issue.trigger.as_str()).collect();
+        triggers.sort_unstable();
+        assert_eq!(triggers, vec!["BetaFour", "BetaThree"]);
+    }
+
+    #[test]
     fn corpus_groups_match_native() {
         let mismatches = corpus_mismatches();
         assert!(

@@ -34,7 +34,9 @@ pub struct Fallback {
     pub reason: String,
 }
 
-/// Fail-closed gate for one enabled check; `None` means natively servable.
+/// Fail-closed gate for one enabled check in a full run; `None` means
+/// natively servable. Promoted project-lane checks serve here (differential
+/// proof on file); subset runs use [`subset_gate`] and stay fail-closed.
 fn gate(entry: &crate::CheckEntry) -> Option<Fallback> {
     if crate::check_kernel(&entry.module, "defmodule Probe do end").is_err() {
         return Some(Fallback {
@@ -49,7 +51,7 @@ fn gate(entry: &crate::CheckEntry) -> Option<Fallback> {
             reason: format!("needs-validated-config:{}", entry.module),
         });
     }
-    if !crate::supports_per_file(&entry.module) {
+    if !crate::supports_per_file(&entry.module) && !crate::promoted_project_check(&entry.module) {
         return Some(Fallback {
             reason: format!("project-scope-check:{}", entry.module),
         });
@@ -60,6 +62,18 @@ fn gate(entry: &crate::CheckEntry) -> Option<Fallback> {
         });
     }
     None
+}
+
+/// Fail-closed gate for one enabled check in a subset run: project-lane
+/// checks aggregate across the full file set, so even promoted ones refuse
+/// here (a lone minority file is clean natively but blamed in-project).
+fn subset_gate(entry: &crate::CheckEntry) -> Option<Fallback> {
+    if !crate::supports_per_file(&entry.module) {
+        return Some(Fallback {
+            reason: format!("project-scope-check:{}", entry.module),
+        });
+    }
+    gate(entry)
 }
 
 /// Build the native runner over default-param enabled checks.
@@ -174,7 +188,7 @@ pub fn execute_files(
     files: &[(String, String)],
     min_priority: i32,
 ) -> Result<std::collections::BTreeMap<String, serde_json::Value>, Fallback> {
-    if let Outcome::Fallback { reason } = select(config_source, config_name) {
+    if let Outcome::Fallback { reason } = select_subset(config_source, config_name) {
         return Err(Fallback { reason });
     }
     let config =
@@ -217,6 +231,20 @@ pub fn execute_files(
 /// Choose the native engine or fail-closed real-Credo fallback.
 #[must_use]
 pub fn select(config_source: &str, config_name: &str) -> Outcome {
+    select_with(config_source, config_name, gate)
+}
+
+/// Subset-run variant: project-lane checks refuse even when promoted.
+fn select_subset(config_source: &str, config_name: &str) -> Outcome {
+    select_with(config_source, config_name, subset_gate)
+}
+
+/// Shared selection over one gate function.
+fn select_with(
+    config_source: &str,
+    config_name: &str,
+    gate_one: fn(&crate::CheckEntry) -> Option<Fallback>,
+) -> Outcome {
     match crate::config_file::parse_config(config_source, config_name) {
         Err(unsupported) => Outcome::Fallback {
             reason: format!("unsupported-credo-config:{}", unsupported.0),
@@ -224,7 +252,7 @@ pub fn select(config_source: &str, config_name: &str) -> Outcome {
         Ok(config) => {
             let mut checks = Vec::new();
             for entry in config.checks.iter().filter(|check| check.enabled) {
-                if let Some(fallback) = gate(entry) {
+                if let Some(fallback) = gate_one(entry) {
                     return Outcome::Fallback {
                         reason: fallback.reason,
                     };
@@ -277,6 +305,72 @@ mod execute_tests {
     }
 
     const ONE_CHECK: &str = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Warning.IoInspect, []}]}}]}\n";
+
+    const TABS_CHECK: &str = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Consistency.TabsOrSpaces, []}]}}]}\n";
+
+    fn tabs_project() -> Vec<RunnerFile> {
+        vec![
+            RunnerFile {
+                filename: "lib/a.ex".to_owned(),
+                source: "defmodule A do\n  def a, do: 1\nend\n".to_owned(),
+            },
+            RunnerFile {
+                filename: "lib/b.ex".to_owned(),
+                source: "defmodule B do\n  def b, do: 2\nend\n".to_owned(),
+            },
+            RunnerFile {
+                filename: "lib/c.ex".to_owned(),
+                source: "defmodule C do\n\tdef c, do: 3\nend\n".to_owned(),
+            },
+        ]
+    }
+
+    #[test]
+    fn promoted_project_checks_serve_full_runs() {
+        let report = execute(TABS_CHECK, "default", &tabs_project(), -99).expect("served");
+        assert!(report.errors.is_empty());
+        let files: Vec<&str> = report
+            .issues
+            .iter()
+            .map(|issue| issue.filename.as_str())
+            .collect();
+        assert_eq!(files, vec!["lib/c.ex"]);
+    }
+
+    #[test]
+    fn project_checks_still_refuse_subset_runs() {
+        // A lone minority file is clean natively but blamed in-project;
+        // subset execution stays fail-closed instead of guessing.
+        let subset = vec![("lib/c.ex".to_owned(), tabs_project()[2].source.clone())];
+        assert_eq!(
+            execute_files(TABS_CHECK, "default", &subset, -99).expect_err("subset refuses"),
+            Fallback {
+                reason: "project-scope-check:Credo.Check.Consistency.TabsOrSpaces".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn duplicated_code_stays_gated() {
+        let source = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Design.DuplicatedCode, []}]}}]}\n";
+        assert_eq!(
+            execute(source, "default", &tabs_project(), -99).expect_err("gated"),
+            Fallback {
+                reason: "project-scope-check:Credo.Check.Design.DuplicatedCode".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn project_majority_revert_returns_original_issues() {
+        let report = execute(TABS_CHECK, "default", &tabs_project(), -99).expect("served");
+        let mut flipped = tabs_project();
+        flipped[2].source = "defmodule C do\n  def c, do: 3\nend\n".to_owned();
+        let clean = execute(TABS_CHECK, "default", &flipped, -99).expect("served");
+        assert!(clean.issues.is_empty());
+        let reverted = execute(TABS_CHECK, "default", &tabs_project(), -99).expect("served");
+        assert_eq!(reverted.issues, report.issues);
+    }
 
     const DISABLED_CHECK: &str = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Warning.IoInspect, []}], disabled: [{Credo.Check.Warning.Dbg, []}]}}]}\n";
 
@@ -399,11 +493,19 @@ mod tests {
 
     #[test]
     fn project_and_config_validated_checks_fall_back() {
-        let project = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Consistency.TabsOrSpaces, []}]}}]}\n";
+        // TabsOrSpaces is promoted (serves); DuplicatedCode stays gated.
+        let promoted = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Consistency.TabsOrSpaces, []}]}}]}\n";
+        assert_eq!(
+            select(promoted, "default"),
+            Outcome::Serve {
+                checks: vec!["Credo.Check.Consistency.TabsOrSpaces".to_owned()],
+            }
+        );
+        let project = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Design.DuplicatedCode, []}]}}]}\n";
         assert_eq!(
             select(project, "default"),
             Outcome::Fallback {
-                reason: "project-scope-check:Credo.Check.Consistency.TabsOrSpaces".to_owned(),
+                reason: "project-scope-check:Credo.Check.Design.DuplicatedCode".to_owned(),
             }
         );
         let validated = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Design.MissingCheckInConfig, []}]}}]}\n";

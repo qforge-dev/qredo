@@ -388,6 +388,25 @@ mod tests {
     }
 
     #[test]
+    fn tie_break_two_files_toward_multi_blames_single_file() {
+        // Key space is `multi`/`single`; smallest key `multi` wins a 1-1 tie,
+        // so the file holding the non-smallest `single` vote (file 1) is blamed.
+        let files = vec![
+            file("defmodule M do\n  alias Foo.{A, B}\nend\n"),
+            file("defmodule N do\n  alias Bar.Baz\n  alias Bar.Qux\nend\n"),
+        ];
+        let issues = run(&files, &BTreeMap::new());
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].file, 1);
+        assert_eq!(issues[0].line, Some(3));
+        assert_eq!(issues[0].column, Some(2));
+        assert_eq!(
+            issues[0].message,
+            "Most of the time you are using the multi-alias/require/import/use syntax, but here you are using multiple single directives"
+        );
+    }
+
+    #[test]
     fn single_segment_and_option_forms_never_vote() {
         let files = vec![file(
             "defmodule M do\n  import Assertions\n  use Foo\n  alias Bar.Baz, as: Qux\nend\n",

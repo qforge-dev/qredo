@@ -205,6 +205,23 @@ mod tests {
     }
 
     #[test]
+    fn tie_breaks_toward_anonymous_and_blames_meaningful_file() {
+        // Key space is `anonymous` (bare `_`) / `meaningful` (`_name`);
+        // smallest key `anonymous` wins a 1-1 tie, so the file holding the
+        // non-smallest `meaningful` vote (file 1) is blamed.
+        let files = vec![
+            file("defmodule M do\n  def f(_) do\n  end\nend\n"),
+            file(
+                "defmodule N do\n  def g(list) do\n    Enum.map(list, fn _item -> 1 end)\n  end\nend\n",
+            ),
+        ];
+        let issues = run(&files, &BTreeMap::new());
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].file, 1);
+        assert_eq!(issues[0].trigger, "_item");
+    }
+
+    #[test]
     fn def_names_never_vote() {
         let files = vec![
             file("defmodule M do\n  def _weird(var1, var2) do\n  end\nend\n"),

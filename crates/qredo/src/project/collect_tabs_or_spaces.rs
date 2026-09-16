@@ -270,4 +270,24 @@ mod tests {
             ));
         }
     }
+
+    #[test]
+    fn tie_breaks_toward_spaces_and_blames_tabs_file() {
+        // Equal votes (1 spaces vs 1 tabs): the tie resolves to the
+        // smallest key ("spaces"), so the tabs file is blamed.
+        let files = vec![
+            ProjectFile {
+                filename: "spaces.ex".to_owned(),
+                source: "def f do\n  x\nend\n".to_owned(),
+            },
+            ProjectFile {
+                filename: "tabs.ex".to_owned(),
+                source: "def f do\n\tx\nend\n".to_owned(),
+            },
+        ];
+        let issues = run(&files, &BTreeMap::new());
+        assert_eq!(issues.len(), 1);
+        assert!(issues.iter().all(|issue| issue.file == 1));
+        assert_eq!(issues[0].line, Some(2));
+    }
 }

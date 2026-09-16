@@ -400,6 +400,31 @@ mod tests {
     }
 
     #[test]
+    fn tie_breaks_toward_after_and_blames_before_file() {
+        // Key space is `before` (`var = pattern`) / `after` (`pattern = var`);
+        // smallest key `after` wins a 1-1 tie, so the file holding the
+        // non-smallest `before` vote (file 0) is blamed regardless of order.
+        let files = vec![
+            ProjectFile {
+                filename: "a.ex".to_owned(),
+                source: "defmodule M do\n  def f(list = [a, b]), do: :ok\nend\n".to_owned(),
+            },
+            ProjectFile {
+                filename: "b.ex".to_owned(),
+                source: "defmodule N do\n  def g([a, b] = list), do: :ok\nend\n".to_owned(),
+            },
+        ];
+        let issues = run(&files, &BTreeMap::new());
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].file, 0);
+        assert_eq!(issues[0].trigger, "list");
+        assert_eq!(
+            issues[0].message,
+            "File has the variable name before the pattern while most of the files have the variable name after the pattern when naming parameter pattern matches"
+        );
+    }
+
+    #[test]
     fn corpus_projects_match_upstream_findings() {
         let parsed: Vec<Entry> = serde_json::from_str(CASES).expect("valid corpus JSON");
         let mut subgroups: BTreeMap<(String, String), Vec<usize>> = BTreeMap::new();
