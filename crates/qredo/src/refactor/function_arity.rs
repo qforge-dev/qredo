@@ -199,4 +199,33 @@ mod tests {
         assert_eq!(findings[0].line, 2);
         assert_eq!(findings[0].column, Some(7));
     }
+    #[test]
+    fn max_arity_param_is_honored() {
+        let src = "def foo(a, b, c), do: 1\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+        let params: BTreeMap<String, String> = [("max_arity".to_owned(), "2".to_owned())]
+            .into_iter()
+            .collect();
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &params).len(),
+            1
+        );
+    }
+    #[test]
+    fn ignore_defp_param_is_honored() {
+        let src = "defp foo(a,b,c,d,e,f,g,h,i), do: 1\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+        let params: BTreeMap<String, String> = [("ignore_defp".to_owned(), "true".to_owned())]
+            .into_iter()
+            .collect();
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+        let pub_src = "def foo(a,b,c,d,e,f,g,h,i), do: 1\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(pub_src), &params).len(),
+            1
+        );
+    }
 }

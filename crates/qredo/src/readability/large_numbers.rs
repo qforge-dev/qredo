@@ -283,4 +283,28 @@ mod tests {
             .is_empty()
         );
     }
+
+    #[test]
+    fn only_greater_than_raises_threshold() {
+        let src = "x = 1000000\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+        let mut params = BTreeMap::new();
+        params.insert("only_greater_than".to_owned(), "10000000".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+
+    #[test]
+    fn trailing_digits_allows_variant_grouping() {
+        let src = "x = 10_000_00\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+        let mut params = BTreeMap::new();
+        params.insert("trailing_digits".to_owned(), "[2]".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
 }

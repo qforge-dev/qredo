@@ -392,4 +392,18 @@ mod tests {
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].column, Some(18));
     }
+
+    #[test]
+    fn ascii_sort_method_orders_case_sensitively() {
+        // `apple` before `Zebra` is alpha-ordered but not ascii-ordered
+        // (`Z` 0x5A sorts before `a` 0x61).
+        let src = "alias Foo.apple\nalias Foo.Zebra\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+        let mut params = BTreeMap::new();
+        params.insert("sort_method".to_owned(), "ascii".to_owned());
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &params).len(),
+            1
+        );
+    }
 }

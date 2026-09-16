@@ -56,4 +56,12 @@ mod tests {
         p.insert("force".to_owned(), "meaningful".to_owned());
         assert!(!check("def f(_x), do: 1\n", &p).is_empty());
     }
+    #[test]
+    fn force_anonymous_stays_conservative() {
+        // Without dataflow the kernel cannot prove a variable unused, so the
+        // `anonymous` strategy reports nothing instead of guessing.
+        let mut p = BTreeMap::new();
+        p.insert("force".to_owned(), "anonymous".to_owned());
+        assert!(check("def f(_x), do: 1\n", &p).is_empty());
+    }
 }

@@ -156,6 +156,13 @@ mod tests {
         assert_eq!((out[0].line, out[0].column), (3, Some(17)));
     }
     #[test]
+    fn allows_field_capture_when_configured() {
+        let src = "defmodule M do\n  def f(x) do\n    Enum.map(x, & &1.name)\n  end\nend\n";
+        let mut params = BTreeMap::new();
+        params.insert("allow_field_access".to_owned(), "true".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+    #[test]
     fn assigned_capture_is_clean() {
         let src = "defmodule M do\n  def f do\n    y = & &1\n  end\nend\n";
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());

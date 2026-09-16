@@ -286,4 +286,12 @@ mod tests {
         params.insert("include_doc".to_owned(), "false".to_owned());
         assert!(check_todo(src, &params).is_empty());
     }
+    #[test]
+    fn fixme_doc_ignored_when_excluded() {
+        let src = "defmodule M do\n  @doc \"FIXME: broken\"\nend\n";
+        assert_eq!(check_fixme(src, &BTreeMap::new()).len(), 1);
+        let mut params = BTreeMap::new();
+        params.insert("include_doc".to_owned(), "false".to_owned());
+        assert!(check_fixme(src, &params).is_empty());
+    }
 }

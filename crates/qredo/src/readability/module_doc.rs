@@ -364,6 +364,17 @@ mod tests {
         assert!(check(src, &params).is_empty());
     }
     #[test]
+    fn respects_ignore_modules_using() {
+        let src = "defmodule CredoSampleModule do\n  use ExUnit.Case\nend\n";
+        assert_eq!(check(src, &BTreeMap::new()).len(), 1);
+        let mut params = BTreeMap::new();
+        params.insert(
+            "ignore_modules_using".to_owned(),
+            r#"["ExUnit.Case"]"#.to_owned(),
+        );
+        assert!(check(src, &params).is_empty());
+    }
+    #[test]
     fn default_ignores_phoenix_controller() {
         let src = "defmodule MyApp.UserController do\nend\n";
         assert!(check(src, &BTreeMap::new()).is_empty());

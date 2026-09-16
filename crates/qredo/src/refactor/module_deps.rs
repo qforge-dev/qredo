@@ -236,6 +236,15 @@ mod tests {
         );
         assert!(check(src, &params).is_empty());
     }
+    #[test]
+    fn max_deps_param_is_honored() {
+        let src = "defmodule M do\n  def f do\n    [ModA, ModB]\n  end\nend\n";
+        assert!(check(src, &BTreeMap::new()).is_empty());
+        let params: BTreeMap<String, String> = [("max_deps".to_owned(), "1".to_owned())]
+            .into_iter()
+            .collect();
+        assert_eq!(check(src, &params).len(), 1);
+    }
 
     #[test]
     fn broken_source_stays_clean() {

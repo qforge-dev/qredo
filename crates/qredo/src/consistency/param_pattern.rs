@@ -96,4 +96,24 @@ mod tests {
             1
         );
     }
+    #[test]
+    fn force_before_reports_after() {
+        let mut p = BTreeMap::new();
+        p.insert("force".to_owned(), "before".to_owned());
+        assert_eq!(
+            check_prepared(
+                &crate::batch::Prepared::lazy("def foo(m = %{a: a}), do: a\n"),
+                &p
+            )
+            .len(),
+            1
+        );
+        assert!(
+            check_prepared(
+                &crate::batch::Prepared::lazy("def foo(%{a: a} = m), do: a\n"),
+                &p
+            )
+            .is_empty()
+        );
+    }
 }

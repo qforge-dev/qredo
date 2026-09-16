@@ -659,6 +659,55 @@ mod tests {
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &given).is_empty());
     }
     #[test]
+    fn excluded_namespace_param_is_clean() {
+        let src = "defmodule Test do\n  def just_an_example do\n    Foo.Qux.baz()\n  end\nend\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &params()).len(),
+            1
+        );
+        let mut given = params();
+        given.insert("excluded_namespaces".to_owned(), "[\"Foo\"]".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &given).is_empty());
+    }
+    #[test]
+    fn nested_threshold_param_is_clean() {
+        let src = "defmodule Test do\n  def just_an_example do\n    Foo.Qux.baz()\n  end\nend\n";
+        let mut given = params();
+        given.insert("if_nested_deeper_than".to_owned(), "2".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &given).is_empty());
+    }
+    #[test]
+    fn call_threshold_param_is_clean() {
+        let src = "defmodule Test do\n  def just_an_example do\n    Foo.Qux.baz()\n  end\nend\n";
+        let mut given = params();
+        given.insert("if_called_more_often_than".to_owned(), "1".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &given).is_empty());
+    }
+    #[test]
+    fn referenced_param_reports_bare_module() {
+        let src = "defmodule Test do\n  def just_an_example do\n    foo(Foo.Qux)\n  end\nend\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params()).is_empty());
+        let mut given = params();
+        given.insert("if_referenced".to_owned(), "true".to_owned());
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &given).len(),
+            1
+        );
+    }
+    #[test]
+    fn only_param_filters_modules() {
+        let src = "defmodule Test do\n  def just_an_example do\n    Foo.Qux.baz()\n  end\nend\n";
+        let mut matching = params();
+        matching.insert("only".to_owned(), "\"Foo\"".to_owned());
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &matching).len(),
+            1
+        );
+        let mut missing = params();
+        missing.insert("only".to_owned(), "\"Bar\"".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &missing).is_empty());
+    }
+    #[test]
     fn conflicting_alias_is_clean() {
         let src = "defmodule Test do\n  alias Exzmq.Socket\n  alias Exzmq.Tcp\n\n  def just_an_example do\n    Socket.test1\n    Tcp.Socket.test2\n  end\nend\n";
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params()).is_empty());

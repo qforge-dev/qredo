@@ -67,4 +67,11 @@ mod tests {
         p.insert("force".to_owned(), "unix".to_owned());
         assert_eq!(check("a\r\n", &p).len(), 1);
     }
+    #[test]
+    fn force_windows_reports_lf() {
+        let mut p = BTreeMap::new();
+        p.insert("force".to_owned(), "windows".to_owned());
+        assert_eq!(check("a\n", &p).len(), 1);
+        assert!(check("a\r\n", &p).is_empty());
+    }
 }

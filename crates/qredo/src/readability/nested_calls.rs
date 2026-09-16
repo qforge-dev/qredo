@@ -381,4 +381,16 @@ mod tests {
         assert_eq!((findings[0].line, findings[0].column), (3, Some(5)));
         assert_eq!((findings[1].line, findings[1].column), (3, Some(18)));
     }
+
+    #[test]
+    fn min_pipeline_length_raises_bar() {
+        let src = "Foo.bar(Baz.qux(x))\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+        let mut params = BTreeMap::new();
+        params.insert("min_pipeline_length".to_owned(), "3".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
 }

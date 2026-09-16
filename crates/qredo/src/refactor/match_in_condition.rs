@@ -733,4 +733,29 @@ mod tests {
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].line, 3);
     }
+    #[test]
+    fn allow_tagged_tuples_suppresses_tagged_match() {
+        let src = "defmodule M do\n  def f(x) do\n    if {:ok, contents} = foo(x) do\n      contents\n    end\n  end\nend\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+        let params: BTreeMap<String, String> =
+            [("allow_tagged_tuples".to_owned(), "true".to_owned())]
+                .into_iter()
+                .collect();
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+    #[test]
+    fn allow_operators_suppresses_operator_rhs() {
+        let src = "defmodule M do\n  def f(x) do\n    if contents = foo(x) + bar(x) do\n      contents\n    end\n  end\nend\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+        let params: BTreeMap<String, String> = [("allow_operators".to_owned(), "true".to_owned())]
+            .into_iter()
+            .collect();
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
 }

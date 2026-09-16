@@ -578,4 +578,29 @@ mod tests {
         assert_eq!(findings[0].line, 5);
         assert_eq!(findings[1].line, 10);
     }
+    #[test]
+    fn ignore_skips_part_kind() {
+        let src = "defmodule M do\n  alias Bar\n  use Foo\nend\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+        let mut params = BTreeMap::new();
+        params.insert("ignore".to_owned(), "[\"alias\"]".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+    #[test]
+    fn ignore_module_attributes_skips_attr() {
+        let src = "defmodule M do\n  @my_attr 1\n  use Foo\nend\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).len(),
+            1
+        );
+        let mut params = BTreeMap::new();
+        params.insert(
+            "ignore_module_attributes".to_owned(),
+            "[\"my_attr\"]".to_owned(),
+        );
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
 }

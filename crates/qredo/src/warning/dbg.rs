@@ -267,4 +267,19 @@ mod tests {
         assert_eq!(findings.len(), 1);
         assert_eq!((findings[0].line, findings[0].column), (4, Some(13)));
     }
+    #[test]
+    fn allow_captures_suppresses_capture_only() {
+        let src = "defmodule CredoSampleModule do\n  def some_function(params) do\n    params\n    |> tap(&dbg/1)\n  end\nend\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &params()).len(),
+            1
+        );
+        let mut allowed = BTreeMap::new();
+        allowed.insert("allow_captures".to_owned(), "true".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &allowed).is_empty());
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy("dbg(x)\n"), &allowed).len(),
+            1
+        );
+    }
 }

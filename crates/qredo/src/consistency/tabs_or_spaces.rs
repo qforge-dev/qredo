@@ -103,4 +103,24 @@ mod tests {
             .is_empty()
         );
     }
+    #[test]
+    fn force_spaces_reports_tabs() {
+        let mut p = BTreeMap::new();
+        p.insert("force".to_owned(), "spaces".to_owned());
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy("\tx = 1\n"), &p).len(),
+            1
+        );
+        assert!(check_prepared(&crate::batch::Prepared::lazy("  x = 1\n"), &p).is_empty());
+    }
+    #[test]
+    fn force_tabs_reports_spaces() {
+        let mut p = BTreeMap::new();
+        p.insert("force".to_owned(), "tabs".to_owned());
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy("  x = 1\n"), &p).len(),
+            1
+        );
+        assert!(check_prepared(&crate::batch::Prepared::lazy("\tx = 1\n"), &p).is_empty());
+    }
 }

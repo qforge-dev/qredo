@@ -884,4 +884,18 @@ mod tests {
             "Function is too complex (ABC size is 5, max is 3)."
         );
     }
+    #[test]
+    fn excluded_functions_are_ignored() {
+        let src = "def foo do\n  foo(1)\n  foo(2)\n  foo(3)\n  foo(4)\n  foo(5)\nend\n";
+        let max: BTreeMap<String, String> = [("max_size".to_owned(), "3".to_owned())]
+            .into_iter()
+            .collect();
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &max).len(),
+            1
+        );
+        let mut params = max;
+        params.insert("excluded_functions".to_owned(), "[\"foo\"]".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
 }

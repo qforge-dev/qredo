@@ -361,6 +361,17 @@ mod tests {
         );
     }
     #[test]
+    fn include_defp_reports_private() {
+        let src = "defp foo(x), do: x\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+        let mut params = BTreeMap::new();
+        params.insert("include_defp".to_owned(), "true".to_owned());
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &params).len(),
+            1
+        );
+    }
+    #[test]
     fn decoy_substrings_do_not_trigger_scans() {
         // "specified", "implement", "defeat" and "done" carry gated
         // substrings but no attributes, definitions or blocks.

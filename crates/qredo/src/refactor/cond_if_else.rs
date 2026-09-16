@@ -255,4 +255,21 @@ mod tests {
         assert_eq!(findings.len(), 1);
         assert_eq!((findings[0].line, findings[0].column), (3, Some(5)));
     }
+    #[test]
+    fn allow_one_liners_suppresses_inline_only() {
+        let inline =
+            "defmodule M do\n  def f do\n    if allowed?, do: :ok, else: :error\n  end\nend\n";
+        let block = "if x do\n  y\nelse\n  z\nend\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(inline), &BTreeMap::new()).len(),
+            1
+        );
+        let mut params = BTreeMap::new();
+        params.insert("allow_one_liners".to_owned(), "true".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(inline), &params).is_empty());
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(block), &params).len(),
+            1
+        );
+    }
 }

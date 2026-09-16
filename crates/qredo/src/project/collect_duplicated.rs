@@ -1014,6 +1014,53 @@ mod tests {
         assert!(failures.is_empty(), "\n{}", failures.join("\n"));
     }
 
+    fn dup_pair() -> Vec<ProjectFile> {
+        let block = "def duplicated(p1, p2) do\n  p1 + p2\nend\n";
+        vec![
+            ProjectFile {
+                filename: "a.ex".to_owned(),
+                source: format!("defmodule A do\n{block}end\n"),
+            },
+            ProjectFile {
+                filename: "b.ex".to_owned(),
+                source: format!("defmodule B do\n{block}end\n"),
+            },
+        ]
+    }
+
+    fn dup_params(key: &str, value: &str) -> BTreeMap<String, String> {
+        let mut params = BTreeMap::new();
+        params.insert("mass_threshold".to_owned(), "3".to_owned());
+        params.insert(key.to_owned(), value.to_owned());
+        params
+    }
+
+    #[test]
+    fn mass_threshold_param_suppresses_small_dup() {
+        let files = dup_pair();
+        assert!(!run(&files, &dup_params("mass_threshold", "3")).is_empty());
+        assert!(run(&files, &dup_params("mass_threshold", "100000")).is_empty());
+    }
+
+    #[test]
+    fn nodes_threshold_param_requires_more_files() {
+        let files = dup_pair();
+        assert!(!run(&files, &dup_params("nodes_threshold", "2")).is_empty());
+        assert!(run(&files, &dup_params("nodes_threshold", "3")).is_empty());
+    }
+
+    #[test]
+    fn excluded_macros_param_suppresses_matching_roots() {
+        let files = dup_pair();
+        let baseline = run(&files, &dup_params("nodes_threshold", "2"));
+        assert!(!baseline.is_empty());
+        let mut params = dup_params("nodes_threshold", "2");
+        params.insert("excluded_macros".to_owned(), "[\"def\"]".to_owned());
+        let filtered = run(&files, &params);
+        assert!(filtered.len() < baseline.len());
+        assert!(!filtered.is_empty());
+    }
+
     /// Parsed EX2002 corpus entries.
     fn corpus_entries() -> Vec<serde_json::Value> {
         let text = std::fs::read_to_string(concat!(

@@ -425,4 +425,15 @@ mod tests {
         );
         assert_eq!(findings[0].column, None);
     }
+    #[test]
+    fn custom_quote_limit_is_honored() {
+        let src = "x = \"a\\\"b\\\"c\\\"d\\\"e\"\n";
+        assert_eq!(check(src, &BTreeMap::new()).len(), 1);
+        let mut relaxed = BTreeMap::new();
+        relaxed.insert("maximum_allowed_quotes".to_owned(), "10".to_owned());
+        assert!(check(src, &relaxed).is_empty());
+        let mut strict = BTreeMap::new();
+        strict.insert("maximum_allowed_quotes".to_owned(), "1".to_owned());
+        assert_eq!(check("x = \"a\\\"b\\\"c\"\n", &strict).len(), 1);
+    }
 }

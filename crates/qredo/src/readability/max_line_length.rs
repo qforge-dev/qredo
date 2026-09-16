@@ -214,4 +214,65 @@ mod tests {
             1
         );
     }
+
+    #[test]
+    fn custom_max_length_is_honored() {
+        let src = "x = [1, 2, 3, 4, 5, 6, 7]\n";
+        assert!(src.chars().count() > 10);
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &defaults()).is_empty());
+        let mut params = BTreeMap::new();
+        params.insert("max_length".to_owned(), "10".to_owned());
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &params).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn definitions_report_when_not_ignored() {
+        let long_def = format!("def {}(x), do: x\n", "a".repeat(130));
+        let mut params = BTreeMap::new();
+        params.insert("ignore_definitions".to_owned(), "false".to_owned());
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(&long_def), &params).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn heredocs_report_when_not_ignored() {
+        let long_body = "a".repeat(130);
+        let src = format!("x = \"\"\"\n{long_body}\n\"\"\"\n");
+        assert!(check_prepared(&crate::batch::Prepared::lazy(&src), &defaults()).is_empty());
+        let mut params = BTreeMap::new();
+        params.insert("ignore_heredocs".to_owned(), "false".to_owned());
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(&src), &params).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn specs_ignored_when_configured() {
+        let long_spec = format!("@spec {}(integer) :: integer\n", "a".repeat(130));
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(&long_spec), &defaults()).len(),
+            1
+        );
+        let mut params = BTreeMap::new();
+        params.insert("ignore_specs".to_owned(), "true".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(&long_spec), &params).is_empty());
+    }
+
+    #[test]
+    fn sigils_report_when_not_ignored() {
+        let long_sigil = format!("x = ~s({})\n", "a".repeat(130));
+        assert!(check_prepared(&crate::batch::Prepared::lazy(&long_sigil), &defaults()).is_empty());
+        let mut params = BTreeMap::new();
+        params.insert("ignore_sigils".to_owned(), "false".to_owned());
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(&long_sigil), &params).len(),
+            1
+        );
+    }
 }

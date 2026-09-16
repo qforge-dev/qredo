@@ -65,4 +65,12 @@ mod tests {
         let src = format!("def a do\n{block}end\ndef b do\n{block}end\n");
         assert!(!check_prepared(&crate::batch::Prepared::lazy(&src), &BTreeMap::new()).is_empty());
     }
+    #[test]
+    fn mass_threshold_param_suppresses_small_dup() {
+        let block = "  x = 1_000_000_000_000_000_000_000_000\n  y = 2_000_000_000_000_000_000_000_000\n  z = x + y + 1_000_000_000_000_000_000_000\n  w = z * 2_000_000_000_000_000_000_000_000\n";
+        let src = format!("def a do\n{block}end\ndef b do\n{block}end\n");
+        let mut params = BTreeMap::new();
+        params.insert("mass_threshold".to_owned(), "100000".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(&src), &params).is_empty());
+    }
 }

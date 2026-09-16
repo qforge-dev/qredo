@@ -205,4 +205,21 @@ mod tests {
         params.insert("ignore_comments".to_owned(), "true".to_owned());
         assert!(check_prepared(&crate::batch::Prepared::lazy(&src), &params).is_empty());
     }
+    #[test]
+    fn max_line_count_param_is_honored() {
+        use std::fmt::Write as _;
+        let mut src = String::from("quote do\n");
+        for i in 0..8 {
+            let _ = writeln!(src, "  x{i}");
+        }
+        src.push_str("end\n");
+        assert!(check_prepared(&crate::batch::Prepared::lazy(&src), &BTreeMap::new()).is_empty());
+        let params: BTreeMap<String, String> = [("max_line_count".to_owned(), "7".to_owned())]
+            .into_iter()
+            .collect();
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(&src), &params).len(),
+            1
+        );
+    }
 }

@@ -315,4 +315,13 @@ mod tests {
         assert_eq!(found[0].line, 6);
         assert_eq!(found[0].column, Some(9));
     }
+    #[test]
+    fn max_nesting_param_is_honored() {
+        let src = "def f do\n if a do\n if b do\n if c do\n d\n end\n end\n end\nend\n";
+        assert!(!check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+        let params: BTreeMap<String, String> = [("max_nesting".to_owned(), "5".to_owned())]
+            .into_iter()
+            .collect();
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
 }
