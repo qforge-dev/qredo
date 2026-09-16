@@ -12,6 +12,7 @@ use batch::{Prepared, run_one};
 pub use check_meta::{
     CheckBase, FileMeta, IssueError, PriorityError, backfill_column, base_priority, build_issue,
     category_for, check_tags, resolve_category, resolve_exit_status, resolve_priority, severity,
+    version_skipped_on_pinned_toolchain,
 };
 pub use config_file::{CheckEntry, CredoConfig, FileEntry, UnsupportedConfig, parse_config};
 pub use file_select::{PatternError, check_runs_on_entries, check_runs_on_file, wildcard_match};
@@ -50,7 +51,10 @@ pub use pipeline::{
     run_trailing_blank_line_selected,
 };
 pub use project::{ProjectFile, ProjectIssue, run_project_check};
-pub use runner::{RunError, RunReport, RunnerConfig, RunnerFile, run_checks, supports_per_file};
+pub use runner::{
+    RunError, RunReport, RunnerConfig, RunnerFile, promoted_project_check, run_checks,
+    supports_per_file,
+};
 pub use selection::{ConfigSource, Resolution, Selection, resolve};
 pub use source::SourceSnapshot;
 pub use syntax::{SyntaxStatus, is_valid, validate};

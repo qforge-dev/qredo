@@ -276,6 +276,25 @@ pub fn check_tags(rule: &str) -> &'static [&'static str] {
     }
 }
 
+/// Checks the native pipeline skips on the pinned toolchain
+/// (Elixir 1.20.2) via `elixir_version` requirements
+/// (`prepare_checks_to_run.ex:72-88` evaluates
+/// `Version.match?(System.version(), check.elixir_version())` and emits
+/// zero issues for non-matching checks). Verified on the pinned checkout:
+/// `Version.match?("1.20.2", "< 1.7.0")`, `"< 1.7.0-dev"` and `"< 1.8.0"`
+/// are false; `">= 1.14.0-dev"`, `">= 1.17.0"` and the default
+/// `">= 0.0.1"` are true. Applies at execution level only (native `run/2`
+/// bypasses the gate, like [`crate::check_kernel`]).
+#[must_use]
+pub fn version_skipped_on_pinned_toolchain(rule: &str) -> bool {
+    matches!(
+        rule,
+        "Credo.Check.Warning.LazyLogging"
+            | "Credo.Check.Readability.PreferUnquotedAtoms"
+            | "Credo.Check.Refactor.MapInto"
+    )
+}
+
 /// Resolve an issue priority: general override, `priority` param, or base.
 /// Mirrors `Params.priority/2` with `Priority.to_integer/1` (`nil` → 0).
 ///
@@ -558,6 +577,30 @@ mod tests {
         );
         assert_eq!(check_tags("Credo.Check.Warning.IoInspect"), &[] as &[&str]);
         assert_eq!(check_tags("Credo.Check.Nope"), &[] as &[&str]);
+    }
+
+    #[test]
+    fn version_gate_matches_pinned_toolchain() {
+        // Native skips these on Elixir 1.20.2 (`< 1.7.0`, `< 1.7.0-dev`,
+        // `< 1.8.0`); running gates and the default stay enabled.
+        assert!(version_skipped_on_pinned_toolchain(
+            "Credo.Check.Warning.LazyLogging"
+        ));
+        assert!(version_skipped_on_pinned_toolchain(
+            "Credo.Check.Readability.PreferUnquotedAtoms"
+        ));
+        assert!(version_skipped_on_pinned_toolchain(
+            "Credo.Check.Refactor.MapInto"
+        ));
+        assert!(!version_skipped_on_pinned_toolchain(
+            "Credo.Check.Warning.Dbg"
+        ));
+        assert!(!version_skipped_on_pinned_toolchain(
+            "Credo.Check.Refactor.PreferDateTimeShift"
+        ));
+        assert!(!version_skipped_on_pinned_toolchain(
+            "Credo.Check.Warning.IoInspect"
+        ));
     }
 
     #[test]
