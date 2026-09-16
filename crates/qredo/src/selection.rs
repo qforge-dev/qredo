@@ -8,7 +8,8 @@
 //!
 //! Name matching mirrors `Credo.Execution`: each pattern is a
 //! case-insensitive regex matched against the check name, and `ignore` wins
-//! over `only`. Tag-based selection is pending: it needs the check-tags table.
+//! over `only`. Tag filtering uses the [`crate::check_meta::check_tags`]
+//! table; unknown tags match nothing, like native atomization.
 
 /// Which checks an execution runs.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

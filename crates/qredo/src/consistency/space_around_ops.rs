@@ -2,11 +2,15 @@ use crate::Finding;
 use std::collections::BTreeMap;
 
 /// `EX1005`: spaces around operators should be consistent.
+///
+/// The `ignore` param lists skipped operators (default `["|"]`, matching
+/// upstream `ignore: [:|]`); values arrive as compact JSON atom lists.
 #[allow(clippy::too_many_lines, reason = "single-file kernel scanner")]
 pub(crate) fn check_prepared(
     prepared: &crate::batch::Prepared<'_>,
-    _params: &BTreeMap<String, String>,
+    params: &BTreeMap<String, String>,
 ) -> Vec<Finding> {
+    let ignored = ignored_operators(params);
     let masked = prepared.masked();
     let mut with_space = 0_usize;
     let mut without_space = 0_usize;
@@ -25,18 +29,24 @@ pub(crate) fn check_prepared(
                 2
             } else if "=<>+-*/|".contains(chars[c]) && chars[c] != ' ' {
                 // Single-char; skip `=` in `==`, `=>`, etc. handled above.
-                // Skip `|` in `|>` handled above; skip `:` `,` etc.
+                // Skip `:` `,` etc.
                 usize::from(
                     chars[c] == '='
                         || chars[c] == '+'
                         || chars[c] == '-'
                         || chars[c] == '*'
-                        || chars[c] == '/',
+                        || chars[c] == '/'
+                        || chars[c] == '|',
                 )
             } else {
                 0
             };
             if op_len > 0 {
+                let op: String = chars[c..c + op_len].iter().collect();
+                if ignored.iter().any(|item| item == &op) {
+                    c += op_len;
+                    continue;
+                }
                 let before = if c > 0 { Some(chars[c - 1]) } else { None };
                 let after = chars.get(c + op_len).copied();
                 let spaced = before == Some(' ') && after == Some(' ');
@@ -71,6 +81,19 @@ pub(crate) fn check_prepared(
     }
 }
 
+/// Operators skipped by the `ignore` param (default `["|"]`, matching
+/// upstream `ignore: [:|]`); values arrive as compact JSON atom lists.
+fn ignored_operators(params: &BTreeMap<String, String>) -> Vec<String> {
+    let Some(raw) = params.get("ignore") else {
+        return vec!["|".to_owned()];
+    };
+    serde_json::from_str::<Vec<String>>(raw)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|item| item.strip_prefix(':').unwrap_or(&item).to_owned())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,6 +113,37 @@ mod tests {
             !check_prepared(
                 &crate::batch::Prepared::lazy("x = 1 + 2\ny=3+4\n"),
                 &BTreeMap::new()
+            )
+            .is_empty()
+        );
+    }
+    #[test]
+    fn pipe_is_ignored_by_default() {
+        // Upstream default `ignore: [:|]`.
+        assert!(
+            check_prepared(
+                &crate::batch::Prepared::lazy("x = foo(a|b)\n"),
+                &BTreeMap::new()
+            )
+            .is_empty()
+        );
+    }
+    #[test]
+    fn empty_ignore_restores_pipe_reports() {
+        let mut params = BTreeMap::new();
+        params.insert("ignore".to_owned(), "[]".to_owned());
+        let findings = check_prepared(&crate::batch::Prepared::lazy("x = foo(a|b)\n"), &params);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].trigger, crate::Trigger::Text("|".to_owned()));
+    }
+    #[test]
+    fn custom_ignore_suppresses_listed_operators() {
+        let mut params = BTreeMap::new();
+        params.insert("ignore".to_owned(), "[\"+\"]".to_owned());
+        assert!(
+            check_prepared(
+                &crate::batch::Prepared::lazy("x = 1+2\ny = 3 + 4\n"),
+                &params
             )
             .is_empty()
         );

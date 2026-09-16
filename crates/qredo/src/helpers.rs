@@ -13,10 +13,12 @@ pub fn param_str<'a>(params: &'a BTreeMap<String, String>, key: &str, default: &
     params.get(key).map_or(default, String::as_str)
 }
 
-/// Get a boolean parameter (`"true"`/`"false"`) with a default.
+/// Get a boolean parameter with a default, following Elixir truthiness:
+/// everything except `"false"` counts as true (`nil` params fail closed
+/// at config load and never reach kernels).
 #[must_use]
 pub fn param_bool(params: &BTreeMap<String, String>, key: &str, default: bool) -> bool {
-    params.get(key).map_or(default, |v| v == "true")
+    params.get(key).map_or(default, |v| v != "false")
 }
 
 /// Get an integer parameter with a default.
@@ -695,5 +697,25 @@ mod tests {
     #[test]
     fn char_hash_is_not_a_comment() {
         assert!(comments("x = ?#\n").is_empty());
+    }
+
+    fn bool_params(value: &str) -> BTreeMap<String, String> {
+        BTreeMap::from([("flag".to_owned(), value.to_owned())])
+    }
+
+    #[test]
+    fn bool_params_follow_elixir_truthiness() {
+        // Upstream `if flag do`: everything except `false`/`nil` is truthy.
+        // `nil` params fail closed at config load and never reach kernels.
+        assert!(param_bool(&bool_params("true"), "flag", false));
+        assert!(param_bool(&bool_params("yes"), "flag", false));
+        assert!(param_bool(&bool_params("0"), "flag", false));
+        assert!(!param_bool(&bool_params("false"), "flag", true));
+    }
+
+    #[test]
+    fn missing_bool_params_use_the_default() {
+        assert!(param_bool(&BTreeMap::new(), "flag", true));
+        assert!(!param_bool(&BTreeMap::new(), "flag", false));
     }
 }
