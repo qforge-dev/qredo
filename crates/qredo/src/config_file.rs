@@ -6,6 +6,25 @@
 //! Anything executable or dynamic (calls, attributes, interpolation,
 //! `__DIR__`, pins, anonymous functions) is an explicit [`UnsupportedConfig`],
 //! never silent defaults.
+//!
+//! Sole exception: `System.get_env/1,2` with literal arguments. Each call is
+//! resolved once against the process environment at config-load time and the
+//! observation is recorded in [`CredoConfig::env_snapshot`]:
+//!
+//! - `System.get_env("FOO")` resolves to the value of `FOO`; an unset `FOO`
+//!   fails closed, naming the variable.
+//! - `System.get_env("FOO", default)` resolves to the value of `FOO`, or to
+//!   the literal `default` (any other static data term, including a nested
+//!   `System.get_env` call) when `FOO` is unset. A `nil` default on a miss
+//!   fails closed like any other `nil` param.
+//! - A non-literal variable name, any other arity, and every other call
+//!   (`Mix.env`, `System.fetch_env`, `System.get_env!`, `__DIR__`, …) stay
+//!   fail-closed.
+//!
+//! Snapshots are load-time views, not live bindings: later environment
+//! changes do not alter an already-parsed config, and any future config
+//! fingerprint must mix the snapshot or reuse across changed environments
+//! becomes unsound.
 
 use std::collections::BTreeMap;
 
@@ -20,6 +39,14 @@ pub struct CredoConfig {
     pub files_excluded: Vec<FileEntry>,
     /// Enabled and disabled checks in file order.
     pub checks: Vec<CheckEntry>,
+    /// Load-time environment snapshot: every `System.get_env` variable
+    /// consulted while parsing, mapped to its observed value (`None` when
+    /// unset and a literal default applied). Empty when the config uses no
+    /// `System.get_env` call. There is no config-fingerprint consumer in
+    /// this crate yet; any future fingerprint MUST mix each
+    /// `(name, present?, value)` tuple alongside source bytes and tool
+    /// identity, or reuse across changed environments becomes unsound.
+    pub env_snapshot: BTreeMap<String, Option<String>>,
 }
 
 /// A config-level file entry: plain glob string or regex source.
@@ -48,10 +75,33 @@ pub struct UnsupportedConfig(pub String);
 
 /// Parse the named config block from `.credo.exs` source.
 ///
+/// `System.get_env/1,2` calls with literal arguments resolve against the
+/// process environment once per call site at load time; see
+/// [`CredoConfig::env_snapshot`]. Everything else executable stays
+/// fail-closed.
+///
 /// # Errors
 /// Returns [`UnsupportedConfig`] for non-map sources, missing config names,
 /// executable/dynamic constructs, or malformed check entries.
 pub fn parse_config(source: &str, config_name: &str) -> Result<CredoConfig, UnsupportedConfig> {
+    parse_config_with_lookup(source, config_name, &|name| std::env::var(name).ok())
+}
+
+/// Shared parse over an injectable environment reader.
+///
+/// Production parsing passes the process environment; tests pass a fixed
+/// table so parallel tests never mutate process-global state (workspace
+/// `unsafe_code = "forbid"` rules out `std::env::set_var` in tests, and env
+/// mutation would race under parallel execution anyway).
+fn parse_config_with_lookup(
+    source: &str,
+    config_name: &str,
+    lookup: &dyn Fn(&str) -> Option<String>,
+) -> Result<CredoConfig, UnsupportedConfig> {
+    let mut env = Env {
+        lookup,
+        snapshot: BTreeMap::new(),
+    };
     let tree = parse_tree(source)?;
     let root = single_map_child(&tree.root_node(), source)?;
     let pairs = map_pairs(&root, source)?;
@@ -65,15 +115,42 @@ pub fn parse_config(source: &str, config_name: &str) -> Result<CredoConfig, Unsu
         let name = as_string(&name, source)?;
         available.push(name.clone());
         if name == config_name {
-            selected = Some(parse_block(&block, &pairs, source, config_name)?);
+            selected = Some(parse_block(&block, &pairs, source, config_name, &mut env)?);
         }
     }
-    selected.ok_or_else(|| {
-        UnsupportedConfig(format!(
-            "config \"{config_name}\" not found (available: {})",
-            available.join(", ")
-        ))
-    })
+    selected
+        .map(|mut config| {
+            config.env_snapshot = env.snapshot;
+            config
+        })
+        .ok_or_else(|| {
+            UnsupportedConfig(format!(
+                "config \"{config_name}\" not found (available: {})",
+                available.join(", ")
+            ))
+        })
+}
+
+/// Load-time environment reader for the `System.get_env` carve-out.
+///
+/// Each variable is read at most once per parse (first observation wins),
+/// so the snapshot is a single consistent view even if another thread
+/// mutates the process environment mid-parse.
+struct Env<'a> {
+    lookup: &'a dyn Fn(&str) -> Option<String>,
+    snapshot: BTreeMap<String, Option<String>>,
+}
+
+impl Env<'_> {
+    /// Read one variable, recording the observation for the fingerprint.
+    fn get(&mut self, name: &str) -> Option<String> {
+        if let Some(known) = self.snapshot.get(name) {
+            return known.clone();
+        }
+        let value = (self.lookup)(name);
+        self.snapshot.insert(name.to_owned(), value.clone());
+        value
+    }
 }
 
 /// Parse one selected config block's pairs.
@@ -82,6 +159,7 @@ fn parse_block(
     pairs: &[(String, tree_sitter::Node<'_>)],
     source: &str,
     config_name: &str,
+    env: &mut Env<'_>,
 ) -> Result<CredoConfig, UnsupportedConfig> {
     let mut files_included = Vec::new();
     let mut files_excluded = Vec::new();
@@ -102,7 +180,7 @@ fn parse_block(
                     }
                 }
             }
-            "checks" => checks = parse_checks(value, source)?,
+            "checks" => checks = parse_checks(value, source, env)?,
             "requires" | "plugins" => {
                 reject_executable_key(key, value, source)?;
             }
@@ -114,6 +192,7 @@ fn parse_block(
         files_included,
         files_excluded,
         checks,
+        env_snapshot: BTreeMap::new(),
     })
 }
 
@@ -140,11 +219,12 @@ fn reject_executable_key(
 fn parse_checks(
     node: &tree_sitter::Node<'_>,
     source: &str,
+    env: &mut Env<'_>,
 ) -> Result<Vec<CheckEntry>, UnsupportedConfig> {
     if node.kind() == "list" {
         let mut out = Vec::new();
         for item in list_items(node, source, "checks")? {
-            out.push(parse_check_entry(&item, source, true)?);
+            out.push(parse_check_entry(&item, source, true, env)?);
         }
         return Ok(out);
     }
@@ -156,7 +236,7 @@ fn parse_checks(
             continue;
         };
         for item in list_items(&list, source, key)? {
-            out.push(parse_check_entry(&item, source, key == "enabled")?);
+            out.push(parse_check_entry(&item, source, key == "enabled", env)?);
         }
     }
     for (key, _) in &pairs {
@@ -172,6 +252,7 @@ fn parse_check_entry(
     node: &tree_sitter::Node<'_>,
     source: &str,
     listed_enabled: bool,
+    env: &mut Env<'_>,
 ) -> Result<CheckEntry, UnsupportedConfig> {
     let tuple = expect_kind(node, "tuple", "check entry")?;
     let items = named_non_comment(&tuple);
@@ -181,7 +262,7 @@ fn parse_check_entry(
             enabled: listed_enabled,
             params: BTreeMap::new(),
         }),
-        [_, _] => parse_check_pair(&items, source, listed_enabled),
+        [_, _] => parse_check_pair(&items, source, listed_enabled, env),
         _ => Err(UnsupportedConfig(
             "check entry must be {Module} or {Module, params}".to_owned(),
         )),
@@ -193,6 +274,7 @@ fn parse_check_pair(
     items: &[tree_sitter::Node<'_>],
     source: &str,
     listed_enabled: bool,
+    env: &mut Env<'_>,
 ) -> Result<CheckEntry, UnsupportedConfig> {
     let module = check_module_name(&items[0], source)?;
     let params_node = &items[1];
@@ -214,13 +296,13 @@ fn parse_check_pair(
                 .filter(|child| child.kind() == "pair")
             {
                 let (key, value) = pair_key_value(&pair, source)?;
-                insert_param(&mut params, &key, &value, source)?;
+                insert_param(&mut params, &key, &value, source, env)?;
             }
             continue;
         }
         let pair = expect_kind(&item, "pair", "param entry")?;
         let (key, value) = pair_key_value(&pair, source)?;
-        insert_param(&mut params, &key, &value, source)?;
+        insert_param(&mut params, &key, &value, source, env)?;
     }
     Ok(CheckEntry {
         module,
@@ -321,6 +403,7 @@ fn insert_param(
     key: &str,
     value: &tree_sitter::Node<'_>,
     source: &str,
+    env: &mut Env<'_>,
 ) -> Result<(), UnsupportedConfig> {
     if key == "files" && value.kind() == "map" {
         let map = map_pairs(value, source)?;
@@ -342,7 +425,10 @@ fn insert_param(
         }
         return Ok(());
     }
-    params.insert(key.to_owned(), kernel_string(&encode_term(value, source)?));
+    params.insert(
+        key.to_owned(),
+        kernel_string(&encode_term(value, source, env)?),
+    );
     Ok(())
 }
 /// Module name of a check entry; custom modules need native execution.
@@ -528,6 +614,7 @@ fn kernel_string(value: &serde_json::Value) -> String {
 fn encode_term(
     node: &tree_sitter::Node<'_>,
     source: &str,
+    env: &mut Env<'_>,
 ) -> Result<serde_json::Value, UnsupportedConfig> {
     if let Some(scalar) = encode_scalar(node, source)? {
         return Ok(scalar);
@@ -541,14 +628,14 @@ fn encode_term(
         "list" => {
             let mut items = Vec::new();
             for item in list_items(node, source, "list param")? {
-                items.push(encode_term(&item, source)?);
+                items.push(encode_term(&item, source, env)?);
             }
             Ok(serde_json::Value::Array(items))
         }
         "tuple" => {
             let mut items = Vec::new();
             for item in named_non_comment(node) {
-                items.push(encode_term(&item, source)?);
+                items.push(encode_term(&item, source, env)?);
             }
             let mut map = serde_json::Map::new();
             map.insert("tuple".to_owned(), serde_json::Value::Array(items));
@@ -556,11 +643,89 @@ fn encode_term(
         }
         "sigil" => encode_sigil(node, source),
         "binary_operator" => encode_range(node, source),
-        "unary_operator" => encode_signed(node, source),
+        "unary_operator" => encode_signed(node, source, env),
+        "call" => match encode_get_env(node, source, env)? {
+            Some(value) => Ok(value),
+            None => Err(UnsupportedConfig(
+                "executable term of kind `call` needs native execution".to_owned(),
+            )),
+        },
         _ => Err(UnsupportedConfig(format!(
             "executable term of kind `{}` needs native execution",
             node.kind()
         ))),
+    }
+}
+
+/// True for a `System.get_env` remote-call target (`dot` of alias
+/// `System` and identifier `get_env`); anything else keeps the generic
+/// fail-closed call reason.
+fn is_system_get_env(target: &tree_sitter::Node<'_>, source: &str) -> bool {
+    if target.kind() != "dot" {
+        return false;
+    }
+    let receiver = target
+        .child_by_field_name("left")
+        .filter(|left| left.kind() == "alias")
+        .is_some_and(|left| text_of(&left, source).is_ok_and(|text| text == "System"));
+    let function = target
+        .child_by_field_name("right")
+        .filter(|right| right.kind() == "identifier")
+        .is_some_and(|right| text_of(&right, source).is_ok_and(|text| text == "get_env"));
+    receiver && function
+}
+/// Resolve the sole admitted executable form, `System.get_env/1,2`.
+///
+/// Returns `Ok(None)` for any other call so the caller keeps the generic
+/// fail-closed reason. Mirrors native `System.get_env(name, default \\ nil)`
+/// except that an unset variable without a (non-`nil`) literal default is an
+/// explicit [`UnsupportedConfig`] naming the variable instead of `nil`.
+fn encode_get_env(
+    node: &tree_sitter::Node<'_>,
+    source: &str,
+    env: &mut Env<'_>,
+) -> Result<Option<serde_json::Value>, UnsupportedConfig> {
+    let Some(target) = node.child_by_field_name("target") else {
+        return Ok(None);
+    };
+    if !is_system_get_env(&target, source) {
+        return Ok(None);
+    }
+    let Some(arguments) = node
+        .children(&mut node.walk())
+        .find(|child| child.kind() == "arguments")
+    else {
+        return Ok(None);
+    };
+    let args = named_non_comment(&arguments);
+    let (name_node, default_node) = match args.as_slice() {
+        [name] => (*name, None),
+        [name, default] => (*name, Some(*default)),
+        _ => {
+            return Err(UnsupportedConfig(format!(
+                "System.get_env takes 1 or 2 arguments (found {})",
+                args.len()
+            )));
+        }
+    };
+    if name_node.kind() != "string" {
+        return Err(UnsupportedConfig(format!(
+            "System.get_env variable name must be a literal string (found {})",
+            name_node.kind()
+        )));
+    }
+    let name = string_raw(&name_node, source)?;
+    match env.get(&name) {
+        Some(value) => Ok(Some(serde_json::Value::String(value))),
+        None => match default_node {
+            None => Err(UnsupportedConfig(format!(
+                "System.get_env(\"{name}\") is unset and has no default"
+            ))),
+            Some(default) if default.kind() == "nil" => Err(UnsupportedConfig(format!(
+                "System.get_env(\"{name}\") is unset and defaults to nil"
+            ))),
+            Some(default) => Ok(Some(encode_term(&default, source, env)?)),
+        },
     }
 }
 
@@ -699,6 +864,7 @@ fn encode_range(
 fn encode_signed(
     node: &tree_sitter::Node<'_>,
     source: &str,
+    env: &mut Env<'_>,
 ) -> Result<serde_json::Value, UnsupportedConfig> {
     let mut cursor = node.walk();
     let mut sign = None;
@@ -722,7 +888,7 @@ fn encode_signed(
             "only signed number literals parse statically".to_owned(),
         ));
     }
-    let mut value = encode_term(&operand, source)?;
+    let mut value = encode_term(&operand, source, env)?;
     if sign == Some("-") {
         if let Some(number) = value.as_i64() {
             value = serde_json::Value::Number((-number).into());
@@ -738,6 +904,171 @@ mod tests {
     use super::*;
 
     const MINIMAL: &str = "%{\n  configs: [\n    %{\n      name: \"default\",\n      files: %{included: [\"lib/\", \"test/\"]},\n      checks: %{enabled: [{Credo.Check.Warning.IoInspect, []}]}\n    }\n  ]\n}\n";
+
+    /// Fixed-table parse so parallel tests never mutate process-global env.
+    /// Unique `QREDO_TEST_GETENV_*` names additionally guard against real
+    /// environment collisions.
+    fn parse_with_env(
+        source: &str,
+        vars: &BTreeMap<String, String>,
+    ) -> Result<CredoConfig, UnsupportedConfig> {
+        parse_config_with_lookup(source, "default", &|name| vars.get(name).cloned())
+    }
+
+    fn table(vars: &[(&str, &str)]) -> BTreeMap<String, String> {
+        vars.iter()
+            .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+            .collect()
+    }
+
+    fn param_source(value_src: &str) -> String {
+        format!(
+            "%{{configs: [%{{name: \"default\", checks: %{{enabled: [{{Credo.Check.Warning.IoInspect, [label: {value_src}]}}]}}}}]}}\n"
+        )
+    }
+
+    #[test]
+    fn getenv_set_var_resolves_and_snapshots() {
+        let vars = table(&[("QREDO_TEST_GETENV_SET", "fast")]);
+        let source = param_source("System.get_env(\"QREDO_TEST_GETENV_SET\")");
+        let config = parse_with_env(&source, &vars).expect("set var resolves");
+        assert_eq!(
+            config.checks[0].params.get("label").map(String::as_str),
+            Some("fast")
+        );
+        assert_eq!(
+            config.env_snapshot.get("QREDO_TEST_GETENV_SET"),
+            Some(&Some("fast".to_owned()))
+        );
+    }
+
+    #[test]
+    fn getenv_unset_without_default_fails_closed_naming_var() {
+        let source = param_source("System.get_env(\"QREDO_TEST_GETENV_UNSET\")");
+        let error = parse_with_env(&source, &table(&[])).expect_err("unset rejects");
+        assert!(
+            error.0.contains("QREDO_TEST_GETENV_UNSET"),
+            "names the variable: {error:?}"
+        );
+    }
+
+    #[test]
+    fn getenv_unset_with_default_uses_default() {
+        let vars = table(&[]);
+        let source = param_source("System.get_env(\"QREDO_TEST_GETENV_DFLT\", \"dflt\")");
+        let config = parse_with_env(&source, &vars).expect("default applies");
+        assert_eq!(
+            config.checks[0].params.get("label").map(String::as_str),
+            Some("dflt")
+        );
+        assert_eq!(
+            config.env_snapshot.get("QREDO_TEST_GETENV_DFLT"),
+            Some(&None)
+        );
+    }
+
+    #[test]
+    fn getenv_set_var_wins_over_default() {
+        let vars = table(&[("QREDO_TEST_GETENV_WIN", "fast")]);
+        let source = param_source("System.get_env(\"QREDO_TEST_GETENV_WIN\", \"dflt\")");
+        let config = parse_with_env(&source, &vars).expect("set var wins");
+        assert_eq!(
+            config.checks[0].params.get("label").map(String::as_str),
+            Some("fast")
+        );
+    }
+
+    #[test]
+    fn getenv_nonliteral_name_fails_closed() {
+        for value_src in ["System.get_env(name)", "System.get_env(\"A\" <> \"B\")"] {
+            let source = param_source(value_src);
+            assert!(
+                parse_with_env(&source, &table(&[])).is_err(),
+                "non-literal name rejected: {value_src}"
+            );
+        }
+    }
+
+    #[test]
+    fn getenv_nested_inside_list_param() {
+        let vars = table(&[("QREDO_TEST_GETENV_NEST", "fast")]);
+        let source = param_source("[System.get_env(\"QREDO_TEST_GETENV_NEST\"), :extra]");
+        let config = parse_with_env(&source, &vars).expect("nested resolves");
+        assert_eq!(
+            config.checks[0].params.get("label").map(String::as_str),
+            Some("[\"fast\",\":extra\"]")
+        );
+        assert_eq!(
+            config.env_snapshot.get("QREDO_TEST_GETENV_NEST"),
+            Some(&Some("fast".to_owned()))
+        );
+    }
+
+    #[test]
+    fn getenv_wrong_arity_fails_closed() {
+        for value_src in ["System.get_env()", "System.get_env(\"A\", \"b\", \"c\")"] {
+            let source = param_source(value_src);
+            assert!(
+                parse_with_env(&source, &table(&[])).is_err(),
+                "wrong arity rejected: {value_src}"
+            );
+        }
+    }
+
+    #[test]
+    fn getenv_nil_default_on_miss_fails_closed() {
+        let source = param_source("System.get_env(\"QREDO_TEST_GETENV_NIL\", nil)");
+        let error = parse_with_env(&source, &table(&[])).expect_err("nil miss rejects");
+        assert!(
+            error.0.contains("QREDO_TEST_GETENV_NIL"),
+            "names the variable: {error:?}"
+        );
+    }
+
+    #[test]
+    fn getenv_snapshot_records_every_consulted_var() {
+        let vars = table(&[("QREDO_TEST_GETENV_SNAP_SET", "fast")]);
+        let source = param_source(
+            "[System.get_env(\"QREDO_TEST_GETENV_SNAP_SET\"), System.get_env(\"QREDO_TEST_GETENV_SNAP_MISS\", \"d\")]",
+        );
+        let config = parse_with_env(&source, &vars).expect("both resolve");
+        assert_eq!(
+            config.env_snapshot.get("QREDO_TEST_GETENV_SNAP_SET"),
+            Some(&Some("fast".to_owned()))
+        );
+        assert_eq!(
+            config.env_snapshot.get("QREDO_TEST_GETENV_SNAP_MISS"),
+            Some(&None)
+        );
+    }
+
+    #[test]
+    fn getenv_real_path_unset_fails_closed_naming_var() {
+        // No env mutation: a unique surely-absent name exercises the real
+        // `std::env` lookup through the public entry point.
+        let source = param_source("System.get_env(\"QREDO_TEST_GETENV_ABSENT_QREDO\")");
+        let error = parse_config(&source, "default").expect_err("unset rejects");
+        assert!(
+            error.0.contains("QREDO_TEST_GETENV_ABSENT_QREDO"),
+            "names the variable: {error:?}"
+        );
+    }
+
+    #[test]
+    fn getenv_other_calls_stay_fail_closed() {
+        for value_src in [
+            "Mix.env()",
+            "System.fetch_env(\"QREDO_TEST_GETENV_SET\")",
+            "System.get_env!(\"QREDO_TEST_GETENV_SET\")",
+        ] {
+            let vars = table(&[("QREDO_TEST_GETENV_SET", "fast")]);
+            let source = param_source(value_src);
+            assert!(
+                parse_with_env(&source, &vars).is_err(),
+                "still rejected: {value_src}"
+            );
+        }
+    }
 
     #[test]
     fn minimal_config_parses() {
@@ -853,7 +1184,7 @@ mod tests {
     fn executable_constructs_are_explicit() {
         for source in [
             "%{configs: [%{name: \"default\", checks: Mix.env()}]}\n",
-            "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Warning.IoInspect, [path: System.get_env(\"X\")]}]}}]}\n",
+            "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Warning.IoInspect, [path: System.fetch_env(\"X\")]}]}}]}\n",
             "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Warning.IoInspect, [label: \"a#{1}b\"]}]}}]}\n",
         ] {
             assert!(

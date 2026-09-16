@@ -11,6 +11,8 @@
 
 use std::path::{Path, PathBuf};
 
+mod cmd_browse;
+
 /// Parsed command line.
 #[derive(Debug, PartialEq, Eq)]
 struct Args {
@@ -23,21 +25,39 @@ struct Args {
 #[derive(Debug, PartialEq, Eq)]
 enum Command {
     Suggest(Box<SuggestArgs>),
+    List(Box<SuggestArgs>),
+    Categories,
+    Info(Box<InfoArgs>),
     Version,
     Help,
     SuggestHelp,
     Unimplemented(&'static str),
 }
 
+/// `info` options (subset of the suggest surface plus `--verbose`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct InfoArgs {
+    paths: Vec<String>,
+    working_dir: Option<PathBuf>,
+    config_file: Option<PathBuf>,
+    config_name: String,
+    files_included: Vec<String>,
+    files_excluded: Vec<String>,
+    verbose: bool,
+}
+
 /// Native subcommands by implementation status.
 fn lookup_command(word: &str) -> Option<Command> {
     match word {
         "suggest" => Some(Command::Suggest(Box::default())),
+        "list" => Some(Command::List(Box::default())),
+        "categories" => Some(Command::Categories),
+        "info" => Some(Command::Info(Box::default())),
         "version" => Some(Command::Version),
         "help" => Some(Command::Help),
-        "list" | "categories" | "info" | "explain" | "diff" | "gen.check" | "gen.config" => Some(
-            Command::Unimplemented("not yet implemented in this preview"),
-        ),
+        "explain" | "diff" | "gen.check" | "gen.config" => Some(Command::Unimplemented(
+            "not yet implemented in this preview",
+        )),
         _ => None,
     }
 }
@@ -192,6 +212,12 @@ fn parse_args(raw: &[String]) -> Result<Args, ParseError> {
                     Command::Suggest(Box::new(parse_suggest_vec(rest)?))
                 }
             }
+            Some(Command::List(_)) => {
+                let (rest, _) = strip_help(words[1..].to_vec());
+                Command::List(Box::new(parse_suggest_vec(rest)?))
+            }
+            Some(Command::Info(_)) => Command::Info(Box::new(parse_info_vec(words[1..].to_vec())?)),
+            Some(Command::Categories) => Command::Categories,
             Some(other) => other,
             None => {
                 let (words, help) = strip_help(words);
@@ -221,6 +247,60 @@ fn strip_help(words: Vec<String>) -> (Vec<String>, bool) {
         })
         .collect();
     (kept, help)
+}
+
+/// Parse info flags and positionals from owned words.
+fn parse_info_vec(words: Vec<String>) -> Result<InfoArgs, ParseError> {
+    let mut args = InfoArgs {
+        config_name: "default".to_owned(),
+        ..InfoArgs::default()
+    };
+    // `..Default::default()` above would also work; the explicit name keeps
+    // the default visible next to the suggest parser default.
+    let mut words = words.into_iter().peekable();
+    let mut positional = Vec::new();
+    while let Some(word) = words.next() {
+        match word.as_str() {
+            "--verbose" => args.verbose = true,
+            "--config-file" => {
+                args.config_file = Some(PathBuf::from(take_value(
+                    &mut words,
+                    "info",
+                    "--config-file",
+                )?));
+            }
+            "--config-name" | "-C" => {
+                args.config_name = take_value(&mut words, "info", "--config-name")?;
+            }
+            "--working-dir" => {
+                args.working_dir = Some(PathBuf::from(take_value(
+                    &mut words,
+                    "info",
+                    "--working-dir",
+                )?));
+            }
+            "--files-included" => {
+                args.files_included.extend(split_list(&take_value(
+                    &mut words,
+                    "info",
+                    "--files-included",
+                )?));
+            }
+            "--files-excluded" => {
+                args.files_excluded.extend(split_list(&take_value(
+                    &mut words,
+                    "info",
+                    "--files-excluded",
+                )?));
+            }
+            flag if flag.starts_with('-') => {
+                return Err(ParseError::InvalidOption(unknown_switch("info", flag)));
+            }
+            _ => positional.push(word),
+        }
+    }
+    args.paths = positional;
+    Ok(args)
 }
 
 /// Parse suggest flags and positionals from owned words.
@@ -723,7 +803,18 @@ fn print_report(
         }
         Format::Oneline | Format::Flycheck | Format::Json | Format::Sarif => {
             let absolute = absolutized(report, &context.root);
-            let machine = qredo::format_machine::MachineContext::new(context.root.clone());
+            let mut machine = qredo::format_machine::MachineContext::new(context.root.clone());
+            if matches!(args.format, Format::Sarif) {
+                let mut seen = std::collections::BTreeSet::new();
+                for issue in &absolute.issues {
+                    if seen.insert(issue.check.clone()) {
+                        machine = machine.with_rule_doc(
+                            issue.check.clone(),
+                            qredo::check_docs::sarif_rule_doc(&issue.check),
+                        );
+                    }
+                }
+            }
             let text = match args.format {
                 Format::Oneline => qredo::format_machine::render_oneline(&absolute, &machine),
                 Format::Flycheck => qredo::format_machine::render_flycheck(&absolute, &machine),
@@ -835,55 +926,33 @@ fn run_with(argv: &[String]) -> i32 {
             2
         }
         Command::Suggest(suggest) => run_suggest(&suggest),
+        Command::List(list) => run_list(&list),
+        Command::Categories => {
+            let (text, code) = cmd_browse::run_categories();
+            print!("{text}");
+            code
+        }
+        Command::Info(info) => run_info(&info),
     }
 }
 
 /// Execute one `suggest` run, returning the exit code.
 fn run_suggest(args: &SuggestArgs) -> i32 {
-    let Some(root) = working_root(args) else {
-        return 2;
-    };
-    // A leading existing directory becomes the resolution root,
-    // mirroring native behavior; the rest are file patterns.
-    let (root, patterns) = split_root(&root, &args.paths);
-    let Some(config_path) = config_path(args, &root) else {
-        return 2;
-    };
-    if !config_path.is_file() {
-        let (message, code) = missing_config(&config_path);
-        eprintln!("{message}");
-        return code;
-    }
-    let Some(config_source) = read_config(&config_path) else {
-        return 2;
+    let loaded = match load_run(
+        &args.paths,
+        args.working_dir.as_ref(),
+        args.config_file.as_ref(),
+        &args.config_name,
+    ) {
+        Ok(loaded) => loaded,
+        Err(code) => return code,
     };
     let Some(selection) = load_selection(args) else {
         return 1;
     };
-    // Discovery needs the static config; an unreadable one fails here
-    // with the same explicit reason as the pipeline below.
-    let config = match qredo::parse_config(&config_source, &args.config_name) {
-        Ok(config) => config,
-        Err(unsupported) => {
-            eprintln!("warning: failed to parse config file: {}", unsupported.0);
-            return 129;
-        }
+    let Ok((files, load_microseconds)) = discover_files(&loaded) else {
+        return 1;
     };
-    let load_start = std::time::Instant::now();
-    let found = match discover(
-        &root,
-        &patterns,
-        &config.files_included,
-        &config.files_excluded,
-    ) {
-        Ok(found) => found,
-        Err(missing) => {
-            eprintln!("{}", unreadable_file(&missing));
-            return 1;
-        }
-    };
-    let files = read_found(&found);
-    let load_microseconds = micros(load_start.elapsed());
     match resolve_min_priority(args) {
         Ok(_) => {}
         Err(message) => {
@@ -891,8 +960,82 @@ fn run_suggest(args: &SuggestArgs) -> i32 {
             return 1;
         }
     }
-    let context = report_context(args, &config, &selection, root, load_microseconds);
-    report_exit(args, &files, &config_source, selection, context)
+    let context = report_context(
+        args,
+        &loaded.config,
+        &selection,
+        loaded.root,
+        load_microseconds,
+    );
+    report_exit(args, &files, &loaded.config_source, selection, context)
+}
+
+/// Shared load preamble for file-analyzing commands: resolution root,
+/// config discovery and static parse. Prints the failure reason and
+/// yields its exit code on `Err`.
+fn load_run(
+    paths: &[String],
+    working_dir: Option<&PathBuf>,
+    config_file: Option<&PathBuf>,
+    config_name: &str,
+) -> Result<LoadedRun, i32> {
+    let base = match working_dir {
+        Some(dir) => (*dir).clone(),
+        None => match std::env::current_dir() {
+            Ok(dir) => dir,
+            Err(error) => {
+                eprintln!("cannot read working directory: {error}");
+                return Err(2);
+            }
+        },
+    };
+    // A leading existing directory becomes the resolution root,
+    // mirroring native behavior; the rest are file patterns.
+    let (root, patterns) = split_root(&base, paths);
+    let config_path = if let Some(path) = config_file {
+        (*path).clone()
+    } else {
+        let Some(path) = discover_config(&root) else {
+            eprintln!(
+                "no .credo.exs found walking up from {}",
+                root.to_string_lossy()
+            );
+            return Err(2);
+        };
+        path
+    };
+    if !config_path.is_file() {
+        let (message, code) = missing_config(&config_path);
+        eprintln!("{message}");
+        return Err(code);
+    }
+    let Some(config_source) = read_config(&config_path) else {
+        return Err(2);
+    };
+    // Discovery needs the static config; an unreadable one fails here
+    // with the same explicit reason as the pipeline below.
+    match qredo::parse_config(&config_source, config_name) {
+        Ok(config) => Ok(LoadedRun {
+            root,
+            patterns,
+            config_path,
+            config_source,
+            config,
+        }),
+        Err(unsupported) => {
+            eprintln!("warning: failed to parse config file: {}", unsupported.0);
+            Err(129)
+        }
+    }
+}
+
+/// Loaded run inputs shared by the file-analyzing commands.
+struct LoadedRun {
+    root: PathBuf,
+    patterns: Vec<String>,
+    config_path: PathBuf,
+    config_source: String,
+    config: qredo::CredoConfig,
 }
 
 /// CLI check selection with native regex pre-compilation: an invalid
@@ -931,33 +1074,174 @@ fn report_context(
     }
 }
 
-/// Resolution root: `--working-dir` or the process working directory.
-fn working_root(args: &SuggestArgs) -> Option<PathBuf> {
-    if let Some(dir) = &args.working_dir {
-        return Some(dir.clone());
-    }
-    match std::env::current_dir() {
-        Ok(dir) => Some(dir),
-        Err(error) => {
-            eprintln!("cannot read working directory: {error}");
-            None
+/// Execute one `list` run: same discovery and pipeline as suggest,
+/// per-file grouped rendering.
+fn run_list(args: &SuggestArgs) -> i32 {
+    let loaded = match load_run(
+        &args.paths,
+        args.working_dir.as_ref(),
+        args.config_file.as_ref(),
+        &args.config_name,
+    ) {
+        Ok(loaded) => loaded,
+        Err(code) => return code,
+    };
+    let Some(selection) = load_selection(args) else {
+        return 1;
+    };
+    let Ok((files, load_microseconds)) = discover_files(&loaded) else {
+        return 1;
+    };
+    let min_priority = match resolve_min_priority(args) {
+        Ok(priority) => priority,
+        Err(message) => {
+            eprintln!("{message}");
+            return 1;
+        }
+    };
+    let context = cmd_browse::ListContext {
+        check_count: check_count(&loaded.config, &selection, min_priority),
+        load_microseconds,
+        run_microseconds: 0,
+        strict_hint: min_priority < 0,
+        mute_exit_status: args.mute_exit_status,
+    };
+    let run_start = std::time::Instant::now();
+    let outcome = qredo::integration::execute_selected(
+        &loaded.config_source,
+        &args.config_name,
+        &files,
+        min_priority,
+        selection,
+    );
+    let mut context = context;
+    context.run_microseconds = micros(run_start.elapsed());
+    finish_list(&files, outcome, &context)
+}
+
+/// Print one `list` outcome, returning the exit code.
+fn finish_list(
+    files: &[qredo::RunnerFile],
+    outcome: Result<qredo::RunReport, qredo::integration::Fallback>,
+    context: &cmd_browse::ListContext,
+) -> i32 {
+    match outcome {
+        Err(fallback) => {
+            eprintln!("unsupported config: {}", fallback.reason);
+            2
+        }
+        Ok(report) => {
+            for error in &report.errors {
+                eprintln!("error: {error:?}");
+            }
+            let (text, code) = cmd_browse::run_list(files, &report, context);
+            print!("{text}");
+            if !report.errors.is_empty() {
+                return 2;
+            }
+            code
         }
     }
 }
 
-/// Config path: explicit `--config-file` or upward `.credo.exs` discovery.
-fn config_path(args: &SuggestArgs, root: &Path) -> Option<PathBuf> {
-    if let Some(path) = &args.config_file {
-        return Some(path.clone());
-    }
-    if let Some(path) = discover_config(root) {
-        return Some(path);
-    }
-    eprintln!(
-        "no .credo.exs found walking up from {}",
-        root.to_string_lossy()
-    );
-    None
+/// Execute one `info` run: config and file inventory without analysis.
+fn run_info(args: &InfoArgs) -> i32 {
+    let loaded = match load_run(
+        &[],
+        args.working_dir.as_ref(),
+        args.config_file.as_ref(),
+        &args.config_name,
+    ) {
+        Ok(loaded) => loaded,
+        Err(code) => return code,
+    };
+    // Only the first positional feeds `info`; the rest are ignored.
+    let patterns: Vec<String> = args.paths.first().cloned().into_iter().collect();
+    let (root, patterns) = split_root(&loaded.root, &patterns);
+    let config = loaded.config;
+    let files = info_files(&root, &patterns, &config, &args.files_included);
+    let context = cmd_browse::InfoContext {
+        credo_version: env!("CARGO_PKG_VERSION"),
+        elixir_version: "1.20.2",
+        erlang_version: "29",
+        verbose: args.verbose,
+        embedded_inspect: &embedded_default_config(),
+        config: &config,
+        config_path: &loaded.config_path.to_string_lossy(),
+        config_source: &loaded.config_source,
+        files: &files,
+    };
+    let (text, code) = cmd_browse::run_info(&context);
+    print!("{text}");
+    code
+}
+
+/// Native `info --verbose` embeds its compile-time `.credo.exs` (the
+/// pinned upstream default config, vendored under
+/// `compatibility/upstream`), inspected with the printable limit.
+fn embedded_default_config() -> String {
+    cmd_browse::elixir_inspect_string(include_str!(
+        "../compatibility/upstream/credo_default_config.exs"
+    ))
+}
+
+/// File inventory for `info`: first positional only, else live
+/// `--files-included`, else the config set; nonexistent positionals are
+/// silently ignored (never crash).
+fn info_files(
+    root: &Path,
+    patterns: &[String],
+    config: &qredo::CredoConfig,
+    files_included: &[String],
+) -> Vec<String> {
+    let found: Vec<(String, PathBuf)> = if patterns.is_empty() && files_included.is_empty() {
+        discover(root, &[], &config.files_included, &config.files_excluded).unwrap_or_default()
+    } else if patterns.is_empty() {
+        // `--files-included` is live for `info` (unlike `suggest`).
+        let mut collected = Vec::new();
+        collect_included(root, files_included, &mut collected);
+        collected
+            .into_iter()
+            .filter(|(relative, path)| {
+                let absolute = path.to_string_lossy().into_owned();
+                !config
+                    .files_excluded
+                    .iter()
+                    .any(|entry| entry_matches(entry, relative) || entry_matches(entry, &absolute))
+            })
+            .collect()
+    } else {
+        match resolve_positionals(root, patterns) {
+            Ok(paths) => paths
+                .into_iter()
+                .map(|path| (display_name(root, &path), path))
+                .collect(),
+            Err(_) => Vec::new(),
+        }
+    };
+    found
+        .into_iter()
+        .map(|(_, path)| path.to_string_lossy().into_owned())
+        .collect()
+}
+
+/// Discover and read one loaded run's files with load-phase timing.
+fn discover_files(loaded: &LoadedRun) -> Result<(Vec<qredo::RunnerFile>, u64), i32> {
+    let load_start = std::time::Instant::now();
+    let found = match discover(
+        &loaded.root,
+        &loaded.patterns,
+        &loaded.config.files_included,
+        &loaded.config.files_excluded,
+    ) {
+        Ok(found) => found,
+        Err(missing) => {
+            eprintln!("{}", unreadable_file(&missing));
+            return Err(1);
+        }
+    };
+    let files = read_found(&found);
+    Ok((files, micros(load_start.elapsed())))
 }
 
 /// Read the config file to source text.
@@ -1114,15 +1398,7 @@ mod tests {
 
     #[test]
     fn future_commands_error_explicitly() {
-        for command in [
-            "list",
-            "categories",
-            "info",
-            "explain",
-            "diff",
-            "gen.check",
-            "gen.config",
-        ] {
+        for command in ["explain", "diff", "gen.check", "gen.config"] {
             assert!(
                 matches!(
                     parse_args(&argv(&[command])).expect("parses").command,
@@ -1131,6 +1407,43 @@ mod tests {
                 "{command}"
             );
         }
+    }
+
+    #[test]
+    fn browse_commands_parse() {
+        assert!(matches!(
+            parse_args(&argv(&["list"])).expect("parses").command,
+            Command::List(_)
+        ));
+        assert_eq!(
+            parse_args(&argv(&["categories"])).expect("parses").command,
+            Command::Categories
+        );
+        match parse_args(&argv(&["info", "--verbose"]))
+            .expect("parses")
+            .command
+        {
+            Command::Info(info) => assert!(info.verbose),
+            other => panic!("expected info, got {other:?}"),
+        }
+        match parse_args(&argv(&["info"])).expect("parses").command {
+            Command::Info(info) => {
+                assert!(!info.verbose);
+                assert_eq!(info.config_name, "default");
+            }
+            other => panic!("expected info, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn info_rejects_unknown_switches() {
+        let error = parse_args(&argv(&["info", "--nope"])).expect_err("rejects");
+        assert_eq!(
+            error,
+            ParseError::InvalidOption(
+                "** (credo) Unknown switch for `info` command: --nope".to_owned()
+            )
+        );
     }
 
     #[test]
