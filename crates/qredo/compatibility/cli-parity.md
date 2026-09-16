@@ -58,13 +58,15 @@ explicit carve-out.
 
 ## Carve-outs (documented, not silent)
 
-- Default human formatter bytes (`Checking …`, `┃` layout, `Analysis took …`,
-  summary counts, `--all` truncation): placeholder oneline output until P6.
-  `--format json` stays differential JSONL (native single-object shape is P6).
+- `version` prints the qredo crate version, not `1.8.0-dev`; `info`
+  `System.Credo` reports it too. Per-command `--help` texts are otherwise
+  byte-exact.
+- `gen.check`/`gen.config` take no switches at all: even `--help` is a
+  130 unknown switch, like native.
+- `diff` canonicalizes symlinked working dirs for comparison and display
+  (native repeats its `/tmp`-prefix string-compare bug: Q3 in the probe).
+  With physical paths output is byte-identical.
 - Malformed-config stderr prints qredo's static-parse reason, not the native
   Elixir warning + stack trace; exit code 129 matches.
 - Missing-file crash prints the first `** (File.Error)` line only, not the
   process-specific `Task` frames.
-- `version` prints the qredo crate version, not `1.8.0-dev`.
-- Sibling subcommands (`list`, `explain`, `info`, `categories`, `diff`,
-  `gen.check`, `gen.config`) refuse with exit 2 pending per-command work.

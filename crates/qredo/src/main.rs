@@ -12,6 +12,9 @@
 use std::path::{Path, PathBuf};
 
 mod cmd_browse;
+mod cmd_explain;
+mod cmd_gen;
+mod help_texts;
 
 /// Parsed command line.
 #[derive(Debug, PartialEq, Eq)]
@@ -28,10 +31,14 @@ enum Command {
     List(Box<SuggestArgs>),
     Categories,
     Info(Box<InfoArgs>),
+    Explain(Box<ExplainArgs>),
+    Diff(Box<DiffArgs>),
+    GenConfig,
+    GenCheck(Option<String>),
     Version,
     Help,
     SuggestHelp,
-    Unimplemented(&'static str),
+    HelpFor(&'static str),
 }
 
 /// `info` options (subset of the suggest surface plus `--verbose`).
@@ -53,13 +60,64 @@ fn lookup_command(word: &str) -> Option<Command> {
         "list" => Some(Command::List(Box::default())),
         "categories" => Some(Command::Categories),
         "info" => Some(Command::Info(Box::default())),
+        "explain" => Some(Command::Explain(Box::default())),
+        "diff" => Some(Command::Diff(Box::default())),
+        "gen.config" => Some(Command::GenConfig),
+        "gen.check" => Some(Command::GenCheck(None)),
         "version" => Some(Command::Version),
         "help" => Some(Command::Help),
-        "explain" | "diff" | "gen.check" | "gen.config" => Some(Command::Unimplemented(
-            "not yet implemented in this preview",
-        )),
         _ => None,
     }
+}
+
+/// `explain` options: target positional plus analysis-shaping flags.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct ExplainArgs {
+    target: Option<String>,
+    working_dir: Option<PathBuf>,
+    config_file: Option<PathBuf>,
+    config_name: String,
+    strict: bool,
+    min_priority: Option<String>,
+    format: ExplainFormat,
+    only: Vec<String>,
+    ignore: Vec<String>,
+    checks_with_tag: Vec<String>,
+    enable_disabled: Vec<String>,
+}
+
+/// `explain` output format: only `json` switches rendering.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum ExplainFormat {
+    #[default]
+    Default,
+    Json,
+}
+
+/// `diff` options: git comparison plus the suggest selection surface.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct DiffArgs {
+    positional_ref: Option<String>,
+    from_git_ref: Option<String>,
+    from_dir: Option<PathBuf>,
+    from_git_merge_base: Option<String>,
+    since: Option<String>,
+    show_fixed: bool,
+    show_kept: bool,
+    working_dir: Option<PathBuf>,
+    config_file: Option<PathBuf>,
+    config_name: String,
+    strict: bool,
+    all_priorities: bool,
+    all: bool,
+    min_priority: Option<String>,
+    mute_exit_status: bool,
+    only: Vec<String>,
+    ignore: Vec<String>,
+    checks_with_tag: Vec<String>,
+    checks_without_tag: Vec<String>,
+    enable_disabled: Vec<String>,
 }
 
 /// `suggest` options. One bool per CLI switch, mirroring native flags.
@@ -138,24 +196,6 @@ fn help_text() -> &'static str {
      Use `qredo suggest --help` for suggest options.\n"
 }
 
-/// Suggest-command help text.
-fn suggest_help_text() -> &'static str {
-    "Usage: qredo suggest [paths...] [options]\n\
-     \n\
-     Suggests objects from every category that qredo thinks can be improved.\n\
-     \n\
-     Suggest options:\n\
-       --config-file FILE        Use the given config file\n\
-       --config-name NAME        Use the given config instead of \"default\"\n\
-       --strict                  Alias for --all-priorities\n\
-       --all-priorities          Show all issues including low priority ones\n\
-       --min-priority LEVEL      Minimum priority (higher,high,normal,low,ignore or number)\n\
-       --mute-exit-status        Exit with status zero even if there are issues\n\
-       --only CHECKS             Only include checks matching the given strings\n\
-       --ignore CHECKS           Ignore checks matching the given strings\n\
-       --format FORMAT           Display format (json,oneline,flycheck,sarif)\n"
-}
-
 /// qredo version line.
 fn version_text() -> String {
     format!("{}\n", env!("CARGO_PKG_VERSION"))
@@ -185,7 +225,9 @@ enum ParseError {
 
 /// Parse argv (without the program name).
 fn parse_args(raw: &[String]) -> Result<Args, ParseError> {
-    if raw.iter().any(|arg| arg == "-v" || arg == "--version") {
+    // Bare `-v`/`--version` alone prints the version; combined with other
+    // flags it reads as an unknown switch, like native.
+    if raw.len() == 1 && (raw[0] == "-v" || raw[0] == "--version") {
         return Ok(Args {
             command: Command::Version,
         });
@@ -204,21 +246,6 @@ fn parse_args(raw: &[String]) -> Result<Args, ParseError> {
             }
         }
         Some(word) => match lookup_command(word) {
-            Some(Command::Suggest(_)) => {
-                let (rest, help) = strip_help(words[1..].to_vec());
-                if help {
-                    Command::SuggestHelp
-                } else {
-                    Command::Suggest(Box::new(parse_suggest_vec(rest)?))
-                }
-            }
-            Some(Command::List(_)) => {
-                let (rest, _) = strip_help(words[1..].to_vec());
-                Command::List(Box::new(parse_suggest_vec(rest)?))
-            }
-            Some(Command::Info(_)) => Command::Info(Box::new(parse_info_vec(words[1..].to_vec())?)),
-            Some(Command::Categories) => Command::Categories,
-            Some(other) => other,
             None => {
                 let (words, help) = strip_help(words);
                 if help {
@@ -227,9 +254,71 @@ fn parse_args(raw: &[String]) -> Result<Args, ParseError> {
                     Command::Suggest(Box::new(parse_suggest_vec(words)?))
                 }
             }
+            Some(command) => parse_command_tail(command, words[1..].to_vec())?,
         },
     };
     Ok(Args { command })
+}
+
+/// Parse suggest-family words: `--help` wins, otherwise the wrapped
+/// parser runs over the remaining words.
+fn with_help_stripped(
+    rest: Vec<String>,
+    help: Command,
+    run: impl FnOnce(Vec<String>) -> Result<Command, ParseError>,
+) -> Result<Command, ParseError> {
+    let (rest, is_help) = strip_help(rest);
+    if is_help { Ok(help) } else { run(rest) }
+}
+
+/// Parse the words after a known command word into its command.
+fn parse_command_tail(command: Command, rest: Vec<String>) -> Result<Command, ParseError> {
+    match command {
+        Command::Suggest(_) => with_help_stripped(rest, Command::SuggestHelp, |rest| {
+            Ok(Command::Suggest(Box::new(parse_suggest_vec(rest)?)))
+        }),
+        Command::List(_) => with_help_stripped(rest, Command::HelpFor("list"), |rest| {
+            Ok(Command::List(Box::new(parse_suggest_vec(rest)?)))
+        }),
+        Command::Info(_) => with_help_stripped(rest, Command::HelpFor("info"), |rest| {
+            Ok(Command::Info(Box::new(parse_info_vec(rest)?)))
+        }),
+        Command::Categories => Ok(Command::Categories),
+        Command::Version => {
+            if let Some(flag) = rest.iter().find(|arg| arg.starts_with('-')) {
+                return Err(ParseError::InvalidOption(unknown_switch("version", flag)));
+            }
+            Ok(Command::Version)
+        }
+        Command::Explain(_) => with_help_stripped(rest, Command::HelpFor("explain"), |rest| {
+            Ok(Command::Explain(Box::new(parse_explain_vec(rest)?)))
+        }),
+        Command::Diff(_) => with_help_stripped(rest, Command::HelpFor("diff"), |rest| {
+            Ok(Command::Diff(Box::new(parse_diff_vec(rest)?)))
+        }),
+        Command::GenConfig => {
+            if let Some(flag) = rest.iter().find(|arg| arg.starts_with('-')) {
+                return Err(ParseError::InvalidOption(unknown_switch(
+                    "gen.config",
+                    flag,
+                )));
+            }
+            Ok(Command::GenConfig)
+        }
+        Command::GenCheck(_) => parse_gen_check(rest),
+        Command::Help => Ok(Command::Help),
+        Command::SuggestHelp => Ok(Command::SuggestHelp),
+        Command::HelpFor(_) => Ok(command),
+    }
+}
+
+/// Parse `gen.check` positionals: exactly one name is accepted; anything
+/// else prints usage. Any switch is rejected, like native.
+fn parse_gen_check(rest: Vec<String>) -> Result<Command, ParseError> {
+    if let Some(flag) = rest.iter().find(|arg| arg.starts_with('-')) {
+        return Err(ParseError::InvalidOption(unknown_switch("gen.check", flag)));
+    }
+    Ok(Command::GenCheck(rest.into_iter().next()))
 }
 
 /// Split `-h`/`--help` out of suggest words, reporting its presence.
@@ -247,6 +336,135 @@ fn strip_help(words: Vec<String>) -> (Vec<String>, bool) {
         })
         .collect();
     (kept, help)
+}
+
+/// Parse explain flags and positionals: the full suggest surface (native
+/// reuses the suggest switches); the first positional routes the target.
+fn parse_explain_vec(words: Vec<String>) -> Result<ExplainArgs, ParseError> {
+    let suggest = parse_suggest_vec(words)?;
+    let (format, target) = (suggest.format, suggest.paths.first().cloned());
+    Ok(ExplainArgs {
+        target,
+        working_dir: suggest.working_dir,
+        config_file: suggest.config_file,
+        config_name: suggest.config_name,
+        strict: suggest.strict,
+        min_priority: suggest.min_priority,
+        format: match format {
+            Format::Json => ExplainFormat::Json,
+            _ => ExplainFormat::Default,
+        },
+        only: suggest.only,
+        ignore: suggest.ignore,
+        checks_with_tag: suggest.checks_with_tag,
+        enable_disabled: suggest.enable_disabled,
+    })
+}
+
+/// Parse diff flags and positionals: one optional positional ref plus
+/// git selectors and the suggest selection surface.
+fn parse_diff_vec(words: Vec<String>) -> Result<DiffArgs, ParseError> {
+    let mut args = DiffArgs {
+        config_name: "default".to_owned(),
+        ..DiffArgs::default()
+    };
+    let mut words = words.into_iter().peekable();
+    let mut positional = Vec::new();
+    while let Some(word) = words.next() {
+        match word.as_str() {
+            "--show-fixed" => args.show_fixed = true,
+            "--show-kept" => args.show_kept = true,
+            "--strict" => args.strict = true,
+            "--all-priorities" | "-A" => args.all_priorities = true,
+            "--all" | "-a" => args.all = true,
+            "--mute-exit-status" => args.mute_exit_status = true,
+            "--from-git-ref"
+            | "--from-dir"
+            | "--from-git-merge-base"
+            | "--since"
+            | "--config-file"
+            | "--config-name"
+            | "-C"
+            | "--working-dir"
+            | "--min-priority"
+            | "--only"
+            | "--checks"
+            | "-c"
+            | "--ignore"
+            | "--ignore-checks"
+            | "-i"
+            | "--checks-with-tag"
+            | "--checks-without-tag"
+            | "--enable-disabled-checks" => {
+                parse_diff_valued(&mut args, word.as_str(), &mut words)?;
+            }
+            flag if flag.starts_with('-') => {
+                return Err(ParseError::InvalidOption(unknown_switch("diff", flag)));
+            }
+            _ => positional.push(word),
+        }
+    }
+    // First positional is the ref; extras are ignored like native.
+    args.positional_ref = positional.into_iter().next();
+    Ok(args)
+}
+
+/// Apply one `diff` flag that takes a value.
+fn parse_diff_valued(
+    args: &mut DiffArgs,
+    flag: &str,
+    words: &mut std::iter::Peekable<impl Iterator<Item = String>>,
+) -> Result<(), ParseError> {
+    match flag {
+        "--from-git-ref" => {
+            args.from_git_ref = Some(take_value(words, "diff", flag)?);
+        }
+        "--from-dir" => {
+            args.from_dir = Some(PathBuf::from(take_value(words, "diff", flag)?));
+        }
+        "--from-git-merge-base" => {
+            args.from_git_merge_base = Some(take_value(words, "diff", flag)?);
+        }
+        "--since" => {
+            args.since = Some(take_value(words, "diff", flag)?);
+        }
+        "--config-file" => {
+            args.config_file = Some(PathBuf::from(take_value(words, "diff", flag)?));
+        }
+        "--config-name" | "-C" => {
+            args.config_name = take_value(words, "diff", flag)?;
+        }
+        "--working-dir" => {
+            args.working_dir = Some(PathBuf::from(take_value(words, "diff", flag)?));
+        }
+        "--min-priority" => {
+            args.min_priority = Some(take_value(words, "diff", flag)?);
+        }
+        "--only" | "--checks" | "-c" => {
+            args.only
+                .extend(split_list(&take_value(words, "diff", flag)?));
+        }
+        "--ignore" | "--ignore-checks" | "-i" => {
+            args.ignore
+                .extend(split_list(&take_value(words, "diff", flag)?));
+        }
+        "--checks-with-tag" => {
+            args.checks_with_tag
+                .extend(split_list(&take_value(words, "diff", flag)?));
+        }
+        "--checks-without-tag" => {
+            args.checks_without_tag
+                .extend(split_list(&take_value(words, "diff", flag)?));
+        }
+        "--enable-disabled-checks" => {
+            args.enable_disabled
+                .extend(split_list(&take_value(words, "diff", flag)?));
+        }
+        _ => {
+            return Err(ParseError::InvalidOption(unknown_switch("diff", flag)));
+        }
+    }
+    Ok(())
 }
 
 /// Parse info flags and positionals from owned words.
@@ -723,9 +941,14 @@ fn discover(
 /// where included entries are search roots rather than filters.
 fn collect_included(root: &Path, included: &[String], out: &mut Vec<(String, PathBuf)>) {
     for pattern in included {
-        if has_magic(pattern) && Path::new(pattern).is_absolute() {
+        // Display names follow the pattern form: absolute patterns yield
+        // absolute names (so check file-selection matches), relative
+        // patterns yield root-relative names.
+        let absolute_pattern = Path::new(pattern).is_absolute();
+        if has_magic(pattern) && absolute_pattern {
             for path in expand_glob(root, pattern) {
-                out.push((display_name(root, &path), path));
+                let text = path.to_string_lossy().into_owned();
+                out.push((text, path));
             }
             continue;
         }
@@ -739,9 +962,25 @@ fn collect_included(root: &Path, included: &[String], out: &mut Vec<(String, Pat
         }
         let candidate = absolutize(root, Path::new(pattern));
         match std::fs::metadata(&candidate) {
-            Ok(meta) if meta.is_dir() => collect(&candidate, root, out),
+            Ok(meta) if meta.is_dir() => {
+                let mut walked = Vec::new();
+                collect(&candidate, root, &mut walked);
+                if absolute_pattern {
+                    for (_, path) in walked {
+                        let text = path.to_string_lossy().into_owned();
+                        out.push((text, path));
+                    }
+                } else {
+                    out.extend(walked);
+                }
+            }
             Ok(_) if is_elixir_path(pattern) => {
-                out.push((display_name(root, &candidate), candidate));
+                let display = if absolute_pattern {
+                    candidate.to_string_lossy().into_owned()
+                } else {
+                    display_name(root, &candidate)
+                };
+                out.push((display, candidate));
             }
             Ok(_) | Err(_) => {}
         }
@@ -908,7 +1147,12 @@ fn run_with(argv: &[String]) -> i32 {
             return 130;
         }
     };
-    match parsed.command {
+    execute(parsed.command)
+}
+
+/// Execute one parsed command, returning the exit code.
+fn execute(command: Command) -> i32 {
+    match command {
         Command::Version => {
             print!("{}", version_text());
             0
@@ -918,12 +1162,8 @@ fn run_with(argv: &[String]) -> i32 {
             0
         }
         Command::SuggestHelp => {
-            print!("{help}", help = suggest_help_text());
+            print!("{}", help_texts::suggest());
             0
-        }
-        Command::Unimplemented(name) => {
-            eprintln!("{name}: not yet implemented in this preview");
-            2
         }
         Command::Suggest(suggest) => run_suggest(&suggest),
         Command::List(list) => run_list(&list),
@@ -933,6 +1173,31 @@ fn run_with(argv: &[String]) -> i32 {
             code
         }
         Command::Info(info) => run_info(&info),
+        Command::Explain(explain) => run_explain(&explain),
+        Command::Diff(diff) => run_diff(&diff),
+        Command::GenConfig => {
+            let (text, code) = cmd_gen::run_gen_config();
+            print!("{text}");
+            code
+        }
+        Command::GenCheck(name) => {
+            let (text, code) = cmd_gen::run_gen_check(name.as_deref());
+            print!("{text}");
+            code
+        }
+        Command::HelpFor(which) => {
+            print!(
+                "{}",
+                match which {
+                    "list" => help_texts::list(),
+                    "info" => help_texts::info(),
+                    "explain" => help_texts::explain(),
+                    "diff" => help_texts::diff(),
+                    _ => help_texts::general(),
+                }
+            );
+            0
+        }
     }
 }
 
@@ -1142,6 +1407,175 @@ fn finish_list(
             code
         }
     }
+}
+
+/// Execute one `explain` run: usage, check docs, or a located issue.
+fn run_explain(args: &ExplainArgs) -> i32 {
+    let target = match route_explain_target(args) {
+        Ok(target) => target,
+        Err(code) => return code,
+    };
+    let loaded = match load_run(
+        &[],
+        args.working_dir.as_ref(),
+        args.config_file.as_ref(),
+        &args.config_name,
+    ) {
+        Ok(loaded) => loaded,
+        Err(code) => return code,
+    };
+    let selection = match explain_selection(args) {
+        Ok(selection) => selection,
+        Err(code) => return code,
+    };
+    let min_priority = match explicit_min_priority(args.strict, args.min_priority.as_deref()) {
+        Ok(priority) => priority,
+        Err(message) => {
+            eprintln!("{message}");
+            return 1;
+        }
+    };
+    let files = match discover(
+        &loaded.root,
+        &[],
+        &loaded.config.files_included,
+        &loaded.config.files_excluded,
+    ) {
+        Ok(found) => read_found(&found),
+        Err(_) => Vec::new(),
+    };
+    let context = cmd_explain::ExplainContext {
+        target,
+        working_dir: loaded.root,
+        config_name: args.config_name.clone(),
+        config_source: loaded.config_source,
+        files,
+        min_priority,
+        selection,
+    };
+    let (stdout, stderr, code) = match args.format {
+        ExplainFormat::Json => cmd_explain::run_explain_json(&context),
+        ExplainFormat::Default => cmd_explain::run_explain(&context),
+    };
+    print!("{stdout}");
+    eprint!("{stderr}");
+    code
+}
+
+/// Route the first positional to an explain target; usage needs none.
+/// Prints the crash shape for malformed locations.
+fn route_explain_target(args: &ExplainArgs) -> Result<Option<cmd_explain::ExplainTarget>, i32> {
+    // The first positional routes the target; a `path:line[:col]`
+    // location splits there, anything else is a check name.
+    match args.target.as_deref() {
+        None => Ok(None),
+        Some(raw) if is_location_target(raw) => match split_location_target(raw) {
+            Ok((path, line)) => Ok(Some(cmd_explain::ExplainTarget::Location { path, line })),
+            Err(message) => {
+                eprintln!("{message}");
+                Err(1)
+            }
+        },
+        Some(name) => Ok(Some(cmd_explain::ExplainTarget::Check(name.to_owned()))),
+    }
+}
+
+/// Explain check selection with native regex pre-compilation.
+fn explain_selection(args: &ExplainArgs) -> Result<qredo::Selection, i32> {
+    if let Err(message) = compile_selection(&args.only, &args.ignore) {
+        eprintln!("{message}");
+        return Err(1);
+    }
+    Ok(qredo::Selection {
+        only: args.only.clone(),
+        ignore: args.ignore.clone(),
+        checks_with_tag: args.checks_with_tag.clone(),
+        enable_disabled: args.enable_disabled.clone(),
+    })
+}
+/// True for `path:line[:col]` targets: two or three `:` segments, all
+/// non-empty.
+fn is_location_target(raw: &str) -> bool {
+    let parts: Vec<&str> = raw.rsplit(':').collect();
+    matches!(parts.len(), 2 | 3) && parts.iter().all(|part| !part.is_empty())
+}
+
+/// Split a location target; non-integer line/column crashes like native.
+fn split_location_target(raw: &str) -> Result<(String, usize), String> {
+    let mut parts: Vec<&str> = raw.rsplitn(3, ':').collect();
+    parts.reverse();
+    let (path, line_raw, column_raw) = match parts.as_slice() {
+        [path, line] => (*path, *line, None),
+        [path, line, column] => (*path, *line, Some(*column)),
+        _ => return Err(format!("** (ArgumentError) invalid location: {raw}")),
+    };
+    let line: usize = line_raw.parse().map_err(|_| {
+        format!("** (ArgumentError) argument error\n    {raw} is not a valid location")
+    })?;
+    if let Some(column) = column_raw {
+        column.parse::<usize>().map_err(|_| {
+            format!("** (ArgumentError) argument error\n    {raw} is not a valid location")
+        })?;
+    }
+    Ok((path.to_owned(), line))
+}
+
+/// Minimum priority from explicit flags: a `--min-priority` value beats
+/// `--strict` regardless of order, mirroring the suggest surface.
+fn explicit_min_priority(strict: bool, min_priority: Option<&str>) -> Result<i32, String> {
+    if let Some(raw) = min_priority {
+        return match raw {
+            "higher" => Ok(20),
+            "high" => Ok(10),
+            "normal" => Ok(1),
+            "low" => Ok(-10),
+            "ignore" => Ok(-100),
+            _ => raw.parse::<i32>().map_err(|_| invalid_priority(raw)),
+        };
+    }
+    if strict { Ok(-99) } else { Ok(0) }
+}
+
+/// Execute one `diff` run against git HEAD (or the selected previous side).
+fn run_diff(args: &DiffArgs) -> i32 {
+    let working_dir = match &args.working_dir {
+        Some(dir) => dir.clone(),
+        None => match std::env::current_dir() {
+            Ok(dir) => dir,
+            Err(error) => {
+                eprintln!("cannot read working directory: {error}");
+                return 2;
+            }
+        },
+    };
+    let options = qredo::cmd_diff::DiffOptions {
+        working_dir,
+        positional_ref: args.positional_ref.clone(),
+        from_ref: args.from_git_ref.clone(),
+        from_dir: args.from_dir.clone(),
+        from_merge_base: args.from_git_merge_base.clone(),
+        since: args.since.clone(),
+        config_file: args.config_file.clone(),
+        config_name: args.config_name.clone(),
+        strict: args.strict,
+        all_priorities: args.all_priorities,
+        all: args.all,
+        min_priority: args.min_priority.clone(),
+        only: args.only.clone(),
+        ignore: args.ignore.clone(),
+        checks_with_tag: args.checks_with_tag.clone(),
+        checks_without_tag: args.checks_without_tag.clone(),
+        enable_disabled: args.enable_disabled.clone(),
+        files_included: Vec::new(),
+        files_excluded: Vec::new(),
+        show_fixed: args.show_fixed,
+        show_kept: args.show_kept,
+        mute_exit_status: args.mute_exit_status,
+    };
+    let (stdout, stderr, code) = qredo::cmd_diff::run_diff(&options);
+    print!("{stdout}");
+    eprint!("{stderr}");
+    code
 }
 
 /// Execute one `info` run: config and file inventory without analysis.
@@ -1365,17 +1799,29 @@ mod tests {
     }
 
     #[test]
-    fn version_flag_wins_anywhere() {
+    fn version_flag_only_alone() {
+        // Bare `-v`/`--version` prints the version; combined with other
+        // flags it reads as an unknown switch, like native.
         assert_eq!(
-            parse_args(&argv(&["--strict", "-v"]))
-                .expect("parses")
-                .command,
+            parse_args(&argv(&["-v"])).expect("parses").command,
+            Command::Version
+        );
+        assert_eq!(
+            parse_args(&argv(&["--version"])).expect("parses").command,
             Command::Version
         );
         assert_eq!(
             parse_args(&argv(&["version"])).expect("parses").command,
             Command::Version
         );
+        assert_eq!(
+            parse_args(&argv(&["version", "foo"]))
+                .expect("parses")
+                .command,
+            Command::Version
+        );
+        assert!(parse_args(&argv(&["--strict", "-v"])).is_err());
+        assert!(parse_args(&argv(&["version", "--help"])).is_err());
     }
 
     #[test]
@@ -1397,16 +1843,29 @@ mod tests {
     }
 
     #[test]
-    fn future_commands_error_explicitly() {
-        for command in ["explain", "diff", "gen.check", "gen.config"] {
-            assert!(
-                matches!(
-                    parse_args(&argv(&[command])).expect("parses").command,
-                    Command::Unimplemented(_)
-                ),
-                "{command}"
-            );
-        }
+    fn generated_commands_parse() {
+        assert!(matches!(
+            parse_args(&argv(&["explain"])).expect("parses").command,
+            Command::Explain(_)
+        ));
+        assert!(matches!(
+            parse_args(&argv(&["diff"])).expect("parses").command,
+            Command::Diff(_)
+        ));
+        assert_eq!(
+            parse_args(&argv(&["gen.config"])).expect("parses").command,
+            Command::GenConfig
+        );
+        assert_eq!(
+            parse_args(&argv(&["gen.check", "Foo.Bar"]))
+                .expect("parses")
+                .command,
+            Command::GenCheck(Some("Foo.Bar".to_owned()))
+        );
+        assert_eq!(
+            parse_args(&argv(&["gen.check"])).expect("parses").command,
+            Command::GenCheck(None)
+        );
     }
 
     #[test]
@@ -1597,7 +2056,7 @@ mod tests {
     fn version_and_help_texts() {
         assert_eq!(version_text(), format!("{}\n", env!("CARGO_PKG_VERSION")));
         assert!(help_text().contains("suggest"));
-        assert!(suggest_help_text().contains("--strict"));
+        assert!(help_texts::suggest().contains("--strict"));
     }
 
     /// Discovery honors `files.included` over the conventional default:
@@ -1672,16 +2131,17 @@ mod tests {
     #[test]
     fn discover_matches_absolute_included_patterns() {
         // Real harnesses rewrite configs to absolute `included` paths while
-        // running from another directory: absolute patterns must match.
+        // running from another directory: absolute patterns match and
+        // yield absolute names (so check file-selection matches).
         let root = std::env::temp_dir().join("qredo-discover-absinc-test");
         let _ = std::fs::remove_dir_all(&root);
         let path = root.join("lib/a.ex");
         std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
         std::fs::write(&path, "x = 1\n").expect("write");
         let absolute = path.to_string_lossy().into_owned();
-        let found = discover(&root, &[], &[absolute], &[]).expect("discovers");
+        let found = discover(&root, &[], std::slice::from_ref(&absolute), &[]).expect("discovers");
         assert_eq!(found.len(), 1);
-        assert_eq!(found[0].0, "lib/a.ex");
+        assert_eq!(found[0].0, absolute);
         let _ = std::fs::remove_dir_all(&root);
     }
 
