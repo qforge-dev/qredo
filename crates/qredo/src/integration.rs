@@ -63,6 +63,8 @@ fn gate(entry: &crate::CheckEntry) -> Option<Fallback> {
 }
 
 /// Build the native runner over default-param enabled checks.
+/// Disabled checks matching `selection.enable_disabled` (case-insensitive
+/// regex, mirroring native) rejoin the run.
 fn runner_of(
     config: &crate::CredoConfig,
     min_priority: i32,
@@ -72,7 +74,7 @@ fn runner_of(
         checks: config
             .checks
             .iter()
-            .filter(|check| check.enabled)
+            .filter(|check| check.enabled || reenabled(&check.module, &selection.enable_disabled))
             .map(|check| crate::CheckEntry {
                 module: check.module.clone(),
                 enabled: true,
@@ -114,6 +116,17 @@ pub fn execute(
         min_priority,
         crate::Selection::default(),
     )
+}
+
+/// True when a disabled check rejoins via `--enable-disabled-checks`:
+/// any pattern case-insensitive-regex-matches the check name.
+fn reenabled(module: &str, patterns: &[String]) -> bool {
+    patterns.iter().any(|pattern| {
+        regex::RegexBuilder::new(pattern)
+            .case_insensitive(true)
+            .build()
+            .is_ok_and(|expression| expression.is_match(module))
+    })
 }
 
 /// Run the native pipeline for served configs with CLI check selection.
@@ -264,6 +277,33 @@ mod execute_tests {
     }
 
     const ONE_CHECK: &str = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Warning.IoInspect, []}]}}]}\n";
+
+    const DISABLED_CHECK: &str = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Warning.IoInspect, []}], disabled: [{Credo.Check.Warning.Dbg, []}]}}]}\n";
+
+    #[test]
+    fn enable_disabled_checks_rejoins_the_run() {
+        let files = vec![RunnerFile {
+            filename: "lib/a.ex".to_owned(),
+            source: "defmodule A do\n  def a(x) do\n    IO.inspect(x)\n    dbg(x)\n  end\nend\n"
+                .to_owned(),
+        }];
+        let base = execute(DISABLED_CHECK, "default", &files, -99).expect("served");
+        assert_eq!(base.issues.len(), 1);
+        let selection = crate::Selection {
+            enable_disabled: vec!["Dbg".to_owned()],
+            ..crate::Selection::default()
+        };
+        let report =
+            execute_selected(DISABLED_CHECK, "default", &files, -99, selection).expect("served");
+        assert_eq!(report.issues.len(), 2);
+        let nomatch = crate::Selection {
+            enable_disabled: vec!["NoSuchCheck".to_owned()],
+            ..crate::Selection::default()
+        };
+        let stayed =
+            execute_selected(DISABLED_CHECK, "default", &files, -99, nomatch).expect("served");
+        assert_eq!(stayed.issues.len(), 1);
+    }
 
     #[test]
     fn subset_execution_returns_only_requested_files() {

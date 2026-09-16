@@ -17,6 +17,12 @@ pub struct Selection {
     pub only: Vec<String>,
     /// Skip checks matching these patterns (`--ignore`).
     pub ignore: Vec<String>,
+    /// Run only checks carrying any of these tags (`--checks-with-tag`).
+    /// Empty: no restriction. Unknown tags match nothing.
+    pub checks_with_tag: Vec<String>,
+    /// Re-enable disabled config checks matching these patterns
+    /// (`--enable-disabled-checks`, case-insensitive regex).
+    pub enable_disabled: Vec<String>,
 }
 
 impl Selection {
@@ -32,7 +38,8 @@ impl Selection {
     }
 
     /// True when `check` (e.g. `Credo.Check.Readability.TrailingBlankLine`)
-    /// runs under this selection. `ignore` wins over `only`.
+    /// runs under this selection. `ignore` wins over `only`; a non-empty
+    /// tag filter requires the check to carry any listed tag.
     ///
     /// Invalid patterns never match; call [`Selection::validate`] first when
     /// strictness is required ([`resolve`] reports them explicitly).
@@ -41,11 +48,21 @@ impl Selection {
         if matches_any(check, &self.ignore) {
             return false;
         }
+        if !self.checks_with_tag.is_empty() && !has_any_tag(check, &self.checks_with_tag) {
+            return false;
+        }
         if self.only.is_empty() {
             return true;
         }
         matches_any(check, &self.only)
     }
+}
+
+/// True when the check carries any of the listed tags (union).
+/// Unknown tags match nothing, mirroring native `String.to_atom` behavior.
+fn has_any_tag(check: &str, tags: &[String]) -> bool {
+    let carried = crate::check_meta::check_tags(check);
+    tags.iter().any(|tag| carried.contains(&tag.as_str()))
 }
 
 /// Case-insensitive regex match of one pattern against `check`.
@@ -117,6 +134,7 @@ mod tests {
         let selection = Selection {
             only: vec![CHECK.to_owned()],
             ignore: Vec::new(),
+            ..Selection::default()
         };
         assert!(selection.should_run(CHECK));
     }
@@ -126,6 +144,7 @@ mod tests {
         let selection = Selection {
             only: vec!["Credo.Check.Warning.IoInspect".to_owned()],
             ignore: Vec::new(),
+            ..Selection::default()
         };
         assert!(!selection.should_run(CHECK));
     }
@@ -135,6 +154,7 @@ mod tests {
         let selection = Selection {
             only: vec![CHECK.to_owned()],
             ignore: vec![CHECK.to_owned()],
+            ..Selection::default()
         };
         assert!(!selection.should_run(CHECK));
     }
@@ -152,6 +172,7 @@ mod tests {
         let selection = Selection {
             only: vec!["Credo.Check.Warning.IoInspect".to_owned()],
             ignore: Vec::new(),
+            ..Selection::default()
         };
         assert_eq!(
             resolve(CHECK, &selection, &ConfigSource::Default),
@@ -173,6 +194,7 @@ mod tests {
         let selection = Selection {
             only: vec!["Credo.Check.Warning.IoInspect".to_owned()],
             ignore: Vec::new(),
+            ..Selection::default()
         };
         let config = ConfigSource::ExecutableFile("config/.credo.exs".to_owned());
         assert_eq!(
@@ -186,6 +208,7 @@ mod tests {
         let selection = Selection {
             only: vec!["trailingblankline".to_owned()],
             ignore: Vec::new(),
+            ..Selection::default()
         };
         assert!(selection.should_run(CHECK));
     }
@@ -195,6 +218,7 @@ mod tests {
         let selection = Selection {
             only: vec!["([".to_owned()],
             ignore: Vec::new(),
+            ..Selection::default()
         };
         assert_eq!(
             resolve(CHECK, &selection, &ConfigSource::Default),
@@ -206,5 +230,40 @@ mod tests {
     #[test]
     fn valid_selection_validates() {
         assert_eq!(Selection::default().validate(), Ok(()));
+    }
+
+    #[test]
+    fn tag_filter_keeps_tagged_checks() {
+        let selection = Selection {
+            checks_with_tag: vec!["formatter".to_owned()],
+            ..Selection::default()
+        };
+        assert!(selection.should_run("Credo.Check.Readability.TrailingWhiteSpace"));
+        assert!(!selection.should_run("Credo.Check.Warning.IoInspect"));
+    }
+
+    #[test]
+    fn tag_filter_is_union_and_unknown_matches_nothing() {
+        let selection = Selection {
+            checks_with_tag: vec!["formatter".to_owned(), "controversial".to_owned()],
+            ..Selection::default()
+        };
+        assert!(selection.should_run("Credo.Check.Readability.TrailingWhiteSpace"));
+        assert!(selection.should_run("Credo.Check.Refactor.DoubleBooleanNegation"));
+        let unknown = Selection {
+            checks_with_tag: vec!["no-such-tag".to_owned()],
+            ..Selection::default()
+        };
+        assert!(!unknown.should_run("Credo.Check.Readability.TrailingWhiteSpace"));
+    }
+
+    #[test]
+    fn ignore_wins_over_tag_filter() {
+        let selection = Selection {
+            ignore: vec!["TrailingWhiteSpace".to_owned()],
+            checks_with_tag: vec!["formatter".to_owned()],
+            ..Selection::default()
+        };
+        assert!(!selection.should_run("Credo.Check.Readability.TrailingWhiteSpace"));
     }
 }

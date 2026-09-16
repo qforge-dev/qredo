@@ -770,6 +770,8 @@ mod tests {
             selection: Selection {
                 only: vec!["Credo.Check.Warning.Dbg".to_owned()],
                 ignore: Vec::new(),
+                checks_with_tag: Vec::new(),
+                enable_disabled: Vec::new(),
             },
             ..default_config(vec![io_check()])
         };
@@ -865,6 +867,8 @@ mod tests {
             selection: Selection {
                 only: vec!["([".to_owned()],
                 ignore: Vec::new(),
+                checks_with_tag: Vec::new(),
+                enable_disabled: Vec::new(),
             },
             ..default_config(vec![io_check()])
         };

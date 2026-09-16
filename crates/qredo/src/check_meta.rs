@@ -215,6 +215,67 @@ pub fn category_for(rule: &str) -> Option<Category> {
     }
 }
 
+/// Checks tagged `:formatter` at the pinned commit (12).
+const FORMATTER_TAGGED: &[&str] = &[
+    "Credo.Check.Consistency.LineEndings",
+    "Credo.Check.Consistency.SpaceAroundOperators",
+    "Credo.Check.Consistency.SpaceInParentheses",
+    "Credo.Check.Consistency.TabsOrSpaces",
+    "Credo.Check.Readability.LargeNumbers",
+    "Credo.Check.Readability.MaxLineLength",
+    "Credo.Check.Readability.ParenthesesInCondition",
+    "Credo.Check.Readability.RedundantBlankLines",
+    "Credo.Check.Readability.Semicolons",
+    "Credo.Check.Readability.SpaceAfterCommas",
+    "Credo.Check.Readability.TrailingBlankLine",
+    "Credo.Check.Readability.TrailingWhiteSpace",
+];
+
+/// Checks tagged `:controversial` at the pinned commit (22).
+const CONTROVERSIAL_TAGGED: &[&str] = &[
+    "Credo.Check.Consistency.MultiAliasImportRequireUse",
+    "Credo.Check.Design.DuplicatedCode",
+    "Credo.Check.Readability.BlockPipe",
+    "Credo.Check.Readability.MultiAlias",
+    "Credo.Check.Readability.NestedFunctionCalls",
+    "Credo.Check.Readability.SingleFunctionToBlockPipe",
+    "Credo.Check.Readability.SinglePipe",
+    "Credo.Check.Readability.Specs",
+    "Credo.Check.Readability.StrictModuleLayout",
+    "Credo.Check.Refactor.ABCSize",
+    "Credo.Check.Refactor.AppendSingleItem",
+    "Credo.Check.Refactor.DoubleBooleanNegation",
+    "Credo.Check.Refactor.FilterReject",
+    "Credo.Check.Refactor.IoPuts",
+    "Credo.Check.Refactor.ModuleDependencies",
+    "Credo.Check.Refactor.NegatedIsNil",
+    "Credo.Check.Refactor.PipeChainStart",
+    "Credo.Check.Refactor.RejectFilter",
+    "Credo.Check.Refactor.VariableRebinding",
+    "Credo.Check.Warning.ApplicationConfigInModuleAttribute",
+    "Credo.Check.Warning.LeakyEnvironment",
+    "Credo.Check.Warning.MapGetUnsafePass",
+];
+
+/// Checks tagged `:experimental` at the pinned commit (1).
+const EXPERIMENTAL_TAGGED: &[&str] = &["Credo.Check.Readability.AliasAs"];
+
+/// Tags carried by a check at the pinned commit (`tags:` in
+/// `use Credo.Check`; unlisted checks carry none). Mirrors the native
+/// `--checks-with-tag` matching over atoms.
+#[must_use]
+pub fn check_tags(rule: &str) -> &'static [&'static str] {
+    if FORMATTER_TAGGED.contains(&rule) {
+        &["formatter"]
+    } else if CONTROVERSIAL_TAGGED.contains(&rule) {
+        &["controversial"]
+    } else if EXPERIMENTAL_TAGGED.contains(&rule) {
+        &["experimental"]
+    } else {
+        &[]
+    }
+}
+
 /// Resolve an issue priority: general override, `priority` param, or base.
 /// Mirrors `Params.priority/2` with `Priority.to_integer/1` (`nil` → 0).
 ///
@@ -479,6 +540,24 @@ mod tests {
             Some(Category::Warning)
         );
         assert_eq!(category_for("Credo.Check.Nope"), None);
+    }
+
+    #[test]
+    fn tags_match_upstream_table() {
+        assert_eq!(
+            check_tags("Credo.Check.Readability.TrailingWhiteSpace"),
+            &["formatter"]
+        );
+        assert_eq!(
+            check_tags("Credo.Check.Refactor.DoubleBooleanNegation"),
+            &["controversial"]
+        );
+        assert_eq!(
+            check_tags("Credo.Check.Readability.AliasAs"),
+            &["experimental"]
+        );
+        assert_eq!(check_tags("Credo.Check.Warning.IoInspect"), &[] as &[&str]);
+        assert_eq!(check_tags("Credo.Check.Nope"), &[] as &[&str]);
     }
 
     #[test]

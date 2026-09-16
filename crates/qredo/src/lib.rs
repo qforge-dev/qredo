@@ -11,7 +11,7 @@ pub use batch::{FileOutcome, RuleOutcome, check_all_kernels, check_sources_paral
 use batch::{Prepared, run_one};
 pub use check_meta::{
     CheckBase, FileMeta, IssueError, PriorityError, backfill_column, base_priority, build_issue,
-    category_for, resolve_category, resolve_exit_status, resolve_priority, severity,
+    category_for, check_tags, resolve_category, resolve_exit_status, resolve_priority, severity,
 };
 pub use config_file::{CheckEntry, CredoConfig, FileEntry, UnsupportedConfig, parse_config};
 pub use file_select::{PatternError, check_runs_on_entries, check_runs_on_file, wildcard_match};

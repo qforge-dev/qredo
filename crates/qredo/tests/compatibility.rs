@@ -274,6 +274,10 @@ struct PipelineSelection {
     only: Vec<String>,
     #[serde(default)]
     ignore: Vec<String>,
+    #[serde(default)]
+    checks_with_tag: Vec<String>,
+    #[serde(default)]
+    enable_disabled: Vec<String>,
 }
 
 fn default_config() -> String {
@@ -314,6 +318,8 @@ fn assert_pipeline_case(case: &PipelineCase) {
     let selection = Selection {
         only: case.selection.only.clone(),
         ignore: case.selection.ignore.clone(),
+        checks_with_tag: case.selection.checks_with_tag.clone(),
+        enable_disabled: case.selection.enable_disabled.clone(),
     };
     let config = if let Some(path) = case.config.strip_prefix("executable:") {
         ConfigSource::ExecutableFile(path.to_owned())

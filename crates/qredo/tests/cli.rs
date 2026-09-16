@@ -98,6 +98,8 @@ fn only_narrows_to_one_check() {
     let selection = qredo::Selection {
         only: vec!["IoInspect".to_owned()],
         ignore: Vec::new(),
+        checks_with_tag: Vec::new(),
+        enable_disabled: Vec::new(),
     };
     let report = qredo::integration::execute_selected(&config, "default", &files(), -99, selection)
         .expect("config served");
@@ -111,6 +113,8 @@ fn ignore_drops_checks() {
     let selection = qredo::Selection {
         only: Vec::new(),
         ignore: vec!["IoInspect".to_owned(), "Dbg".to_owned()],
+        checks_with_tag: Vec::new(),
+        enable_disabled: Vec::new(),
     };
     let report = qredo::integration::execute_selected(&config, "default", &files(), -99, selection)
         .expect("config served");

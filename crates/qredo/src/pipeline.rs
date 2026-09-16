@@ -367,6 +367,8 @@ mod tests {
         let selection = Selection {
             only: vec!["Credo.Check.Readability.TrailingBlankLine".to_owned()],
             ignore: Vec::new(),
+            checks_with_tag: Vec::new(),
+            enable_disabled: Vec::new(),
         };
         let outcome = run_trailing_blank_line_selected(
             &snapshot("defmodule M do\nend"),
@@ -383,6 +385,8 @@ mod tests {
         let selection = Selection {
             only: vec!["Credo.Check.Warning.IoInspect".to_owned()],
             ignore: Vec::new(),
+            checks_with_tag: Vec::new(),
+            enable_disabled: Vec::new(),
         };
         let outcome = run_trailing_blank_line_selected(
             &snapshot("defmodule M do\nend"),
@@ -412,6 +416,8 @@ mod tests {
         let selection = Selection {
             only: vec!["([".to_owned()],
             ignore: Vec::new(),
+            checks_with_tag: Vec::new(),
+            enable_disabled: Vec::new(),
         };
         let outcome = run_trailing_blank_line_selected(
             &snapshot("defmodule M do\nend"),
