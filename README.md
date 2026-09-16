@@ -23,15 +23,18 @@ cargo install --path crates/qredo
 ## Usage
 
 ```sh
-qredo [PATH] [--config-file FILE] [--strict] [--format text|json]
+qredo [PATH] [--config-file FILE] [--config-name NAME] [--strict] [--min-priority N] [--mute-exit-status] [--only CHECK,...] [--ignore CHECK,...] [--format text|json]
 ```
 
 ```sh
 qredo apps/my_app --strict
+qredo --only IoInspect,Dbg --format json
 ```
 
-On an unsupported configuration qredo prints the reason and exits 2
-instead of running partial analysis.
+Files come from the config's `files.included` (defaulting to `lib/` and
+`test/`), minus `files.excluded`; build directories are never
+descended into. On an unsupported configuration qredo prints the
+reason and exits 2 instead of running partial analysis.
 
 ## Library
 

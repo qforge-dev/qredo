@@ -63,7 +63,11 @@ fn gate(entry: &crate::CheckEntry) -> Option<Fallback> {
 }
 
 /// Build the native runner over default-param enabled checks.
-fn runner_of(config: &crate::CredoConfig, min_priority: i32) -> crate::RunnerConfig {
+fn runner_of(
+    config: &crate::CredoConfig,
+    min_priority: i32,
+    selection: crate::Selection,
+) -> crate::RunnerConfig {
     crate::RunnerConfig {
         checks: config
             .checks
@@ -82,7 +86,7 @@ fn runner_of(config: &crate::CredoConfig, min_priority: i32) -> crate::RunnerCon
             .map(crate::FileEntry::Glob)
             .collect(),
         files_excluded: config.files_excluded.clone(),
-        selection: crate::Selection::default(),
+        selection,
         min_priority,
         general: crate::GeneralParams::default(),
     }
@@ -103,6 +107,30 @@ pub fn execute(
     files: &[crate::RunnerFile],
     min_priority: i32,
 ) -> Result<crate::RunReport, Fallback> {
+    execute_selected(
+        config_source,
+        config_name,
+        files,
+        min_priority,
+        crate::Selection::default(),
+    )
+}
+
+/// Run the native pipeline for served configs with CLI check selection.
+///
+/// `selection.only`/`selection.ignore` narrow the enabled checks after the
+/// serve gate (an invalid selection is recorded in the report errors).
+/// Otherwise identical to [`execute`].
+///
+/// # Errors
+/// Same fallback contract as [`execute`].
+pub fn execute_selected(
+    config_source: &str,
+    config_name: &str,
+    files: &[crate::RunnerFile],
+    min_priority: i32,
+    selection: crate::Selection,
+) -> Result<crate::RunReport, Fallback> {
     if let Outcome::Fallback { reason } = select(config_source, config_name) {
         return Err(Fallback { reason });
     }
@@ -110,7 +138,10 @@ pub fn execute(
         crate::config_file::parse_config(config_source, config_name).map_err(|bad| Fallback {
             reason: format!("unsupported-credo-config:{}", bad.0),
         })?;
-    Ok(crate::run_checks(files, &runner_of(&config, min_priority)))
+    Ok(crate::run_checks(
+        files,
+        &runner_of(&config, min_priority, selection),
+    ))
 }
 
 /// Run the native pipeline over an explicit file subset for served configs.
@@ -144,7 +175,10 @@ pub fn execute_files(
             source: source.clone(),
         })
         .collect();
-    let report = crate::run_checks(&runner_files, &runner_of(&config, min_priority));
+    let report = crate::run_checks(
+        &runner_files,
+        &runner_of(&config, min_priority, crate::Selection::default()),
+    );
     if !report.errors.is_empty() {
         return Err(Fallback {
             reason: "native-pipeline-errors".to_owned(),

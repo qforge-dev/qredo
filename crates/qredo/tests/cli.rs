@@ -91,3 +91,40 @@ fn unknown_check_fails_closed() {
         error.reason
     );
 }
+
+#[test]
+fn only_narrows_to_one_check() {
+    let config = fixture(".credo.exs");
+    let selection = qredo::Selection {
+        only: vec!["IoInspect".to_owned()],
+        ignore: Vec::new(),
+    };
+    let report = qredo::integration::execute_selected(&config, "default", &files(), -99, selection)
+        .expect("config served");
+    assert_eq!(report.issues.len(), 1);
+    assert_eq!(report.issues[0].check, "Credo.Check.Warning.IoInspect");
+}
+
+#[test]
+fn ignore_drops_checks() {
+    let config = fixture(".credo.exs");
+    let selection = qredo::Selection {
+        only: Vec::new(),
+        ignore: vec!["IoInspect".to_owned(), "Dbg".to_owned()],
+    };
+    let report = qredo::integration::execute_selected(&config, "default", &files(), -99, selection)
+        .expect("config served");
+    assert_eq!(report.issues.len(), 1);
+    assert_eq!(report.issues[0].check, "Credo.Check.Readability.ModuleDoc");
+}
+
+#[test]
+fn missing_config_name_fails_closed() {
+    let config = fixture(".credo.exs");
+    let error = qredo::integration::execute(&config, "ci", &files(), -99).expect_err("falls back");
+    assert!(
+        error.reason.starts_with("unsupported-credo-config:"),
+        "unexpected reason: {}",
+        error.reason
+    );
+}

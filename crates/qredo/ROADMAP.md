@@ -12,17 +12,20 @@ inventory.
   `cargo test`.
 - 7-stage pipeline runner with scope, priority, suppression and exit
   status.
-- `qredo` CLI over `lib/` + `test/` with `--strict`, `--format` and
-  fail-closed unsupported configs.
+- `qredo` CLI over configured files with `--strict`, `--format`,
+  `--only`/`--ignore`, `--config-name`, `--min-priority` and
+  `--mute-exit-status`, failing closed on unsupported configs.
 - Per-file shared parse and facts; residual tree walks pinned by test.
 
 ## Next
 
 - Custom check parameters behind the differential gate (real-target
   native-vs-qredo comparisons authorize each expansion).
-- `--only` / `--ignore` selection and output-format parity in the CLI.
 - Remaining tree-walk migrations (statement-role and argument-content
   facts) per the residual list in `src/facts.rs`.
+- Deeper CLI parity: default human-readable formatter matching Credo's
+  layout, `mix credo` exit-code edge cases, stdin input, umbrella
+  project handling.
 - Differential campaigns on real projects: identical issue sets and
   exit codes vs `mix credo --strict`, with work counts beside timings.
 - Distribution: versioned releases with prebuilt binaries; `cargo
