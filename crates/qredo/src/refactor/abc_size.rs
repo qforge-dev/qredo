@@ -1224,7 +1224,9 @@ fn follows_colon(body: &str, end: usize) -> bool {
 fn is_index_target(body: &str, idx: usize) -> bool {
     let bytes = body.as_bytes();
     let mut back = idx;
-    while back > 0 && bytes[back - 1].is_ascii_whitespace() {
+    // Same-line blanks only: `x\n[y]` is two expressions upstream, never
+    // `Access.get` (which the AST only forms on one line).
+    while back > 0 && matches!(bytes[back - 1], b' ' | b'\t' | b'\r') {
         back -= 1;
     }
     if back == 0 {
@@ -1455,6 +1457,17 @@ mod tests {
                 "{src:?}"
             );
         }
+    }
+
+    #[test]
+    fn bracket_after_newline_is_not_index_access() {
+        // `1\n[]` across a newline is two expressions, never `Access.get`
+        // (native size 5 here): index lookup stays on its line.
+        let src = "def f(c) do\n  case g(c) do\n    [build] -> 1\n    [] -> 2\n  end\nend\n";
+        let params: BTreeMap<String, String> = [("max_size".to_owned(), "5".to_owned())]
+            .into_iter()
+            .collect();
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
     }
 
     #[test]
