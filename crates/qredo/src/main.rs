@@ -617,12 +617,7 @@ fn discover(
             collect(&root.join("lib"), root, &mut collected);
             collect(&root.join("test"), root, &mut collected);
         } else {
-            collect(root, root, &mut collected);
-            collected.retain(|(relative, _)| {
-                included
-                    .iter()
-                    .any(|pattern| qredo::wildcard_match(pattern, relative).unwrap_or(false))
-            });
+            collect_included(root, included, &mut collected);
         }
         collected
     } else {
@@ -640,6 +635,39 @@ fn discover(
     named.sort();
     named.dedup_by(|a, b| a.1 == b.1);
     Ok(named)
+}
+
+/// Collect config `files.included` entries: plain directories are walked
+/// directly (absolute or root-relative, inside or outside the root),
+/// globs expand, and `.ex`/`.exs` files include literally. Mirrors native,
+/// where included entries are search roots rather than filters.
+fn collect_included(root: &Path, included: &[String], out: &mut Vec<(String, PathBuf)>) {
+    for pattern in included {
+        if has_magic(pattern) && Path::new(pattern).is_absolute() {
+            for path in expand_glob(root, pattern) {
+                out.push((display_name(root, &path), path));
+            }
+            continue;
+        }
+        if has_magic(pattern) {
+            let mut walked = Vec::new();
+            collect(root, root, &mut walked);
+            walked
+                .retain(|(relative, _)| qredo::wildcard_match(pattern, relative).unwrap_or(false));
+            out.extend(walked);
+            continue;
+        }
+        let candidate = absolutize(root, Path::new(pattern));
+        match std::fs::metadata(&candidate) {
+            Ok(meta) if meta.is_dir() => collect(&candidate, root, out),
+            Ok(_) if is_elixir_path(pattern) => {
+                out.push((display_name(root, &candidate), candidate));
+            }
+            Ok(_) | Err(_) => {}
+        }
+    }
+    out.sort();
+    out.dedup_by(|a, b| a.1 == b.1);
 }
 
 /// Display name for a discovered file: root-relative when inside the
@@ -672,45 +700,107 @@ fn discover_config(dir: &Path) -> Option<PathBuf> {
     }
 }
 
-/// One text line per issue, Credo-oneline style (exact layout lands in P1c).
-fn print_text(report: &qredo::RunReport) {
-    for issue in &report.issues {
-        let line = issue.line_no.map_or("-".to_owned(), |n| n.to_string());
-        let column = issue.column.map_or(String::new(), |n| format!(":{n}"));
-        println!(
-            "{}:{}{} [{}] {}",
-            issue.filename, line, column, issue.check, issue.message
-        );
+/// Rendered stdout for one `suggest` run: native-shape formatters over
+/// absolute filenames (native resolves display paths absolutely).
+fn print_report(
+    args: &SuggestArgs,
+    files: &[qredo::RunnerFile],
+    report: &qredo::RunReport,
+    context: &ReportContext,
+) {
+    match args.format {
+        Format::Default => {
+            let context = qredo::format_default::FormatContext {
+                check_count: context.check_count,
+                load_microseconds: context.load_microseconds,
+                run_microseconds: context.run_microseconds,
+                color: context.color,
+                show_all: context.show_all,
+                strict_hint: context.strict_hint,
+                locale_utf8: context.locale_utf8,
+            };
+            print!("{}", qredo::format_default::render(report, files, &context));
+        }
+        Format::Oneline | Format::Flycheck | Format::Json | Format::Sarif => {
+            let absolute = absolutized(report, &context.root);
+            let machine = qredo::format_machine::MachineContext::new(context.root.clone());
+            let text = match args.format {
+                Format::Oneline => qredo::format_machine::render_oneline(&absolute, &machine),
+                Format::Flycheck => qredo::format_machine::render_flycheck(&absolute, &machine),
+                Format::Json => qredo::format_machine::render_json(&absolute, &machine),
+                Format::Sarif => qredo::format_machine::render_sarif(&absolute, &machine),
+                Format::Default => unreachable!("covered above"),
+            };
+            print!("{text}");
+        }
     }
 }
 
-/// One JSON object per issue plus a summary line (exact shape lands in P1c).
-fn print_json(files: &[qredo::RunnerFile], report: &qredo::RunReport) {
-    for issue in &report.issues {
-        println!(
-            "{}",
-            serde_json::json!({
-                "check": issue.check,
-                "filename": issue.filename,
-                "line_no": issue.line_no,
-                "column": issue.column,
-                "message": issue.message,
-                "priority": issue.priority,
-            })
-        );
+/// Report inputs the formatters need beyond issues and files: one bool
+/// per display switch, mirroring native output flags.
+#[allow(clippy::struct_excessive_bools)]
+struct ReportContext {
+    root: PathBuf,
+    check_count: usize,
+    load_microseconds: u64,
+    run_microseconds: u64,
+    color: bool,
+    show_all: bool,
+    strict_hint: bool,
+    locale_utf8: bool,
+}
+
+/// Clone a report with root-absolute filenames for native-shape output.
+fn absolutized(report: &qredo::RunReport, root: &Path) -> qredo::RunReport {
+    let mut absolute = report.clone();
+    for issue in &mut absolute.issues {
+        let path = Path::new(&issue.filename);
+        if !path.is_absolute() {
+            issue.filename = root.join(path).to_string_lossy().into_owned();
+        }
     }
-    println!(
-        "{}",
-        serde_json::json!({
-            "summary": {
-                "files": files.len(),
-                "issues": report.issues.len(),
-                "exit": report.exit_status,
-                "errors": report.errors.len(),
-                "skipped_invalid": report.skipped_invalid,
+    absolute
+}
+
+/// Saturating wall-time microseconds for timing lines: the `min` bounds
+/// the value before conversion.
+#[allow(clippy::cast_possible_truncation)]
+fn micros(elapsed: std::time::Duration) -> u64 {
+    elapsed.as_micros().min(u128::from(u64::MAX)) as u64
+}
+
+/// TTY color only: piped output never carries escapes, like native.
+fn use_color(args: &SuggestArgs) -> bool {
+    args.color
+        .unwrap_or_else(|| std::io::IsTerminal::is_terminal(&std::io::stdout()))
+}
+
+/// C/POSIX locales render `\x{HEX}` escapes instead of Unicode glyphs.
+fn utf8_locale() -> bool {
+    for key in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+        if let Ok(value) = std::env::var(key) {
+            if value.is_empty() {
+                continue;
             }
-        })
-    );
+            return value != "C" && value != "POSIX" && !value.starts_with("C.");
+        }
+    }
+    true
+}
+
+/// Checks the timing line reports: enabled, selected, version- and
+/// priority-gated — the same predicates the runner applies.
+fn check_count(
+    config: &qredo::CredoConfig,
+    selection: &qredo::Selection,
+    min_priority: i32,
+) -> usize {
+    qredo::integration::enabled_modules(config, selection)
+        .iter()
+        .filter(|module| selection.should_run(module))
+        .filter(|module| !qredo::version_skipped_on_pinned_toolchain(module))
+        .filter(|module| qredo::runs_at_min_priority(module, min_priority))
+        .count()
 }
 
 fn main() {
@@ -767,37 +857,78 @@ fn run_suggest(args: &SuggestArgs) -> i32 {
     let Some(config_source) = read_config(&config_path) else {
         return 2;
     };
-    let selection = qredo::Selection {
-        only: args.only.clone(),
-        ignore: args.ignore.clone(),
-        checks_with_tag: args.checks_with_tag.clone(),
-        enable_disabled: args.enable_disabled.clone(),
-    };
-    if let Err(message) = compile_selection(&args.only, &args.ignore) {
-        eprintln!("{message}");
+    let Some(selection) = load_selection(args) else {
         return 1;
-    }
+    };
     // Discovery needs the static config; an unreadable one fails here
     // with the same explicit reason as the pipeline below.
-    let (included, excluded) = match qredo::parse_config(&config_source, &args.config_name) {
-        Ok(config) => (config.files_included, config.files_excluded),
+    let config = match qredo::parse_config(&config_source, &args.config_name) {
+        Ok(config) => config,
         Err(unsupported) => {
             eprintln!("warning: failed to parse config file: {}", unsupported.0);
             return 129;
         }
     };
-    let found = match discover(&root, &patterns, &included, &excluded) {
+    let load_start = std::time::Instant::now();
+    let found = match discover(
+        &root,
+        &patterns,
+        &config.files_included,
+        &config.files_excluded,
+    ) {
         Ok(found) => found,
         Err(missing) => {
             eprintln!("{}", unreadable_file(&missing));
             return 1;
         }
     };
-    if found.is_empty() && !matches!(args.format, Format::Json) {
-        println!("No files found!");
-    }
     let files = read_found(&found);
-    report_exit(args, &files, &config_source, selection)
+    let load_microseconds = micros(load_start.elapsed());
+    match resolve_min_priority(args) {
+        Ok(_) => {}
+        Err(message) => {
+            eprintln!("{message}");
+            return 1;
+        }
+    }
+    let context = report_context(args, &config, &selection, root, load_microseconds);
+    report_exit(args, &files, &config_source, selection, context)
+}
+
+/// CLI check selection with native regex pre-compilation: an invalid
+/// pattern fails before any analysis.
+fn load_selection(args: &SuggestArgs) -> Option<qredo::Selection> {
+    if let Err(message) = compile_selection(&args.only, &args.ignore) {
+        eprintln!("{message}");
+        return None;
+    }
+    Some(qredo::Selection {
+        only: args.only.clone(),
+        ignore: args.ignore.clone(),
+        checks_with_tag: args.checks_with_tag.clone(),
+        enable_disabled: args.enable_disabled.clone(),
+    })
+}
+
+/// Formatter inputs for one run: check counts mirror the runner gates.
+fn report_context(
+    args: &SuggestArgs,
+    config: &qredo::CredoConfig,
+    selection: &qredo::Selection,
+    root: PathBuf,
+    load_microseconds: u64,
+) -> ReportContext {
+    let min_priority = resolve_min_priority(args).unwrap_or(0);
+    ReportContext {
+        check_count: check_count(config, selection, min_priority),
+        load_microseconds,
+        run_microseconds: 0,
+        color: use_color(args),
+        show_all: args.all || min_priority <= -99,
+        strict_hint: min_priority < 0,
+        locale_utf8: utf8_locale(),
+        root,
+    }
 }
 
 /// Resolution root: `--working-dir` or the process working directory.
@@ -872,6 +1003,7 @@ fn report_exit(
     files: &[qredo::RunnerFile],
     config_source: &str,
     selection: qredo::Selection,
+    mut context: ReportContext,
 ) -> i32 {
     let min_priority = match resolve_min_priority(args) {
         Ok(priority) => priority,
@@ -880,13 +1012,16 @@ fn report_exit(
             return 1;
         }
     };
-    match qredo::integration::execute_selected(
+    let run_start = std::time::Instant::now();
+    let outcome = qredo::integration::execute_selected(
         config_source,
         &args.config_name,
         files,
         min_priority,
         selection,
-    ) {
+    );
+    context.run_microseconds = micros(run_start.elapsed());
+    match outcome {
         Err(fallback) => {
             eprintln!("unsupported config: {}", fallback.reason);
             2
@@ -895,10 +1030,7 @@ fn report_exit(
             for error in &report.errors {
                 eprintln!("error: {error:?}");
             }
-            match args.format {
-                Format::Json => print_json(files, &report),
-                _ => print_text(&report),
-            }
+            print_report(args, files, &report, &context);
             if !report.skipped_invalid.is_empty() {
                 eprintln!("skipped invalid: {}", report.skipped_invalid.join(", "));
             }
@@ -1221,6 +1353,22 @@ mod tests {
                 .expect("dir")
                 .is_empty()
         );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn discover_matches_absolute_included_patterns() {
+        // Real harnesses rewrite configs to absolute `included` paths while
+        // running from another directory: absolute patterns must match.
+        let root = std::env::temp_dir().join("qredo-discover-absinc-test");
+        let _ = std::fs::remove_dir_all(&root);
+        let path = root.join("lib/a.ex");
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+        std::fs::write(&path, "x = 1\n").expect("write");
+        let absolute = path.to_string_lossy().into_owned();
+        let found = discover(&root, &[], &[absolute], &[]).expect("discovers");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].0, "lib/a.ex");
         let _ = std::fs::remove_dir_all(&root);
     }
 

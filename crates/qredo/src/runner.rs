@@ -255,6 +255,10 @@ fn run_check_entry(
         // any file runs; they emit zero issues on this toolchain.
         return;
     }
+    if !crate::check_meta::runs_at_min_priority(rule, config.min_priority) {
+        // Native check-level pre-exclusion runs before any file.
+        return;
+    }
     if rule == "Credo.Check.Design.MissingCheckInConfig"
         || rule == "Credo.Check.Design.DeprecatedChecksConfig"
     {

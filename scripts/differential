@@ -98,54 +98,50 @@ normalize() {
     local rep=$1
     elixir -e '
 [native_path, rust_path, approot, out_n, out_r] = System.argv()
-native = :json.decode(File.read!(native_path))["issues"]
-triples_n =
-  Enum.map(native, fn i ->
-    Enum.join([i["check"], String.replace_prefix(i["filename"] || "", approot <> "/", ""), inspect(i["line_no"])], "\t")
+strip = fn file -> String.replace_prefix(file || "", approot <> "/", "") end
+triples = fn path ->
+  path
+  |> File.read!()
+  |> :json.decode()
+  |> Map.fetch!("issues")
+  |> Enum.map(fn i ->
+    Enum.join([i["check"], strip.(i["filename"]), inspect(i["line_no"])], "\t")
   end)
-rust =
-  File.stream!(rust_path)
-  |> Stream.filter(&(String.starts_with?(&1, "{") and String.contains?(&1, "\"check\"")))
-  |> Enum.map(&:json.decode/1)
-triples_r =
-  Enum.map(rust, fn i ->
-    Enum.join([i["check"], i["filename"], inspect(i["line_no"])], "\t")
-  end)
-File.write!(out_n, Enum.join(Enum.sort(triples_n), "\n") <> "\n")
-File.write!(out_r, Enum.join(Enum.sort(triples_r), "\n") <> "\n")
+end
+File.write!(out_n, Enum.join(Enum.sort(triples.(native_path)), "\n") <> "\n")
+File.write!(out_r, Enum.join(Enum.sort(triples.(rust_path)), "\n") <> "\n")
 ' "$out/native-$rep.out" "$out/rust-$rep.out" "$approot" "$out/native-triples-$rep.txt" "$out/rust-triples-$rep.txt"
 }
 
 fail=""
 for (( i=1; i<=reps; i++ )); do
     rcode=$(run_timed "rust-$i" "$root" "$root/target/release/qredo" "$approot" --config-file "$cfg" --strict --format json)
-    rsummary=$(grep '"summary"' "$out/rust-$i.out" | tail -n 1 || true)
-    if [[ -z "$rsummary" ]]; then
+    if ! grep -q '"issues"' "$out/rust-$i.out" 2>/dev/null; then
         reason=$(grep -o "unsupported config: .*" "$out/rust-$i.time" | head -n 1 || true)
         printf 'rep %d: rust REFUSED (%s, exit %s); cannot compare, see triage\n' \
             "$i" "${reason:-unknown}" "$rcode" | tee -a "$out/reps.txt"
         fail="rep $i: qredo refused config (${reason:-unknown}); serve it before claiming parity"
         continue
     fi
-    rexit=$(echo "$rsummary" | grep -o '"exit":[0-9]*' | cut -d: -f2)
+    rissues=$(elixir -e 'IO.puts(length(:json.decode(File.read!(hd(System.argv())))["issues"]))' "$out/rust-$i.out")
     ncode=$(run_timed "native-$i" "$ref" mix credo --config-file "$tmpconfig" --strict --format json)
     nissues=$(elixir -e 'IO.puts(length(:json.decode(File.read!(hd(System.argv())))["issues"]))' "$out/native-$i.out")
-    printf 'rep %d: rust exit=%s summary=%s | native exit=%s issues=%s\n' \
-        "$i" "$rcode" "$rsummary" "$ncode" "$nissues" | tee -a "$out/reps.txt"
-    echo "$rexit $ncode" >> "$out/exits.tsv"
+    printf 'rep %d: rust exit=%s issues=%s | native exit=%s issues=%s\n' \
+        "$i" "$rcode" "$rissues" "$ncode" "$nissues" | tee -a "$out/reps.txt"
+    echo "$rcode $ncode" >> "$out/exits.tsv"
     normalize "$i"
     if ! diff -q "$out/native-triples-$i.txt" "$out/rust-triples-$i.txt" >/dev/null; then
         fail="rep $i: issue triples differ"
         diff -u "$out/native-triples-$i.txt" "$out/rust-triples-$i.txt" | head -n 20 || true
     fi
-    if [[ "$rexit" != "$ncode" ]]; then
-        fail="rep $i: exit codes differ (rust $rexit, native $ncode)"
+    if [[ "$rcode" != "$ncode" ]]; then
+        fail="rep $i: exit codes differ (rust $rcode, native $ncode)"
     fi
 done
 
 {
-    if grep -q '"summary"' "$out/rust-1.out" 2>/dev/null; then
-        echo "rust summary: $(grep '"summary"' "$out/rust-1.out" | tail -n 1)"
+    if grep -q '"issues"' "$out/rust-1.out" 2>/dev/null; then
+        echo "rust issues: $(elixir -e 'IO.puts(length(:json.decode(File.read!(hd(System.argv())))["issues"]))' "$out/rust-1.out")"
     else
         echo "rust summary: REFUSED (see reps.txt)"
     fi

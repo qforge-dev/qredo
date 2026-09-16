@@ -85,12 +85,10 @@ fn runner_of(
     selection: crate::Selection,
 ) -> crate::RunnerConfig {
     crate::RunnerConfig {
-        checks: config
-            .checks
-            .iter()
-            .filter(|check| check.enabled || reenabled(&check.module, &selection.enable_disabled))
-            .map(|check| crate::CheckEntry {
-                module: check.module.clone(),
+        checks: enabled_modules(config, &selection)
+            .into_iter()
+            .map(|module| crate::CheckEntry {
+                module,
                 enabled: true,
                 params: std::collections::BTreeMap::new(),
             })
@@ -132,6 +130,18 @@ pub fn execute(
     )
 }
 
+/// Enabled check modules after `--enable-disabled-checks` rejoining,
+/// before CLI selection and execution gates. Shared by the runner and by
+/// CLI check-count reporting so both agree.
+#[must_use]
+pub fn enabled_modules(config: &crate::CredoConfig, selection: &crate::Selection) -> Vec<String> {
+    config
+        .checks
+        .iter()
+        .filter(|check| check.enabled || reenabled(&check.module, &selection.enable_disabled))
+        .map(|check| check.module.clone())
+        .collect()
+}
 /// True when a disabled check rejoins via `--enable-disabled-checks`:
 /// any pattern case-insensitive-regex-matches the check name.
 fn reenabled(module: &str, patterns: &[String]) -> bool {

@@ -295,6 +295,23 @@ pub fn version_skipped_on_pinned_toolchain(rule: &str) -> bool {
     )
 }
 
+/// True when a check runs at all under `min_priority`: native
+/// `PrepareChecksToRun` excludes checks whose base priority is below
+/// `min_priority - 9`, before any file runs. Issue-level `>=` filtering
+/// still applies to what runs.
+#[must_use]
+pub fn runs_at_min_priority(rule: &str, min_priority: i32) -> bool {
+    let base = match base_priority(rule) {
+        None => return true,
+        Some(CheckBase::Higher) => 20,
+        Some(CheckBase::High) => 10,
+        Some(CheckBase::Normal) => 1,
+        Some(CheckBase::Low) => -10,
+        Some(CheckBase::DefaultZero) => 0,
+    };
+    base >= min_priority - 9
+}
+
 /// Resolve an issue priority: general override, `priority` param, or base.
 /// Mirrors `Params.priority/2` with `Priority.to_integer/1` (`nil` → 0).
 ///
@@ -601,6 +618,19 @@ mod tests {
         assert!(!version_skipped_on_pinned_toolchain(
             "Credo.Check.Warning.IoInspect"
         ));
+    }
+
+    #[test]
+    fn priority_pre_exclusion_matches_native_threshold() {
+        // Checks run iff base >= min_priority - 9.
+        let low = "Credo.Check.Readability.TrailingWhiteSpace";
+        assert!(!runs_at_min_priority(low, 0));
+        assert!(runs_at_min_priority(low, -99));
+        assert!(runs_at_min_priority(low, -1));
+        let normal = "Credo.Check.Design.TagTODO";
+        assert!(runs_at_min_priority(normal, 0));
+        assert!(!runs_at_min_priority(normal, 10));
+        assert!(runs_at_min_priority("Credo.Check.Nope", 999));
     }
 
     #[test]
