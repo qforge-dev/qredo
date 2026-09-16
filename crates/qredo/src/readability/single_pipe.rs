@@ -26,11 +26,11 @@ pub(crate) fn check_prepared(
         .map(|chain| chain[0])
         .collect();
     for pipe in &lone {
-        // Lone singles at the same level rejoin across balanced `fn`
-        // bodies: link-following for chains like
-        // `pod |> update_in(..., fn ... end) |> update_in(...)`, where the
-        // inner pipes group separately but the outers form one chain.
-        if joins_lone_neighbor(&chars, &bytes, &lone, *pipe) {
+        // Lone singles rejoin across balanced `fn` bodies: link-following
+        // for chains like `pod |> update_in(..., fn ... end) |>
+        // update_in(...)`, where the inner pipes group separately but the
+        // outers form one chain.
+        if joins_any_pipe(&chars, &bytes, &pipes, *pipe) {
             continue;
         }
         let (line_idx, pipe_at) = line_pipe_at(&starts, &masked, *pipe);
@@ -42,27 +42,22 @@ pub(crate) fn check_prepared(
     findings
 }
 
-/// True when a lone pipe joins a neighboring lone pipe across balanced
-/// blocks: same text connectivity as chaining, but ignoring `fn` balance
-/// (the inner groups already account for nesting).
-fn joins_lone_neighbor(chars: &[char], bytes: &[usize], lone: &[usize], pipe: usize) -> bool {
-    let Some(position) = lone.iter().position(|candidate| *candidate == pipe) else {
-        return false;
-    };
-    for neighbor in [position.checked_sub(1), position.checked_add(1)] {
-        let Some(other) = neighbor.and_then(|index| lone.get(index)) else {
-            continue;
-        };
-        let (first, second) = if pipe < *other {
-            (pipe, *other)
-        } else {
-            (*other, pipe)
-        };
-        if pipes_connected_nofn(chars, bytes, first, second) {
-            return true;
+/// True when a lone pipe joins any other pipe by plain text
+/// connectivity (link-following for chains spanning `fn` arguments whose
+/// inner pipes group separately). Grouping splits conservatively at
+/// block boundaries; a textual connection across the split means one
+/// expression, hence one chain.
+fn joins_any_pipe(chars: &[char], bytes: &[usize], pipes: &[usize], pipe: usize) -> bool {
+    pipes.iter().any(|other| {
+        *other != pipe && {
+            let (first, second) = if pipe < *other {
+                (pipe, *other)
+            } else {
+                (*other, pipe)
+            };
+            pipes_connected(chars, bytes, first, second)
         }
-    }
-    false
+    })
 }
 
 /// Byte offsets of `|>` operators in a chain: consecutive pipes join when no
@@ -93,30 +88,12 @@ fn group_pipe_chains(chars: &[char], bytes: &[usize], pipes: &[usize]) -> Vec<Ve
 /// Whether two consecutive `|>` byte offsets belong to one chain: the text
 /// between them must not cross a depth-zero statement boundary.
 fn pipes_connected(chars: &[char], bytes: &[usize], prev: usize, curr: usize) -> bool {
-    pipes_connected_inner(chars, bytes, prev, curr, true)
+    pipes_connected_inner(chars, bytes, prev, curr)
 }
 
-/// Shared connectivity with optional `fn`-balance gating: grouping gates
-/// on it, lone rejoining skips it (inner groups already nest correctly).
-fn pipes_connected_nofn(chars: &[char], bytes: &[usize], prev: usize, curr: usize) -> bool {
-    pipes_connected_inner(chars, bytes, prev, curr, false)
-}
-
-fn pipes_connected_inner(
-    chars: &[char],
-    bytes: &[usize],
-    prev: usize,
-    curr: usize,
-    check_fn: bool,
-) -> bool {
+fn pipes_connected_inner(chars: &[char], bytes: &[usize], prev: usize, curr: usize) -> bool {
     let mut start = char_index(bytes, prev) + 2;
     let end = char_index(bytes, curr);
-    // Pipes inside an unbalanced `fn...end` span belong to the inner
-    // function; complete `fn` arguments stay transparent (see
-    // `fn_depth_delta`).
-    if check_fn && fn_depth_delta(chars, start, end) != 0 {
-        return false;
-    }
     let mut depth = 0_usize;
     while start < end && start < chars.len() {
         match chars[start] {
@@ -150,23 +127,6 @@ const CHAIN_STOP_WORDS: &[&str] = &[
     "do", "else", "if", "unless", "case", "cond", "with", "for", "try", "quote", "receive",
     "catch", "rescue", "after", "when", "in", "not", "and", "or", "end",
 ];
-
-/// Net `fn`/`end` word balance over a span: nonzero means the span enters
-/// (or leaves) a function body, so its pipes live at another level.
-/// Complete `fn...end` arguments balance out and stay transparent.
-fn fn_depth_delta(chars: &[char], start: usize, end: usize) -> i32 {
-    let mut delta = 0_i32;
-    let mut idx = start;
-    while idx < end && idx < chars.len() {
-        if word_ending_at(chars, idx, b"fn") {
-            delta += 1;
-        } else if word_ending_at(chars, idx, b"end") {
-            delta -= 1;
-        }
-        idx += 1;
-    }
-    delta
-}
 
 fn word_ending_at_con(chars: &[char], i: usize) -> bool {
     CHAIN_STOP_WORDS

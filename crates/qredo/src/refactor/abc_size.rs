@@ -509,12 +509,11 @@ fn split_args(inside: &str) -> Vec<&str> {
     parts
 }
 
-/// The segment itself is one bare identifier (after one bracket layer).
+/// The segment itself is one bare identifier (after transparent parens).
+/// Brackets and braces are NOT transparent upstream (`{v0} = ...` binds
+/// nothing observable; only `(v0) = ...` scopes `v0`), so they disqualify.
 fn bare_ident(segment: &str) -> Option<String> {
-    let stripped = segment
-        .trim_start_matches(['(', '[', '{'])
-        .trim_end_matches([')', ']', '}'])
-        .trim();
+    let stripped = segment.trim_start_matches('(').trim_end_matches(')').trim();
     let mut chars = stripped.chars();
     let first = chars.next()?;
     if !first.is_ascii_lowercase() {
@@ -1295,6 +1294,24 @@ mod tests {
         src.push_str("end\n");
         assert!(!check_prepared(&crate::batch::Prepared::lazy(&src), &BTreeMap::new()).is_empty());
     }
+    #[test]
+    fn bracketed_destructuring_binds_nothing() {
+        // Upstream `var_name/1` only scopes bare `{name, _, nil}` (parens
+        // transparent): `{v0} = ...` leaves `v0` unknown, so later uses
+        // count as branches.
+        let src = "def f() do\n  {v0} = pin(v0)\n  v0\nend\n";
+        let params: BTreeMap<String, String> = [("max_size".to_owned(), "2".to_owned())]
+            .into_iter()
+            .collect();
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &params).len(),
+            1
+        );
+        // ...while `(v0) = ...` scopes normally and stays clean.
+        let src = "def f() do\n  (v0) = pin(v0)\n  v0\nend\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+
     #[test]
     fn interpolation_calls_do_not_count() {
         // Upstream ignores string interpolation (`:<<>>` binaries): calls
