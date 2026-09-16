@@ -47,6 +47,16 @@ pub(crate) fn check_prepared(
                     c += op_len;
                     continue;
                 }
+                // Operator atoms (`:*`) and remote call names (`Kernel.||`)
+                // are not operators (native `{:atom, …}` /
+                // `{:paren_identifier, …}`); `..` ranges keep their sign.
+                if c > 0 && (chars[c - 1] == ':' || chars[c - 1] == '.') {
+                    let range_dot = chars[c - 1] == '.' && c > 1 && chars[c - 2] == '.';
+                    if !range_dot {
+                        c += op_len;
+                        continue;
+                    }
+                }
                 let before = if c > 0 { Some(chars[c - 1]) } else { None };
                 let after = chars.get(c + op_len).copied();
                 let spaced = before == Some(' ') && after == Some(' ');
@@ -136,6 +146,24 @@ mod tests {
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].trigger, crate::Trigger::Text("|".to_owned()));
     }
+    #[test]
+    fn operator_atoms_and_remote_calls_are_not_operators() {
+        // Native lexes `:*` as `{:atom, …}` and `Kernel.||` as
+        // `{:paren_identifier, …}` — neither is an operator occurrence.
+        // Each source mixes spaced operators (majority) with the atom/call
+        // form, which must not vote or report.
+        for source in [
+            "x = 1 + 2\nmatch :*, \"/notes\"\n",
+            "x = a |> b\nquery = uri.query |> Kernel.||(\"\")\n",
+            "x = 1 + 2\n@conditions [:==, :!=]\n",
+        ] {
+            assert!(
+                check_prepared(&crate::batch::Prepared::lazy(source), &BTreeMap::new()).is_empty(),
+                "findings for {source:?}"
+            );
+        }
+    }
+
     #[test]
     fn custom_ignore_suppresses_listed_operators() {
         let mut params = BTreeMap::new();

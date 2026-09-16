@@ -268,7 +268,37 @@ fn tokenize(source: &str) -> Vec<Tok> {
     while cursor.pos < cursor.src.len() {
         toks.extend(next_toks(&mut cursor));
     }
+    demote_non_operators(&mut toks);
     toks
+}
+
+/// Demote symbolic operators native lexes as non-operators: an operator
+/// directly glued to `:` is an atom (`:*`, `:==`, `:->` read as
+/// `{:atom, …}`), and one glued to `.` is a remote call name
+/// (`Kernel.||` reads as `{:paren_identifier, …}`); neither satisfies
+/// native `operator?/1` (`space_helper.ex`). `::` lexes as `Type` and
+/// `..` as `Range`, so they never trigger this.
+fn demote_non_operators(toks: &mut [Tok]) {
+    for index in 0..toks.len() {
+        if toks[index].kind != Kind::Op {
+            continue;
+        }
+        let (previous_kind, adjacent) = match index.checked_sub(1).and_then(|at| toks.get(at)) {
+            Some(previous) => (
+                previous.kind.clone(),
+                previous.line == toks[index].line && previous.end == toks[index].col,
+            ),
+            None => continue,
+        };
+        if !adjacent {
+            continue;
+        }
+        if previous_kind == Kind::Colon {
+            toks[index].kind = Kind::Atom;
+        } else if previous_kind == Kind::Dot {
+            toks[index].kind = Kind::ParenIdent;
+        }
+    }
 }
 
 /// Scan the tokens starting at the cursor (gaps yield none).
@@ -1220,5 +1250,66 @@ mod tests {
         let votes = collect(source);
         assert_eq!(votes.len(), 3);
         assert!(votes.iter().all(|vote| vote.with_v && !vote.without_v));
+    }
+
+    #[test]
+    fn operator_atoms_cast_no_votes() {
+        // Native lexes `:*`, `:==`, `:->` as `{:atom, …}` — never operators.
+        // (Other operators in the source may still vote; only the atom
+        // forms must not.)
+        for (source, atom_ops) in [
+            ("match :*, \"/notes\"\n", vec!["*"]),
+            (
+                "@conditions [:==, :!=, :===, :!==, :in]\n",
+                vec!["==", "!=", "===", "!=="],
+            ),
+            ("{:->, _, _} = child\n", vec!["->"]),
+        ] {
+            let votes = collect(source);
+            let triggers: Vec<&str> = votes.iter().map(|vote| vote.trigger.as_str()).collect();
+            for atom_op in &atom_ops {
+                assert!(
+                    !triggers.contains(atom_op),
+                    "atom vote for {source:?}: {triggers:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn remote_operator_calls_cast_no_votes() {
+        // Native lexes `Kernel.||` as `{:paren_identifier, …}` — never an
+        // operator.
+        for (source, call_op) in [
+            ("query = uri.query |> Kernel.||(\"\")\n", "||"),
+            ("x = Kernel.<>(a, b)\n", "<>"),
+        ] {
+            let votes = collect(source);
+            let triggers: Vec<&str> = votes.iter().map(|vote| vote.trigger.as_str()).collect();
+            assert!(
+                !triggers.contains(&call_op),
+                "call-name vote for {source:?}: {triggers:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn tie_breaks_toward_with_space_and_blames_without_space_file() {
+        // Equal votes (2 with_space vs 2 without_space): the tie resolves
+        // to the smallest key ("with_space"), so the tight-operators file
+        // is blamed.
+        let files = vec![
+            ProjectFile {
+                filename: "a.ex".to_owned(),
+                source: "x = 1 + 2\n".to_owned(),
+            },
+            ProjectFile {
+                filename: "b.ex".to_owned(),
+                source: "x=1+2\n".to_owned(),
+            },
+        ];
+        let issues = run(&files, &BTreeMap::new());
+        assert_eq!(issues.len(), 2);
+        assert!(issues.iter().all(|issue| issue.file == 1));
     }
 }
