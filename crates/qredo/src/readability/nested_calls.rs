@@ -7,31 +7,50 @@ pub(crate) fn check_prepared(
     params: &BTreeMap<String, String>,
 ) -> Vec<Finding> {
     let min_len = helpers::param_usize(params, "min_pipeline_length", 2);
-    let masked = prepared.masked();
+    // Upstream drops `:<<>>` binaries whole: calls inside string
+    // interpolation are invisible to nesting (masking keeps them visible
+    // for other checks).
+    let masked = helpers::mask_interpolation(prepared.masked());
     let lines: Vec<&str> = masked.split('\n').collect();
-    let starts = line_starts(masked);
-    let mut calls = find_calls(masked);
+    let starts = line_starts(&masked);
+    let mut calls = find_calls(&masked);
     calls.sort_by_key(|call| call.head_start);
     let lengths: Vec<usize> = calls
         .iter()
         .map(|call| 1 + pipe_len(first_arg(call)))
         .collect();
+    let parents = parent_indexes(&calls);
     let pipe_target: Vec<bool> = calls
         .iter()
-        .map(|call| is_pipe_target(masked, call.head_start))
+        .map(|call| is_pipe_target(&masked, call.head_start))
         .collect();
-    let hidden = capture_spans(masked);
+    // Calls whose first argument is an `fn` expression can never start
+    // a pipeline (upstream `[:fn]` argument type): they report nothing
+    // themselves, but their subtrees stay visible (unlike pruned ones).
+    let transparent: Vec<bool> = calls
+        .iter()
+        .map(|call| is_fn_lead(first_arg(call)))
+        .collect();
+    // Ancestors that never prune their subtrees: pipe targets (their
+    // arguments are still visited) and transparent `fn`-led calls.
+    let shields: Vec<bool> = pipe_target
+        .iter()
+        .zip(transparent.iter())
+        .map(|(pipe, clear)| *pipe || *clear)
+        .collect();
     let mut findings = Vec::new();
     for (idx, call) in calls.iter().enumerate() {
         let line = line_of_idx(&starts, &lines, call.head_start);
         if skip_line(line) {
             continue;
         }
-        // Upstream never visits calls inside `&(...)` captures.
-        if hidden
-            .iter()
-            .any(|(from, to)| *from <= call.head_start && call.head_start < *to)
-        {
+        if transparent[idx] {
+            continue;
+        }
+        // Upstream prunes whole subtrees of calls below the minimum
+        // length; shielded ancestors never prune (their arguments
+        // are still visited).
+        if pruned_under(&lengths, &parents, &shields, min_len, idx) {
             continue;
         }
         if pipe_target[idx] {
@@ -53,7 +72,10 @@ pub(crate) fn check_prepared(
 struct RemoteCall {
     head: String,
     head_start: usize,
+    close: usize,
     args: String,
+    args_start: usize,
+    args_end: usize,
 }
 
 /// Guards, typespecs and documentation carry no pipeline candidates.
@@ -105,6 +127,9 @@ fn find_calls(text: &str) -> Vec<RemoteCall> {
             out.push(RemoteCall {
                 head,
                 head_start,
+                close,
+                args_start: idx + 1,
+                args_end: close,
                 args,
             });
         }
@@ -193,68 +218,44 @@ fn is_pipe_target(text: &str, head_start: usize) -> bool {
     before.ends_with("|>")
 }
 
-/// Byte spans of `&` captures, whose contents upstream never visits.
-/// `&&` boolean conjunction is not a capture.
-fn capture_spans(text: &str) -> Vec<(usize, usize)> {
-    let bytes = text.as_bytes();
-    let mut spans = Vec::new();
-    let mut idx = 0_usize;
-    while idx < bytes.len() {
-        if bytes[idx] == b'&'
-            && bytes.get(idx + 1) != Some(&b'&')
-            && (idx == 0 || bytes[idx - 1] != b'&')
-            && let Some(end) = capture_end(bytes, idx + 1)
-        {
-            spans.push((idx, end));
-            idx = end;
-            continue;
-        }
-        idx += 1;
-    }
-    spans
-}
-
-/// End offset (exclusive) of the captured expression after `&`, or `None`
-/// when nothing callable follows: a bracketed span balances out, a call
-/// head runs to its matched paren, anything else captures nothing nested.
-fn capture_end(bytes: &[u8], mut idx: usize) -> Option<usize> {
-    if let Some(b'(' | b'[' | b'{') = bytes.get(idx) {
-        return balanced_end(bytes, idx);
-    }
-    if bytes.get(idx) == Some(&b'%') && bytes.get(idx + 1) == Some(&b'{') {
-        return balanced_end(bytes, idx + 1);
-    }
-    let start = idx;
-    while idx < bytes.len()
-        && (bytes[idx].is_ascii_alphanumeric()
-            || matches!(bytes[idx], b'_' | b'.' | b'?' | b'!' | b':'))
-    {
-        idx += 1;
-    }
-    if idx == start || bytes.get(idx) != Some(&b'(') {
-        return None;
-    }
-    balanced_end(bytes, idx)
-}
-
-/// End offset past the balanced bracket run starting at `open`.
-fn balanced_end(bytes: &[u8], open: usize) -> Option<usize> {
-    let mut depth = 0_usize;
-    let mut idx = open;
-    while idx < bytes.len() {
-        match bytes[idx] {
-            b'(' | b'[' | b'{' => depth += 1,
-            b')' | b']' | b'}' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(idx + 1);
+/// Index of the smallest enclosing call for each call, if any.
+fn parent_indexes(calls: &[RemoteCall]) -> Vec<Option<usize>> {
+    let mut parents = vec![None; calls.len()];
+    for (idx, call) in calls.iter().enumerate() {
+        let mut best: Option<(usize, usize)> = None;
+        for (other, parent) in calls.iter().enumerate() {
+            if other == idx {
+                continue;
+            }
+            if parent.args_start <= call.head_start && call.close <= parent.args_end {
+                let width = parent.args_end - parent.args_start;
+                if best.is_none_or(|(_, best_width)| width < best_width) {
+                    best = Some((other, width));
                 }
             }
-            _ => {}
         }
-        idx += 1;
+        parents[idx] = best.map(|(other, _)| other);
     }
-    None
+    parents
+}
+
+/// Whether an ancestor with pipeline length below minimum prunes this call.
+/// Pipe-target ancestors never prune: upstream still visits their arguments.
+fn pruned_under(
+    lengths: &[usize],
+    parents: &[Option<usize>],
+    shields: &[bool],
+    min_len: usize,
+    idx: usize,
+) -> bool {
+    let mut current = parents[idx];
+    while let Some(parent) = current {
+        if !shields[parent] && lengths[parent] < min_len {
+            return true;
+        }
+        current = parents[parent];
+    }
+    false
 }
 
 /// First top-level argument of the call.
@@ -262,14 +263,30 @@ fn first_arg(call: &RemoteCall) -> &str {
     split_args(&call.args).into_iter().next().unwrap_or("")
 }
 
+/// Whether text leads with an `fn` expression: anything from bare
+/// `fn ->` to multi-clause heads. Upstream types every `fn` first
+/// argument `[:fn]`, so no `fn`-led argument ever starts a pipeline.
+fn is_fn_lead(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    let Some(rest) = trimmed.strip_prefix("fn") else {
+        return false;
+    };
+    !rest.starts_with(|c: char| c.is_alphanumeric() || c == '_' || c == '?' || c == '!')
+}
+
 /// Pipeline length contributed by the first argument: another nested call
 /// with arguments adds one level. Paren-less `from x in y` counts as one;
 /// `key: value` keywords, field access (`a.b`) and operator rests count zero.
+/// An `fn` with arguments cannot start a pipeline (upstream
+/// anonymous-function rule); an arg-less `fn ->` counts one.
 fn pipe_len(arg: &str) -> usize {
     let trimmed = strip_parens(arg.trim());
     // Erlang `:mod.fun(...)` counts like its dotted form.
     let trimmed = trimmed.strip_prefix(':').unwrap_or(trimmed);
     if trimmed.is_empty() || keyword_value(trimmed).is_some() {
+        return 0;
+    }
+    if is_fn_lead(trimmed) {
         return 0;
     }
     if let Some((head, args)) = split_call(trimmed) {
@@ -642,6 +659,19 @@ mod tests {
         // Upstream never visits calls inside `&` captures.
         let src = "Enum.map(items, &Map.merge(Map.from_struct(&1), %{}))\n";
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new()).is_empty());
+    }
+
+    #[test]
+    fn nested_inside_fn_with_args_reports() {
+        // `fn`-led first arguments never report themselves, but their
+        // subtrees stay visible: remote nesting inside still reports.
+        let src = "def f(x) do\n  foo(fn y -> Mod.bar(Mod2.baz(y)) end)\nend\n";
+        let findings = check_prepared(&crate::batch::Prepared::lazy(src), &BTreeMap::new());
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].trigger,
+            crate::Trigger::Text("Mod.bar".to_owned())
+        );
     }
 
     #[test]
