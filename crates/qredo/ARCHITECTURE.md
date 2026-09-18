@@ -51,7 +51,9 @@ winners (`stale_cache::DiskCache`, schema `cache-v2.json`). Comment-validation
 outcomes, filename-dependent pattern validation and the final globally sorted
 report are hash-bound cache data too: an exact filename/order and content-hash
 hit returns that report directly without rescanning comments, rematching every
-check, rebuilding project state or resorting issues.
+check, rebuilding project state or resorting issues. Ownership moves the
+cached issue vector into the report, and machine-format path absolutization
+mutates it in place, avoiding two full diagnostic clones.
 
 Each consistency collector exposes `collect_file` (per-file votes),
 `counts_of`, `winner` (same force normalization and suppression as

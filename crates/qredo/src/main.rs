@@ -1059,7 +1059,7 @@ fn execute_cached(
 fn print_report(
     args: &SuggestArgs,
     files: &[qredo::RunnerFile],
-    report: &qredo::RunReport,
+    report: &mut qredo::RunReport,
     context: &ReportContext,
 ) {
     match args.format {
@@ -1076,11 +1076,11 @@ fn print_report(
             print!("{}", qredo::format_default::render(report, files, &context));
         }
         Format::Oneline | Format::Flycheck | Format::Json | Format::Sarif => {
-            let absolute = absolutized(report, &context.root);
+            absolutize_in_place(report, &context.root);
             let mut machine = qredo::format_machine::MachineContext::new(context.root.clone());
             if matches!(args.format, Format::Sarif) {
                 let mut seen = std::collections::BTreeSet::new();
-                for issue in &absolute.issues {
+                for issue in &report.issues {
                     if seen.insert(issue.check.clone()) {
                         machine = machine.with_rule_doc(
                             issue.check.clone(),
@@ -1090,10 +1090,10 @@ fn print_report(
                 }
             }
             let text = match args.format {
-                Format::Oneline => qredo::format_machine::render_oneline(&absolute, &machine),
-                Format::Flycheck => qredo::format_machine::render_flycheck(&absolute, &machine),
-                Format::Json => qredo::format_machine::render_json(&absolute, &machine),
-                Format::Sarif => qredo::format_machine::render_sarif(&absolute, &machine),
+                Format::Oneline => qredo::format_machine::render_oneline(report, &machine),
+                Format::Flycheck => qredo::format_machine::render_flycheck(report, &machine),
+                Format::Json => qredo::format_machine::render_json(report, &machine),
+                Format::Sarif => qredo::format_machine::render_sarif(report, &machine),
                 Format::Default => unreachable!("covered above"),
             };
             print!("{text}");
@@ -1115,16 +1115,14 @@ struct ReportContext {
     locale_utf8: bool,
 }
 
-/// Clone a report with root-absolute filenames for native-shape output.
-fn absolutized(report: &qredo::RunReport, root: &Path) -> qredo::RunReport {
-    let mut absolute = report.clone();
-    for issue in &mut absolute.issues {
+/// Make report filenames root-absolute in place for native-shape output.
+fn absolutize_in_place(report: &mut qredo::RunReport, root: &Path) {
+    for issue in &mut report.issues {
         let path = Path::new(&issue.filename);
         if !path.is_absolute() {
             issue.filename = root.join(path).to_string_lossy().into_owned();
         }
     }
-    absolute
 }
 
 /// Saturating wall-time microseconds for timing lines: the `min` bounds
@@ -1781,11 +1779,11 @@ fn report_exit(
             eprintln!("unsupported config: {}", fallback.reason);
             2
         }
-        Ok(report) => {
+        Ok(mut report) => {
             for error in &report.errors {
                 eprintln!("error: {error:?}");
             }
-            print_report(args, files, &report, &context);
+            print_report(args, files, &mut report, &context);
             if !report.skipped_invalid.is_empty() {
                 eprintln!("skipped invalid: {}", report.skipped_invalid.join(", "));
             }
@@ -2101,6 +2099,32 @@ mod tests {
         assert_eq!(version_text(), format!("{}\n", env!("CARGO_PKG_VERSION")));
         assert!(help_text().contains("suggest"));
         assert!(help_texts::suggest().contains("--strict"));
+    }
+
+    #[test]
+    fn machine_output_absolutizes_in_place() {
+        let mut report = qredo::RunReport {
+            issues: vec![qredo::Issue {
+                check: "Credo.Check.Warning.IoInspect".to_owned(),
+                category: qredo::Category::Warning,
+                priority: 0,
+                severity: 1.0,
+                message: "message".to_owned(),
+                filename: "lib/a.ex".to_owned(),
+                line_no: Some(1),
+                column: Some(1),
+                exit_status: 16,
+                trigger: qredo::IssueTrigger::NoTrigger,
+                scope: None,
+            }],
+            exit_status: 16,
+            errors: Vec::new(),
+            skipped_invalid: Vec::new(),
+        };
+        let allocation = report.issues.as_ptr();
+        absolutize_in_place(&mut report, Path::new("/project"));
+        assert_eq!(report.issues.as_ptr(), allocation, "must not clone issues");
+        assert_eq!(report.issues[0].filename, "/project/lib/a.ex");
     }
 
     /// Discovery honors `files.included` over the conventional default:

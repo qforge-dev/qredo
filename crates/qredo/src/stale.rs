@@ -119,7 +119,7 @@ pub(crate) fn execute_stale_with_path(
         Some(cache) => Ok(incremental(
             files,
             &runner_config,
-            &cache,
+            cache,
             &fingerprint,
             &saver,
         )),
@@ -523,13 +523,13 @@ fn plan_partitions(
     plan
 }
 
-/// Clone the exact final report stored by a hash-clean cache hit.
-fn cached_report(cache: &DiskCache) -> crate::RunReport {
+/// Move out the exact final report stored by a hash-clean cache hit.
+fn cached_report(cache: DiskCache) -> crate::RunReport {
     crate::RunReport {
-        issues: cache.issues.clone(),
+        issues: cache.issues,
         exit_status: cache.exit_status,
-        errors: cache.errors.clone(),
-        skipped_invalid: cache.skipped_invalid.clone(),
+        errors: cache.errors,
+        skipped_invalid: cache.skipped_invalid,
     }
 }
 
@@ -537,23 +537,23 @@ fn cached_report(cache: &DiskCache) -> crate::RunReport {
 fn incremental(
     files: &[crate::RunnerFile],
     runner_config: &crate::RunnerConfig,
-    cache: &DiskCache,
+    cache: DiskCache,
     fingerprint: &str,
     saver: &dyn Fn(&DiskCache),
 ) -> crate::RunReport {
-    let mut plan = plan_partitions(files, runner_config, cache);
+    let mut plan = plan_partitions(files, runner_config, &cache);
     if plan.exact_file_order && plan.dirty.is_empty() {
         return cached_report(cache);
     }
     let fresh_run = run_fresh_subset(files, runner_config, &mut plan);
-    let mut issues = merge_reused_issues(files, cache, &plan, fresh_run.issues);
+    let mut issues = merge_reused_issues(files, &cache, &plan, fresh_run.issues);
 
     // Project phase per check; a flipped majority fails open to a full
     // run rather than guessing.
     let Some(phase) = project_phase(
         files,
         runner_config,
-        cache,
+        &cache,
         &plan,
         &fresh_run.fresh_valid,
         &fresh_run.prepared,
@@ -580,7 +580,7 @@ fn incremental(
     persist_cache(
         files,
         runner_config,
-        cache,
+        &cache,
         fingerprint,
         saver,
         &plan,
@@ -1583,11 +1583,17 @@ mod tests {
         let (runner, fingerprint) = runner_and_fingerprint(TWO_CHECKS, -99);
         let expected = crate::run_checks(&files, &runner);
         let cache = cold_cache(&files, &expected, &runner, &fingerprint);
+        let issue_allocation = cache.issues.as_ptr();
         let saves = std::cell::Cell::new(0_usize);
-        let actual = incremental(&files, &runner, &cache, &fingerprint, &|_| {
+        let actual = incremental(&files, &runner, cache, &fingerprint, &|_| {
             saves.set(saves.get() + 1);
         });
         assert_eq!(actual, expected);
+        assert_eq!(
+            actual.issues.as_ptr(),
+            issue_allocation,
+            "clean hit must move, not clone, cached issues"
+        );
         assert_eq!(saves.get(), 0, "clean hit must not rewrite its cache");
     }
 
