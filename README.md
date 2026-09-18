@@ -16,16 +16,12 @@ with an explicit reason on anything else. See
 
 ## Install with Mix
 
-Add qredo as a development dependency. Git checkouts use the rolling `dev`
-GitHub release; tagged/Hex packages use the matching immutable release:
+Add qredo from Hex as a development dependency:
 
 ```elixir
 defp deps do
   [
-    {:qredo,
-     github: "qforge-dev/qredo",
-     only: [:dev, :test],
-     runtime: false}
+    {:qredo, "~> 0.1.0", only: [:dev, :test], runtime: false}
   ]
 end
 ```
