@@ -86,12 +86,11 @@ pub(crate) fn runner_of(
     selection: crate::Selection,
 ) -> crate::RunnerConfig {
     crate::RunnerConfig {
-        checks: enabled_modules(config, &selection)
+        checks: enabled_checks(config, &selection)
             .into_iter()
-            .map(|module| crate::CheckEntry {
-                module,
-                enabled: true,
-                params: std::collections::BTreeMap::new(),
+            .map(|mut entry| {
+                entry.enabled = true;
+                entry
             })
             .collect(),
         files_included: config
@@ -136,11 +135,22 @@ pub fn execute(
 /// CLI check-count reporting so both agree.
 #[must_use]
 pub fn enabled_modules(config: &crate::CredoConfig, selection: &crate::Selection) -> Vec<String> {
+    enabled_checks(config, selection)
+        .into_iter()
+        .map(|check| check.module)
+        .collect()
+}
+
+/// Enabled check entries with their configured parameters preserved.
+fn enabled_checks(
+    config: &crate::CredoConfig,
+    selection: &crate::Selection,
+) -> Vec<crate::CheckEntry> {
     config
         .checks
         .iter()
         .filter(|check| check.enabled || reenabled(&check.module, &selection.enable_disabled))
-        .map(|check| check.module.clone())
+        .cloned()
         .collect()
 }
 /// True when a disabled check rejoins via `--enable-disabled-checks`:
@@ -469,6 +479,21 @@ mod tests {
     use super::*;
 
     const MINIMAL: &str = "%{\n  configs: [\n    %{\n      name: \"default\",\n      files: %{included: [\"lib/\", \"test/\"]},\n      checks: %{enabled: [{Credo.Check.Warning.IoInspect, []}]}\n    }\n  ]\n}\n";
+
+    #[test]
+    fn runner_of_preserves_check_params() {
+        let source = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Warning.IoInspect, [exit_status: 2]}]}}]}\n";
+        let config = crate::parse_config(source, "default").expect("parses");
+        let runner = super::runner_of(&config, 0, crate::Selection::default());
+        assert_eq!(runner.checks.len(), 1);
+        assert_eq!(
+            runner.checks[0]
+                .params
+                .get("exit_status")
+                .map(String::as_str),
+            Some("2")
+        );
+    }
 
     #[test]
     fn static_default_params_serve() {
