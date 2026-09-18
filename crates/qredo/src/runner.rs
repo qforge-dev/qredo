@@ -47,7 +47,7 @@ pub struct RunnerConfig {
 }
 
 /// Explicit pipeline failure modes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum RunError {
     /// Check without any implementation.
     UnknownRule(String),

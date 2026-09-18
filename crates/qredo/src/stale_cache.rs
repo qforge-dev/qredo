@@ -1,39 +1,47 @@
 //! Persistent incremental cache for `--stale` runs.
 //!
-//! Layout: `$XDG_CACHE_HOME/qredo/<proj>/cache-v1.json`, falling back to
+//! Layout: `$XDG_CACHE_HOME/qredo/<proj>/cache-v2.json`, falling back to
 //! `~/.cache/qredo/<proj>/` when `XDG_CACHE_HOME` is unset. `<proj>` is the
 //! first 16 hex chars of the SHA-256 over the canonical root path, so
 //! distinct checkouts never share entries. A moved checkout simply starts
 //! cold under a new directory; no garbage collection yet.
 //!
 //! Per file we store the content hash (uppercase hex SHA-256, matching
-//! [`crate::SourceSnapshot`]), the final post-filter issues, the per-check
-//! project vote counts (`check -> kind -> count`) and the syntax-gate bit.
-//! Globally we store the config fingerprint and the per-check majority
-//! winners. Any fingerprint mismatch invalidates the whole cache; a content
-//! hash mismatch invalidates just that file. Corrupt or unreadable caches
-//! fail open to a full run, never to silent divergence.
+//! [`crate::SourceSnapshot`]), per-check project vote counts
+//! (`check -> kind -> count`), syntax validity and comment-validation
+//! outcome. Globally we store the sorted report, config fingerprint,
+//! file order, pattern-validation result and per-check majority winners.
+//! Any fingerprint mismatch invalidates the whole cache; a content hash
+//! mismatch invalidates just that file. Corrupt or unreadable caches fail
+//! open to a full run, never to silent divergence.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
 /// On-disk schema version; bumps invalidate every existing cache.
-pub const CACHE_VERSION: u32 = 1;
+pub const CACHE_VERSION: u32 = 2;
+
+/// Cached comment-registration failure for one exact source hash.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CachedCommentError {
+    pub line_no: usize,
+    pub message: String,
+}
 
 /// One cached file unit.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CachedFile {
     /// Uppercase hex SHA-256 over exact source bytes.
     pub hash: String,
-    /// Final post-filter, post-suppression issues for this file.
-    pub issues: Vec<crate::Issue>,
     /// Project vote counts by check (`check -> kind -> count`).
     pub project_counts: BTreeMap<String, BTreeMap<String, usize>>,
     /// Syntax-gate outcome: invalid files stay skipped without re-parsing.
     pub skipped_invalid: bool,
+    /// Comment-validation failure, reusable only with the matching hash.
+    pub comment_error: Option<CachedCommentError>,
 }
 
 /// Whole-project cache payload.
@@ -45,6 +53,22 @@ pub struct DiskCache {
     pub qredo_version: String,
     /// Global config fingerprint (see [`fingerprint`]).
     pub fingerprint: String,
+    /// Discovery-order filenames. Exact equality enables the clean fast path
+    /// and safe reuse of filename-dependent pattern validation.
+    pub file_order: Vec<String>,
+    /// Final globally sorted post-filter report issues.
+    pub issues: Vec<crate::Issue>,
+    /// OR-combined status for [`Self::issues`].
+    pub exit_status: i32,
+    /// Exact errors produced when this payload was built.
+    pub errors: Vec<crate::RunError>,
+    /// Exact invalid-syntax filenames in discovery order.
+    pub skipped_invalid: Vec<String>,
+    /// Checks stopped by lazily reached file-pattern errors.
+    pub pattern_stopped: BTreeSet<String>,
+    /// Pattern errors in check order, reusable while [`Self::file_order`]
+    /// stays identical.
+    pub pattern_errors: Vec<crate::RunError>,
     /// Majority winner per project check (`None` = no votes).
     pub winners: BTreeMap<String, Option<String>>,
     /// Display filename (root-relative) to cached unit.
@@ -59,6 +83,13 @@ impl DiskCache {
             version: CACHE_VERSION,
             qredo_version: env!("CARGO_PKG_VERSION").to_owned(),
             fingerprint,
+            file_order: Vec::new(),
+            issues: Vec::new(),
+            exit_status: 0,
+            errors: Vec::new(),
+            skipped_invalid: Vec::new(),
+            pattern_stopped: BTreeSet::new(),
+            pattern_errors: Vec::new(),
             winners: BTreeMap::new(),
             files: BTreeMap::new(),
         }
@@ -104,7 +135,7 @@ pub fn cache_dir(root: &Path) -> Option<PathBuf> {
 /// Cache file path for one project root, or `None` when unresolvable.
 #[must_use]
 pub fn cache_file(root: &Path) -> Option<PathBuf> {
-    cache_dir(root).map(|dir| dir.join("cache-v1.json"))
+    cache_dir(root).map(|dir| dir.join("cache-v2.json"))
 }
 
 /// Global fingerprint over everything that can change issue output for
@@ -198,7 +229,7 @@ pub fn save_file(path: &Path, cache: &DiskCache) {
     let Ok(bytes) = serde_json::to_vec(cache) else {
         return;
     };
-    let tmp = dir.join("cache-v1.json.tmp");
+    let tmp = dir.join("cache-v2.json.tmp");
     if std::fs::write(&tmp, bytes).is_err() {
         return;
     }
@@ -258,15 +289,15 @@ mod tests {
     fn cache_round_trips_through_explicit_path() {
         let dir = std::env::temp_dir().join("qredo-cache-test-home");
         let _ = std::fs::remove_dir_all(&dir);
-        let path = dir.join("cache-v1.json");
+        let path = dir.join("cache-v2.json");
         let mut cache = DiskCache::empty("fp".to_owned());
         cache.files.insert(
             "lib/a.ex".to_owned(),
             CachedFile {
                 hash: content_hash("x = 1\n"),
-                issues: Vec::new(),
                 project_counts: BTreeMap::new(),
                 skipped_invalid: false,
+                comment_error: None,
             },
         );
         save_file(&path, &cache);
@@ -276,11 +307,41 @@ mod tests {
     }
 
     #[test]
+    fn fast_hit_metadata_round_trips() {
+        let dir = std::env::temp_dir().join("qredo-cache-test-fast-hit");
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("cache-v2.json");
+        let mut cache = DiskCache::empty("fp".to_owned());
+        cache.file_order = vec!["lib/a.ex".to_owned()];
+        cache.exit_status = 2;
+        cache.errors = vec![crate::RunError::Pattern("cached-pattern".to_owned())];
+        cache.pattern_stopped.insert("Check.A".to_owned());
+        cache
+            .pattern_errors
+            .push(crate::RunError::Pattern("cached-pattern".to_owned()));
+        cache.files.insert(
+            "lib/a.ex".to_owned(),
+            CachedFile {
+                hash: content_hash("# credo:disable-for-lines:nope\n"),
+                project_counts: BTreeMap::new(),
+                skipped_invalid: false,
+                comment_error: Some(CachedCommentError {
+                    line_no: 1,
+                    message: "cached-comment".to_owned(),
+                }),
+            },
+        );
+        save_file(&path, &cache);
+        assert_eq!(load_file(&path, "fp"), Some(cache));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn corrupt_cache_fails_open() {
         let dir = std::env::temp_dir().join("qredo-cache-test-corrupt");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
-        let path = dir.join("cache-v1.json");
+        let path = dir.join("cache-v2.json");
         std::fs::write(&path, b"not json").expect("write");
         assert_eq!(load_file(&path, "fp"), None);
         let _ = std::fs::remove_dir_all(&dir);
@@ -294,7 +355,7 @@ mod tests {
         assert!(text.contains("qredo"), "{text}");
         assert_eq!(
             cache_file(Path::new("/proj/app")).expect("resolvable"),
-            dir.join("cache-v1.json")
+            dir.join("cache-v2.json")
         );
     }
 }

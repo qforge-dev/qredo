@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use crate::integration::{Fallback, Outcome};
-use crate::stale_cache::{CachedFile, DiskCache};
+use crate::stale_cache::{CachedCommentError, CachedFile, DiskCache};
 
 // Lanes needing the complete staged issue set or whole-project aggregation.
 const REDUNDANT: &str = "Credo.Check.Design.RedundantConfigComments";
@@ -28,6 +28,9 @@ const VALIDATED: &[&str] = &[
     "Credo.Check.Design.MissingCheckInConfig",
     "Credo.Check.Design.DeprecatedChecksConfig",
 ];
+
+type ProjectCounts = BTreeMap<String, BTreeMap<String, usize>>;
+type ProjectCountsByFile = BTreeMap<String, ProjectCounts>;
 
 /// Run the native pipeline with incremental caching for served configs.
 ///
@@ -139,20 +142,13 @@ fn fresh_sub_config(full: &crate::RunnerConfig) -> crate::RunnerConfig {
     sub
 }
 
-/// Cheap text-only comment validation over all files in input order,
-/// mirroring the pipeline prepare gate without parsing.
-fn live_comment_errors(files: &[crate::RunnerFile]) -> Vec<crate::RunError> {
-    let mut errors = Vec::new();
-    for file in files {
-        if let Err(error) = crate::suppression::validate_comments(&file.source) {
-            errors.push(crate::RunError::Comment {
-                file: file.filename.clone(),
-                line_no: error.line_no,
-                message: error.message,
-            });
-        }
-    }
-    errors
+/// Text-only comment validation for a changed file. Unchanged files reuse
+/// this exact outcome by content hash from [`CachedFile::comment_error`].
+fn validate_comment(file: &crate::RunnerFile) -> Result<(), CachedCommentError> {
+    crate::suppression::validate_comments(&file.source).map_err(|error| CachedCommentError {
+        line_no: error.line_no,
+        message: error.message,
+    })
 }
 
 /// Full run plus cold-save: issues regrouped per file, votes collected with
@@ -178,7 +174,16 @@ fn cold_cache(
     fingerprint: &str,
 ) -> DiskCache {
     let mut cache = DiskCache::empty(fingerprint.to_owned());
+    cache.file_order = files.iter().map(|file| file.filename.clone()).collect();
+    cache.issues.clone_from(&report.issues);
+    cache.exit_status = report.exit_status;
+    cache.errors.clone_from(&report.errors);
+    cache.skipped_invalid.clone_from(&report.skipped_invalid);
+    let (pattern_stopped, pattern_errors) = pattern_stops(files, runner_config);
+    cache.pattern_stopped = pattern_stopped;
+    cache.pattern_errors = pattern_errors;
     let skipped: BTreeSet<&str> = report.skipped_invalid.iter().map(String::as_str).collect();
+    let comment_errors = cached_comment_errors(report);
     // Per-file facts parsed once and shared across the `Facts`-backed
     // collectors (cold runs pay one extra parse pass for votes).
     let prepared: Vec<crate::batch::Prepared<'_>> = files
@@ -191,8 +196,13 @@ fn cold_cache(
             .map(|entry| (entry.module.clone(), check_matcher(entry, runner_config)))
             .collect();
     for (index, file) in files.iter().enumerate() {
-        let (name, entry) =
-            cold_file_entry(file, report, &project_matchers, &prepared[index], &skipped);
+        let (name, entry) = cold_file_entry(
+            file,
+            &project_matchers,
+            &prepared[index],
+            &skipped,
+            &comment_errors,
+        );
         cache.files.insert(name, entry);
     }
     for entry in project_entries(runner_config) {
@@ -210,32 +220,59 @@ fn cold_cache(
     cache
 }
 
+/// Comment failures from a full report, keyed by borrowed filename.
+fn cached_comment_errors(report: &crate::RunReport) -> BTreeMap<&str, CachedCommentError> {
+    report
+        .errors
+        .iter()
+        .filter_map(|error| match error {
+            crate::RunError::Comment {
+                file,
+                line_no,
+                message,
+            } => Some((
+                file.as_str(),
+                CachedCommentError {
+                    line_no: *line_no,
+                    message: message.clone(),
+                },
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
 /// One cold-cache file unit with its project votes.
 fn cold_file_entry(
     file: &crate::RunnerFile,
-    report: &crate::RunReport,
     project_matchers: &BTreeMap<String, crate::file_select::CheckFileMatcher>,
     prepared: &crate::batch::Prepared<'_>,
     skipped: &BTreeSet<&str>,
+    comment_errors: &BTreeMap<&str, CachedCommentError>,
 ) -> (String, CachedFile) {
     let hash = crate::stale_cache::content_hash(&file.source);
+    if let Some(error) = comment_errors.get(file.filename.as_str()) {
+        return (
+            file.filename.clone(),
+            CachedFile {
+                hash,
+                project_counts: BTreeMap::new(),
+                skipped_invalid: false,
+                comment_error: Some(error.clone()),
+            },
+        );
+    }
     if skipped.contains(file.filename.as_str()) {
         return (
             file.filename.clone(),
             CachedFile {
                 hash,
-                issues: Vec::new(),
                 project_counts: BTreeMap::new(),
                 skipped_invalid: true,
+                comment_error: None,
             },
         );
     }
-    let issues: Vec<crate::Issue> = report
-        .issues
-        .iter()
-        .filter(|issue| issue.filename == file.filename)
-        .cloned()
-        .collect();
     let mut project_counts = BTreeMap::new();
     for (module, matcher) in project_matchers {
         let votes = match selected_for(matcher, &file.filename) {
@@ -250,9 +287,9 @@ fn cold_file_entry(
         file.filename.clone(),
         CachedFile {
             hash,
-            issues,
             project_counts,
             skipped_invalid: false,
+            comment_error: None,
         },
     )
 }
@@ -349,11 +386,14 @@ fn pattern_stops(
 ) -> (BTreeSet<String>, Vec<crate::RunError>) {
     let mut stopped = BTreeSet::new();
     let mut errors = Vec::new();
-    for entry in runner_config
-        .checks
-        .iter()
-        .filter(|entry| entry.enabled && runner_config.selection.should_run(&entry.module))
-    {
+    for entry in runner_config.checks.iter().filter(|entry| {
+        entry.enabled
+            && runner_config.selection.should_run(&entry.module)
+            && !crate::version_skipped_on_pinned_toolchain(&entry.module)
+            && crate::runs_at_min_priority(&entry.module, runner_config.min_priority)
+            && entry.module.as_str() != REDUNDANT
+            && !VALIDATED.contains(&entry.module.as_str())
+    }) {
         let matcher = check_matcher(entry, runner_config);
         for file in files {
             match matcher.matches(&file.filename) {
@@ -374,10 +414,87 @@ fn pattern_stops(
 struct Partition {
     errors: Vec<crate::RunError>,
     errored_file: BTreeSet<String>,
+    comment_errors: BTreeMap<String, CachedCommentError>,
+    hashes: Vec<String>,
+    dirty: BTreeSet<usize>,
     fresh: Vec<usize>,
     reused: Vec<usize>,
     skipped_set: BTreeSet<String>,
     pattern_stopped: BTreeSet<String>,
+    pattern_errors: Vec<crate::RunError>,
+    exact_file_order: bool,
+}
+
+impl Partition {
+    /// Empty classification plan carrying reusable pattern validation.
+    fn new(
+        file_capacity: usize,
+        pattern_stopped: BTreeSet<String>,
+        pattern_errors: Vec<crate::RunError>,
+        exact_file_order: bool,
+    ) -> Self {
+        Self {
+            errors: pattern_errors.clone(),
+            errored_file: BTreeSet::new(),
+            comment_errors: BTreeMap::new(),
+            hashes: Vec::with_capacity(file_capacity),
+            dirty: BTreeSet::new(),
+            fresh: Vec::new(),
+            reused: Vec::new(),
+            skipped_set: BTreeSet::new(),
+            pattern_stopped,
+            pattern_errors,
+            exact_file_order,
+        }
+    }
+
+    /// Record one exact comment-validation failure in report and cache form.
+    fn record_comment_error(&mut self, file: &crate::RunnerFile, error: CachedCommentError) {
+        self.errored_file.insert(file.filename.clone());
+        self.comment_errors
+            .insert(file.filename.clone(), error.clone());
+        self.errors.push(crate::RunError::Comment {
+            file: file.filename.clone(),
+            line_no: error.line_no,
+            message: error.message,
+        });
+    }
+
+    /// Classify one file by exact hash, reusing validation when safe.
+    fn classify(&mut self, index: usize, file: &crate::RunnerFile, cache: &DiskCache) {
+        let hash = crate::stale_cache::content_hash(&file.source);
+        self.hashes.push(hash.clone());
+        if let Some(cached) = cache
+            .files
+            .get(&file.filename)
+            .filter(|cached| cached.hash == hash)
+        {
+            if let Some(error) = &cached.comment_error {
+                self.record_comment_error(file, error.clone());
+            } else if cached.skipped_invalid {
+                self.skipped_set.insert(file.filename.clone());
+            } else {
+                self.reused.push(index);
+            }
+            return;
+        }
+        self.dirty.insert(index);
+        match validate_comment(file) {
+            Ok(()) => self.fresh.push(index),
+            Err(error) => self.record_comment_error(file, error),
+        }
+    }
+}
+
+/// Exact discovery order is required for reusing lazy pattern outcomes and
+/// report error ordering.
+fn exact_file_order(files: &[crate::RunnerFile], cache: &DiskCache) -> bool {
+    cache.file_order.len() == files.len()
+        && cache
+            .file_order
+            .iter()
+            .zip(files)
+            .all(|(cached, file)| cached == &file.filename)
 }
 
 /// Comment validation plus content-hash partitioning. Files failing
@@ -388,42 +505,31 @@ fn plan_partitions(
     runner_config: &crate::RunnerConfig,
     cache: &DiskCache,
 ) -> Partition {
-    let (pattern_stopped, mut errors) = pattern_stops(files, runner_config);
-    let comment_errors = live_comment_errors(files);
-    let errored_file: BTreeSet<String> = comment_errors
-        .iter()
-        .filter_map(|error| match error {
-            crate::RunError::Comment { file, .. } => Some(file.clone()),
-            _ => None,
-        })
-        .collect();
-    errors.extend(comment_errors);
-    let mut fresh = Vec::new();
-    let mut reused = Vec::new();
-    let mut skipped_set = BTreeSet::new();
-    for (index, file) in files.iter().enumerate() {
-        if errored_file.contains(file.filename.as_str()) {
-            continue;
-        }
-        let hash = crate::stale_cache::content_hash(&file.source);
-        match cache.files.get(&file.filename) {
-            Some(cached) if cached.hash == hash => {
-                if cached.skipped_invalid {
-                    skipped_set.insert(file.filename.clone());
-                } else {
-                    reused.push(index);
-                }
-            }
-            _ => fresh.push(index),
-        }
-    }
-    Partition {
-        errors,
-        errored_file,
-        fresh,
-        reused,
-        skipped_set,
+    let exact_file_order = exact_file_order(files, cache);
+    let (pattern_stopped, pattern_errors) = if exact_file_order {
+        (cache.pattern_stopped.clone(), cache.pattern_errors.clone())
+    } else {
+        pattern_stops(files, runner_config)
+    };
+    let mut plan = Partition::new(
+        files.len(),
         pattern_stopped,
+        pattern_errors,
+        exact_file_order,
+    );
+    for (index, file) in files.iter().enumerate() {
+        plan.classify(index, file, cache);
+    }
+    plan
+}
+
+/// Clone the exact final report stored by a hash-clean cache hit.
+fn cached_report(cache: &DiskCache) -> crate::RunReport {
+    crate::RunReport {
+        issues: cache.issues.clone(),
+        exit_status: cache.exit_status,
+        errors: cache.errors.clone(),
+        skipped_invalid: cache.skipped_invalid.clone(),
     }
 }
 
@@ -436,6 +542,9 @@ fn incremental(
     saver: &dyn Fn(&DiskCache),
 ) -> crate::RunReport {
     let mut plan = plan_partitions(files, runner_config, cache);
+    if plan.exact_file_order && plan.dirty.is_empty() {
+        return cached_report(cache);
+    }
     let fresh_run = run_fresh_subset(files, runner_config, &mut plan);
     let mut issues = merge_reused_issues(files, cache, &plan, fresh_run.issues);
 
@@ -451,7 +560,6 @@ fn incremental(
     ) else {
         return full_run_and_save(files, runner_config, fingerprint, saver);
     };
-    let cache_is_current = clean_hit_matches_cache(files, cache, &plan, &phase.new_winners);
     // Pattern-errored project checks contribute nothing: strip them.
     issues.retain(|issue| !phase.drop_checks.contains(&issue.check));
     issues.extend(phase.fresh_issues);
@@ -469,21 +577,21 @@ fn incremental(
         .iter()
         .fold(0, |status, issue| status | issue.exit_status);
 
-    if !cache_is_current {
-        persist_cache(
-            files,
-            runner_config,
-            cache,
-            fingerprint,
-            saver,
-            &plan,
-            phase.new_winners,
-            &phase.drop_checks,
-            &fresh_run.fresh_valid,
-            &fresh_run.prepared,
-            &issues,
-        );
-    }
+    persist_cache(
+        files,
+        runner_config,
+        cache,
+        fingerprint,
+        saver,
+        &plan,
+        phase.new_winners,
+        &phase.drop_checks,
+        &fresh_run.fresh_valid,
+        &fresh_run.prepared,
+        &issues,
+        exit_status,
+        &fresh_run.skipped_invalid,
+    );
 
     crate::RunReport {
         issues,
@@ -491,26 +599,6 @@ fn incremental(
         errors: plan.errors,
         skipped_invalid: fresh_run.skipped_invalid,
     }
-}
-
-/// True when an incremental run changed no cache-bearing input: every
-/// non-errored file is still present by hash, no file was added or deleted,
-/// and every project winner is unchanged. In that case rebuilding and
-/// atomically rewriting the same payload is pure overhead.
-fn clean_hit_matches_cache(
-    files: &[crate::RunnerFile],
-    cache: &DiskCache,
-    plan: &Partition,
-    new_winners: &BTreeMap<String, Option<String>>,
-) -> bool {
-    if !plan.fresh.is_empty() || &cache.winners != new_winners {
-        return false;
-    }
-    let mut cache_bearing = files
-        .iter()
-        .filter(|file| !plan.errored_file.contains(file.filename.as_str()));
-    cache_bearing.clone().count() == cache.files.len()
-        && cache_bearing.all(|file| cache.files.contains_key(&file.filename))
 }
 
 /// Reused kernel/filename issues (pattern-stopped checks stripped) plus
@@ -521,19 +609,19 @@ fn merge_reused_issues(
     plan: &Partition,
     fresh: Vec<crate::Issue>,
 ) -> Vec<crate::Issue> {
-    let mut issues = Vec::new();
-    for index in &plan.reused {
-        let file = &files[*index];
-        if let Some(cached) = cache.files.get(&file.filename) {
-            issues.extend(
-                cached
-                    .issues
-                    .iter()
-                    .filter(|issue| !plan.pattern_stopped.contains(&issue.check))
-                    .cloned(),
-            );
-        }
-    }
+    let reused_names: BTreeSet<&str> = plan
+        .reused
+        .iter()
+        .map(|index| files[*index].filename.as_str())
+        .collect();
+    let mut issues: Vec<crate::Issue> = cache
+        .issues
+        .iter()
+        .filter(|issue| reused_names.contains(issue.filename.as_str()))
+        .filter(|issue| !plan.pattern_stopped.contains(&issue.check))
+        .filter(|issue| issue.check != REDUNDANT)
+        .cloned()
+        .collect();
     issues.extend(fresh);
     issues
 }
@@ -589,8 +677,70 @@ fn run_fresh_subset<'a>(
     }
 }
 
-/// Persist one incremental run: reused entries keep hashes/counts, fresh
-/// entries are built from this run, errored and deleted files are dropped.
+/// Inputs used to rebuild per-file cache entries after an incremental run.
+struct PersistEntries<'a> {
+    cache: &'a DiskCache,
+    plan: &'a Partition,
+    drop_checks: &'a BTreeSet<String>,
+    fresh_counts: &'a ProjectCountsByFile,
+}
+
+impl PersistEntries<'_> {
+    /// One hash-bound file payload, reusing or replacing project votes.
+    fn file(&self, index: usize, file: &crate::RunnerFile) -> CachedFile {
+        let hash = self.plan.hashes[index].clone();
+        if let Some(error) = self.plan.comment_errors.get(&file.filename) {
+            return CachedFile {
+                hash,
+                project_counts: BTreeMap::new(),
+                skipped_invalid: false,
+                comment_error: Some(error.clone()),
+            };
+        }
+        if self.plan.skipped_set.contains(&file.filename) {
+            return CachedFile {
+                hash,
+                project_counts: BTreeMap::new(),
+                skipped_invalid: true,
+                comment_error: None,
+            };
+        }
+        CachedFile {
+            hash,
+            project_counts: self.project_counts(index, file),
+            skipped_invalid: false,
+            comment_error: None,
+        }
+    }
+
+    /// Reused votes for clean files, fresh votes for changed files.
+    fn project_counts(
+        &self,
+        index: usize,
+        file: &crate::RunnerFile,
+    ) -> BTreeMap<String, BTreeMap<String, usize>> {
+        let mut counts = if self.plan.reused.contains(&index) {
+            self.cache
+                .files
+                .get(&file.filename)
+                .map(|cached| cached.project_counts.clone())
+                .unwrap_or_default()
+        } else {
+            self.fresh_counts
+                .get(&file.filename)
+                .cloned()
+                .unwrap_or_default()
+        };
+        for stopped in self.drop_checks {
+            counts.remove(stopped);
+        }
+        counts
+    }
+}
+
+/// Persist one incremental run: reused entries keep vote counts, fresh
+/// entries are built from this run, and every hash-bound validation outcome
+/// plus the sorted report is recorded for a direct clean-hit return.
 #[allow(
     clippy::too_many_arguments,
     reason = "one cache-save spine; inputs are the plan plus merge outputs"
@@ -607,51 +757,29 @@ fn persist_cache(
     fresh_valid: &[usize],
     fresh_prepared: &[crate::batch::Prepared<'_>],
     issues: &[crate::Issue],
+    exit_status: i32,
+    skipped_invalid: &[String],
 ) {
     let mut next = DiskCache::empty(fingerprint.to_owned());
+    next.file_order
+        .extend(files.iter().map(|file| file.filename.clone()));
+    next.issues.extend_from_slice(issues);
+    next.exit_status = exit_status;
+    next.errors.clone_from(&plan.errors);
+    next.skipped_invalid.extend_from_slice(skipped_invalid);
+    next.pattern_stopped.clone_from(&plan.pattern_stopped);
+    next.pattern_errors.clone_from(&plan.pattern_errors);
     next.winners = new_winners;
-    let by_file = group_by_filename(issues);
     let fresh_counts = fresh_vote_counts(files, runner_config, fresh_valid, fresh_prepared);
+    let entries = PersistEntries {
+        cache,
+        plan,
+        drop_checks,
+        fresh_counts: &fresh_counts,
+    };
     for (index, file) in files.iter().enumerate() {
-        if plan.errored_file.contains(file.filename.as_str()) {
-            continue;
-        }
-        let hash = crate::stale_cache::content_hash(&file.source);
-        if plan.skipped_set.contains(&file.filename) {
-            next.files.insert(
-                file.filename.clone(),
-                CachedFile {
-                    hash,
-                    issues: Vec::new(),
-                    project_counts: BTreeMap::new(),
-                    skipped_invalid: true,
-                },
-            );
-            continue;
-        }
-        let mut project_counts = BTreeMap::new();
-        if plan.reused.contains(&index) {
-            if let Some(cached) = cache.files.get(&file.filename) {
-                project_counts = cached.project_counts.clone();
-                for stopped in drop_checks {
-                    project_counts.remove(stopped);
-                }
-            }
-        } else if let Some(counts) = fresh_counts.get(&file.filename) {
-            project_counts = counts.clone();
-            for stopped in drop_checks {
-                project_counts.remove(stopped);
-            }
-        }
-        next.files.insert(
-            file.filename.clone(),
-            CachedFile {
-                hash,
-                issues: by_file.get(&file.filename).cloned().unwrap_or_default(),
-                project_counts,
-                skipped_invalid: false,
-            },
-        );
+        next.files
+            .insert(file.filename.clone(), entries.file(index, file));
     }
     saver(&next);
 }
@@ -960,8 +1088,8 @@ fn fresh_vote_counts(
     runner_config: &crate::RunnerConfig,
     fresh_valid: &[usize],
     fresh_prepared: &[crate::batch::Prepared<'_>],
-) -> BTreeMap<String, BTreeMap<String, BTreeMap<String, usize>>> {
-    let mut out: BTreeMap<String, BTreeMap<String, BTreeMap<String, usize>>> = BTreeMap::new();
+) -> ProjectCountsByFile {
+    let mut out = ProjectCountsByFile::new();
     for entry in project_entries(runner_config) {
         let matcher = check_matcher(entry, runner_config);
         let mut voting: Vec<usize> = Vec::new();
@@ -1135,18 +1263,6 @@ fn redundant_for_file(
     out
 }
 
-/// Group final issues by filename for cache saves.
-fn group_by_filename(issues: &[crate::Issue]) -> BTreeMap<String, Vec<crate::Issue>> {
-    let mut by_file: BTreeMap<String, Vec<crate::Issue>> = BTreeMap::new();
-    for issue in issues {
-        by_file
-            .entry(issue.filename.clone())
-            .or_default()
-            .push(issue.clone());
-    }
-    by_file
-}
-
 /// Relevant ordering mirroring the pipeline: check, filename, line, column.
 fn sort_report(issues: &mut [crate::Issue]) {
     issues.sort_by(|left, right| {
@@ -1239,6 +1355,24 @@ mod tests {
         crate::integration::execute(config, "default", files, min_priority).expect("served")
     }
 
+    fn runner_and_fingerprint(
+        config_source: &str,
+        min_priority: i32,
+    ) -> (crate::RunnerConfig, String) {
+        let config = crate::parse_config(config_source, "default").expect("config parses");
+        let runner =
+            crate::integration::runner_of(&config, min_priority, crate::Selection::default());
+        let fingerprint = crate::stale_cache::fingerprint(
+            config_source,
+            "default",
+            &config.env_snapshot,
+            &runner.checks,
+            &runner.selection,
+            min_priority,
+        );
+        (runner, fingerprint)
+    }
+
     #[test]
     fn stale_cold_run_matches_fresh() {
         let path = fresh_path("cold");
@@ -1258,6 +1392,25 @@ mod tests {
         let second = stale(TWO_CHECKS, &files, -99, &path);
         assert_eq!(second, first);
         assert_eq!(second, fresh(TWO_CHECKS, &files, -99));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn stale_hit_reuses_comment_validation_error() {
+        let path = fresh_path("comment-error-hit");
+        let files = vec![crate::RunnerFile {
+            filename: "lib/a.ex".to_owned(),
+            source: "# credo:disable-for-next-line /[/\ndefmodule A do\nend\n".to_owned(),
+        }];
+        let first = stale(TWO_CHECKS, &files, -99, &path);
+        assert_eq!(first, fresh(TWO_CHECKS, &files, -99));
+        let (_, fingerprint) = runner_and_fingerprint(TWO_CHECKS, -99);
+        let cache = crate::stale_cache::load_file(&path, &fingerprint).expect("cache loads");
+        assert!(
+            cache.files["lib/a.ex"].comment_error.is_some(),
+            "comment error must be hash-cached"
+        );
+        assert_eq!(stale(TWO_CHECKS, &files, -99, &path), first);
         let _ = std::fs::remove_file(&path);
     }
 
@@ -1364,20 +1517,17 @@ mod tests {
             filename.to_owned(),
             crate::stale_cache::CachedFile {
                 hash: crate::stale_cache::content_hash(source),
-                issues: Vec::new(),
                 project_counts: BTreeMap::new(),
                 skipped_invalid: false,
+                comment_error: None,
             },
         );
         let mut winners = BTreeMap::new();
         winners.insert(entry.module.clone(), winner);
-        crate::stale_cache::DiskCache {
-            version: crate::stale_cache::CACHE_VERSION,
-            qredo_version: env!("CARGO_PKG_VERSION").to_owned(),
-            fingerprint: "test".to_owned(),
-            winners,
-            files: cached_files,
-        }
+        let mut cache = crate::stale_cache::DiskCache::empty("test".to_owned());
+        cache.winners = winners;
+        cache.files = cached_files;
+        cache
     }
 
     #[test]
@@ -1430,16 +1580,7 @@ mod tests {
     #[test]
     fn clean_hit_does_not_save_unchanged_cache() {
         let files = files();
-        let config = crate::parse_config(TWO_CHECKS, "default").expect("config parses");
-        let runner = crate::integration::runner_of(&config, -99, crate::Selection::default());
-        let fingerprint = crate::stale_cache::fingerprint(
-            TWO_CHECKS,
-            "default",
-            &config.env_snapshot,
-            &runner.checks,
-            &runner.selection,
-            -99,
-        );
+        let (runner, fingerprint) = runner_and_fingerprint(TWO_CHECKS, -99);
         let expected = crate::run_checks(&files, &runner);
         let cache = cold_cache(&files, &expected, &runner, &fingerprint);
         let saves = std::cell::Cell::new(0_usize);
