@@ -2120,6 +2120,7 @@ mod tests {
             exit_status: 16,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         };
         let allocation = report.issues.as_ptr();
         absolutize_in_place(&mut report, Path::new("/project"));

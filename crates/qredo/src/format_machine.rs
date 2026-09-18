@@ -905,6 +905,7 @@ mod tests {
             exit_status: 20,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         }
     }
 
@@ -1053,6 +1054,7 @@ mod tests {
             exit_status: 20,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         };
         let out = render_oneline(&report, &fixture_ctx());
         let lines: Vec<&str> = out.lines().collect();
@@ -1073,6 +1075,7 @@ mod tests {
             exit_status: 20,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         };
         let flycheck = render_flycheck(&report, &fixture_ctx());
         let io_pos = flycheck.find("IO.inspect").expect("ioinspect line");
@@ -1095,6 +1098,7 @@ mod tests {
             exit_status: 20,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         };
         let out = render_flycheck(&report, &fixture_ctx());
         let lines: Vec<&str> = out.lines().collect();
@@ -1191,6 +1195,7 @@ mod tests {
             exit_status: 0,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         };
         assert_eq!(
             render_json(&report, &fixture_ctx()),
@@ -1217,6 +1222,7 @@ mod tests {
             exit_status: 16,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         };
         let expected = "{\n  \"issues\": [\n    {\n      \"category\": \"warning\",\n      \"check\": \"Credo.Check.Warning.IoInspect\",\n      \"column\": null,\n      \"column_end\": null,\n      \"filename\": \"f.ex\",\n      \"line_no\": null,\n      \"message\": \"m\",\n      \"priority\": 12,\n      \"scope\": null,\n      \"trigger\": null\n    }\n  ]\n}\n";
         assert_eq!(render_json(&report, &fixture_ctx()), expected);
@@ -1229,6 +1235,7 @@ mod tests {
             exit_status: 0,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         };
         assert_eq!(render_oneline(&report, &fixture_ctx()), "");
         assert_eq!(render_flycheck(&report, &fixture_ctx()), "");
@@ -1262,6 +1269,7 @@ mod tests {
             exit_status: 16,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         };
         let out = render_sarif(&report, &MachineContext::new("/root"));
         assert!(out.contains("\"ruleId\": \"EX5026\""), "{out}");
@@ -1303,6 +1311,7 @@ mod tests {
             exit_status: 0,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         };
         let expected = "{\n  \"$schema\": \"https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0-rtm.5.json\",\n  \"version\": \"2.1.0\",\n  \"runs\": [\n    {\n      \"columnKind\": \"utf16CodeUnits\",\n      \"originalUriBaseIds\": {\n        \"ROOTPATH\": {\n          \"uri\": \"file:///root/\"\n        }\n      },\n      \"results\": [],\n      \"tool\": {\n        \"driver\": {\n          \"informationUri\": \"http://credo-ci.org/\",\n          \"name\": \"Credo\",\n          \"rules\": [],\n          \"version\": \"1.8.0-dev\"\n        }\n      }\n    }\n  ]\n}\n";
         assert_eq!(render_sarif(&report, &tiny_ctx()), expected);
@@ -1324,6 +1333,7 @@ mod tests {
             exit_status: 16,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         };
         let out = render_sarif(&report, &tiny_ctx());
         assert!(out.contains("\"level\": \"note\""), "{out}");
@@ -1349,6 +1359,7 @@ mod tests {
             exit_status: 16,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         };
         let out = render_sarif(&report, &tiny_ctx());
         assert!(!out.contains("\"level\""), "{out}");

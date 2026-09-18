@@ -484,7 +484,9 @@ fn push_found(
     valid: &[&RunnerFile],
     context: &FormatContext,
 ) {
-    let mods: usize = valid.iter().map(|file| count_mods_funs(&file.source)).sum();
+    let mods = report
+        .mods_funs
+        .unwrap_or_else(|| valid.iter().map(|file| count_mods_funs(&file.source)).sum());
     let mut line = Line::new(context);
     line.seq("32").text(format!("{mods} mods/funs, "));
     line.seq("0").text("found ");
@@ -815,6 +817,7 @@ mod tests {
             exit_status,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         }
     }
 
@@ -907,6 +910,18 @@ mod tests {
             \n\
             Use `mix credo explain` to explain issues, `mix credo --help` for options.\n";
         assert_eq!(rendered, expected);
+    }
+
+    #[test]
+    fn cached_mods_funs_bypasses_source_reparse() {
+        let mut report = report(Vec::new());
+        report.mods_funs = Some(99);
+        let files = vec![RunnerFile {
+            filename: "lib/a.ex".to_owned(),
+            source: "def broken( do\n".to_owned(),
+        }];
+        let rendered = render(&report, &files, &FormatContext::default());
+        assert!(rendered.contains("99 mods/funs, found no issues."));
     }
 
     /// Pinned verbatim shape: no files at all.

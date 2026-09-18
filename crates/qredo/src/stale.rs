@@ -90,6 +90,7 @@ pub(crate) fn execute_stale_with_path(
             exit_status: 0,
             errors: vec![crate::RunError::InvalidSelection(pattern)],
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         });
     }
     let runner_config = crate::integration::runner_of(&config, min_priority, selection);
@@ -159,8 +160,10 @@ fn full_run_and_save(
     fingerprint: &str,
     saver: &dyn Fn(&DiskCache),
 ) -> crate::RunReport {
-    let report = crate::run_checks(files, runner_config);
-    saver(&cold_cache(files, &report, runner_config, fingerprint));
+    let mut report = crate::run_checks(files, runner_config);
+    let cache = cold_cache(files, &report, runner_config, fingerprint);
+    report.mods_funs = Some(cache.mods_funs);
+    saver(&cache);
     report
 }
 
@@ -205,6 +208,7 @@ fn cold_cache(
         );
         cache.files.insert(name, entry);
     }
+    cache.mods_funs = cache.files.values().map(|file| file.mods_funs).sum();
     for entry in project_entries(runner_config) {
         cache.winners.insert(
             entry.module.clone(),
@@ -258,6 +262,7 @@ fn cold_file_entry(
                 hash,
                 project_counts: BTreeMap::new(),
                 skipped_invalid: false,
+                mods_funs: 0,
                 comment_error: Some(error.clone()),
             },
         );
@@ -269,6 +274,7 @@ fn cold_file_entry(
                 hash,
                 project_counts: BTreeMap::new(),
                 skipped_invalid: true,
+                mods_funs: 0,
                 comment_error: None,
             },
         );
@@ -289,6 +295,7 @@ fn cold_file_entry(
             hash,
             project_counts,
             skipped_invalid: false,
+            mods_funs: prepared.facts().modules.len() + prepared.facts().defs.len(),
             comment_error: None,
         },
     )
@@ -530,6 +537,7 @@ fn cached_report(cache: DiskCache) -> crate::RunReport {
         exit_status: cache.exit_status,
         errors: cache.errors,
         skipped_invalid: cache.skipped_invalid,
+        mods_funs: Some(cache.mods_funs),
     }
 }
 
@@ -577,7 +585,7 @@ fn incremental(
         .iter()
         .fold(0, |status, issue| status | issue.exit_status);
 
-    persist_cache(
+    let mods_funs = persist_cache(
         files,
         runner_config,
         &cache,
@@ -598,6 +606,7 @@ fn incremental(
         exit_status,
         errors: plan.errors,
         skipped_invalid: fresh_run.skipped_invalid,
+        mods_funs: Some(mods_funs),
     }
 }
 
@@ -683,6 +692,7 @@ struct PersistEntries<'a> {
     plan: &'a Partition,
     drop_checks: &'a BTreeSet<String>,
     fresh_counts: &'a ProjectCountsByFile,
+    fresh_mods_funs: &'a BTreeMap<String, usize>,
 }
 
 impl PersistEntries<'_> {
@@ -694,6 +704,7 @@ impl PersistEntries<'_> {
                 hash,
                 project_counts: BTreeMap::new(),
                 skipped_invalid: false,
+                mods_funs: 0,
                 comment_error: Some(error.clone()),
             };
         }
@@ -702,6 +713,7 @@ impl PersistEntries<'_> {
                 hash,
                 project_counts: BTreeMap::new(),
                 skipped_invalid: true,
+                mods_funs: 0,
                 comment_error: None,
             };
         }
@@ -709,8 +721,24 @@ impl PersistEntries<'_> {
             hash,
             project_counts: self.project_counts(index, file),
             skipped_invalid: false,
+            mods_funs: self.mods_funs(index, file),
             comment_error: None,
         }
+    }
+
+    /// Reused scope count for clean files, freshly collected count otherwise.
+    fn mods_funs(&self, index: usize, file: &crate::RunnerFile) -> usize {
+        if self.plan.reused.contains(&index) {
+            return self
+                .cache
+                .files
+                .get(&file.filename)
+                .map_or(0, |cached| cached.mods_funs);
+        }
+        self.fresh_mods_funs
+            .get(&file.filename)
+            .copied()
+            .unwrap_or(0)
     }
 
     /// Reused votes for clean files, fresh votes for changed files.
@@ -759,7 +787,7 @@ fn persist_cache(
     issues: &[crate::Issue],
     exit_status: i32,
     skipped_invalid: &[String],
-) {
+) -> usize {
     let mut next = DiskCache::empty(fingerprint.to_owned());
     next.file_order
         .extend(files.iter().map(|file| file.filename.clone()));
@@ -771,17 +799,31 @@ fn persist_cache(
     next.pattern_errors.clone_from(&plan.pattern_errors);
     next.winners = new_winners;
     let fresh_counts = fresh_vote_counts(files, runner_config, fresh_valid, fresh_prepared);
+    let fresh_mods_funs: BTreeMap<String, usize> = fresh_valid
+        .iter()
+        .zip(fresh_prepared)
+        .map(|(index, prepared)| {
+            (
+                files[*index].filename.clone(),
+                prepared.facts().modules.len() + prepared.facts().defs.len(),
+            )
+        })
+        .collect();
     let entries = PersistEntries {
         cache,
         plan,
         drop_checks,
         fresh_counts: &fresh_counts,
+        fresh_mods_funs: &fresh_mods_funs,
     };
     for (index, file) in files.iter().enumerate() {
         next.files
             .insert(file.filename.clone(), entries.file(index, file));
     }
+    next.mods_funs = next.files.values().map(|file| file.mods_funs).sum();
+    let mods_funs = next.mods_funs;
     saver(&next);
+    mods_funs
 }
 
 /// Merged vote counts for one project check: cached votes for reused
@@ -1404,8 +1446,9 @@ mod tests {
         }];
         let first = stale(TWO_CHECKS, &files, -99, &path);
         assert_eq!(first, fresh(TWO_CHECKS, &files, -99));
-        let (_, fingerprint) = runner_and_fingerprint(TWO_CHECKS, -99);
-        let cache = crate::stale_cache::load_file(&path, &fingerprint).expect("cache loads");
+        let cache: crate::stale_cache::DiskCache =
+            serde_json::from_slice(&std::fs::read(&path).expect("cache readable"))
+                .expect("cache parses");
         assert!(
             cache.files["lib/a.ex"].comment_error.is_some(),
             "comment error must be hash-cached"
@@ -1519,6 +1562,7 @@ mod tests {
                 hash: crate::stale_cache::content_hash(source),
                 project_counts: BTreeMap::new(),
                 skipped_invalid: false,
+                mods_funs: 0,
                 comment_error: None,
             },
         );

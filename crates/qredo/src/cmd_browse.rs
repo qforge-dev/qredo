@@ -672,6 +672,7 @@ mod tests {
             exit_status,
             errors: Vec::new(),
             skipped_invalid: Vec::new(),
+            mods_funs: None,
         }
     }
 

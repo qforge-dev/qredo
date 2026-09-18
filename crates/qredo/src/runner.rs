@@ -78,6 +78,9 @@ pub struct RunReport {
     pub errors: Vec<RunError>,
     /// Invalid-syntax files excluded with a complaint, like upstream.
     pub skipped_invalid: Vec<String>,
+    /// Cached `defmodule` + `def`-family count for the default formatter.
+    /// `None` lets non-stale reports compute it from source on demand.
+    pub mods_funs: Option<usize>,
 }
 
 /// Run every configured check over every file.
@@ -88,6 +91,7 @@ pub fn run_checks(files: &[RunnerFile], config: &RunnerConfig) -> RunReport {
         exit_status: 0,
         errors: Vec::new(),
         skipped_invalid: Vec::new(),
+        mods_funs: None,
     };
     if let Err(pattern) = config.selection.validate() {
         report.errors.push(RunError::InvalidSelection(pattern));
@@ -106,6 +110,12 @@ pub fn run_checks(files: &[RunnerFile], config: &RunnerConfig) -> RunReport {
             Err(error) => report.errors.push(error),
         }
     }
+    report.mods_funs = Some(
+        prepared
+            .iter()
+            .map(|file| file.prepared.facts().modules.len() + file.prepared.facts().defs.len())
+            .sum(),
+    );
     // Staged `(file index, issue)` pairs; EX2006 runs after all other
     // checks because it reads every file's collected issues.
     let mut work = Worklist::default();
