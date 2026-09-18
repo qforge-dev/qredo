@@ -175,6 +175,38 @@ const USIZE_PARAMS: &[(&str, &str)] = &[
     ("Credo.Check.Warning.StructFieldAmount", "max_fields"),
 ];
 
+/// Homogeneous string/atom-list params encoded as compact JSON arrays.
+const STRING_LIST_PARAMS: &[(&str, &str)] = &[
+    ("Credo.Check.Consistency.SpaceAroundOperators", "ignore"),
+    ("Credo.Check.Design.AliasUsage", "excluded_namespaces"),
+    ("Credo.Check.Design.AliasUsage", "excluded_lastnames"),
+    ("Credo.Check.Design.DuplicatedCode", "excluded_macros"),
+    ("Credo.Check.Readability.AliasAs", "ignore"),
+    ("Credo.Check.Readability.BlockPipe", "exclude"),
+    ("Credo.Check.Readability.ModuleNames", "ignore"),
+    ("Credo.Check.Readability.StrictModuleLayout", "order"),
+    ("Credo.Check.Readability.StrictModuleLayout", "ignore"),
+    (
+        "Credo.Check.Readability.StrictModuleLayout",
+        "ignore_module_attributes",
+    ),
+    ("Credo.Check.Refactor.ABCSize", "excluded_functions"),
+    (
+        "Credo.Check.Refactor.ModuleDependencies",
+        "dependency_namespaces",
+    ),
+    (
+        "Credo.Check.Refactor.ModuleDependencies",
+        "excluded_namespaces",
+    ),
+    (
+        "Credo.Check.Refactor.PipeChainStart",
+        "excluded_argument_types",
+    ),
+    ("Credo.Check.Refactor.PipeChainStart", "excluded_functions"),
+    ("Credo.Check.Warning.LazyLogging", "ignore"),
+];
+
 /// Per-check schemas for scalar values and enums.
 fn supported_check_param(module: &str, name: &str, value: &str) -> bool {
     let key = (module, name);
@@ -191,7 +223,7 @@ fn supported_check_param(module: &str, name: &str, value: &str) -> bool {
     ) {
         return value.parse::<f64>().is_ok_and(f64::is_finite);
     }
-    valid_enum_param(key, value)
+    valid_enum_param(key, value) || valid_structured_param(key, value)
 }
 
 /// Enumerated atom options documented by upstream.
@@ -218,6 +250,149 @@ fn valid_enum_param(key: (&str, &str), value: &str) -> bool {
         }
         _ => false,
     }
+}
+
+/// Structured list/tuple/regex schemas from the pinned inventory.
+fn valid_structured_param(key: (&str, &str), raw: &str) -> bool {
+    if STRING_LIST_PARAMS.contains(&key) {
+        return json(raw).is_some_and(|value| valid_string_array(&value));
+    }
+    match key {
+        ("Credo.Check.Design.AliasUsage", "only") => {
+            json(raw).is_some_and(|value| valid_regex_tree(&value))
+        }
+        ("Credo.Check.Readability.LargeNumbers", "trailing_digits") => {
+            json(raw).is_some_and(|value| valid_trailing_digits(&value))
+        }
+        ("Credo.Check.Readability.ModuleDoc", "ignore_names" | "ignore_modules_using")
+        | (
+            "Credo.Check.Refactor.ModuleDependencies" | "Credo.Check.Warning.MixEnv",
+            "excluded_paths",
+        ) => json(raw).is_some_and(|value| valid_matcher_array(&value)),
+        ("Credo.Check.Warning.ForbiddenFunction", "functions") => {
+            json(raw).is_some_and(|value| valid_forbidden_functions(&value))
+        }
+        ("Credo.Check.Warning.ForbiddenModule", "modules") => {
+            json(raw).is_some_and(|value| valid_forbidden_modules(&value))
+        }
+        ("Credo.Check.Warning.MissedMetadataKeyInLoggerConfig", "metadata_keys") => {
+            raw == "all" || json(raw).is_some_and(|value| valid_string_array(&value))
+        }
+        ("Credo.Check.Warning.UnusedOperation", "modules") => {
+            json(raw).is_some_and(|value| valid_unused_modules(&value))
+        }
+        _ => false,
+    }
+}
+
+fn json(raw: &str) -> Option<serde_json::Value> {
+    serde_json::from_str(raw).ok()
+}
+
+fn valid_string_array(value: &serde_json::Value) -> bool {
+    value
+        .as_array()
+        .is_some_and(|items| items.iter().all(serde_json::Value::is_string))
+}
+
+fn valid_regex(value: &serde_json::Value) -> bool {
+    value
+        .as_object()
+        .and_then(|map| map.get("regex"))
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|pattern| regex::Regex::new(pattern).is_ok())
+}
+
+fn valid_regex_tree(value: &serde_json::Value) -> bool {
+    valid_regex(value)
+        || value
+            .as_array()
+            .is_some_and(|items| items.iter().all(valid_regex_tree))
+}
+
+fn valid_matcher_array(value: &serde_json::Value) -> bool {
+    value.as_array().is_some_and(|items| {
+        items
+            .iter()
+            .all(|item| item.is_string() || valid_regex(item))
+    })
+}
+
+fn valid_trailing_digits(value: &serde_json::Value) -> bool {
+    if value
+        .as_u64()
+        .and_then(|n| usize::try_from(n).ok())
+        .is_some()
+    {
+        return true;
+    }
+    if let Some(items) = value.as_array() {
+        return items.iter().all(|item| {
+            item.as_u64()
+                .and_then(|n| usize::try_from(n).ok())
+                .is_some()
+        });
+    }
+    value
+        .get("range")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|bounds| bounds.len() == 2 && bounds.iter().all(valid_usize_json))
+}
+
+fn valid_usize_json(value: &serde_json::Value) -> bool {
+    value
+        .as_u64()
+        .and_then(|n| usize::try_from(n).ok())
+        .is_some()
+}
+
+fn tuple_parts(value: &serde_json::Value) -> Option<&Vec<serde_json::Value>> {
+    value.get("tuple")?.as_array()
+}
+
+fn valid_forbidden_functions(value: &serde_json::Value) -> bool {
+    value.as_array().is_some_and(|items| {
+        items.iter().all(|item| {
+            tuple_parts(item).is_some_and(|parts| {
+                parts.len() == 3
+                    && parts[0].is_string()
+                    && parts[1].is_string()
+                    && (parts[2].is_string() || parts[2].is_null())
+            })
+        })
+    })
+}
+
+fn valid_forbidden_modules(value: &serde_json::Value) -> bool {
+    value.as_array().is_some_and(|items| {
+        items.iter().all(|item| {
+            item.is_string()
+                || tuple_parts(item).is_some_and(|parts| {
+                    parts.len() == 2 && parts[0].is_string() && parts[1].is_string()
+                })
+        })
+    })
+}
+
+fn valid_unused_modules(value: &serde_json::Value) -> bool {
+    value.as_array().is_some_and(|items| {
+        items.iter().all(|item| {
+            let Some(parts) = item.as_array().or_else(|| tuple_parts(item)) else {
+                return false;
+            };
+            (2..=3).contains(&parts.len())
+                && parts[0].is_string()
+                && valid_function_selection(&parts[1])
+                && parts.get(2).is_none_or(serde_json::Value::is_string)
+        })
+    })
+}
+
+fn valid_function_selection(value: &serde_json::Value) -> bool {
+    value
+        .as_str()
+        .is_some_and(|name| name.trim_start_matches(':') == "all")
+        || valid_string_array(value)
 }
 
 /// Configured categories qredo can represent without changing issue shape.
@@ -1039,6 +1214,185 @@ mod tests {
     #[test]
     fn all_scalar_check_params_are_validated() {
         for &(module, name, valid, invalid) in SCALAR_PARAMS {
+            assert!(
+                params_supported(&entry_with_param(module, name, valid)),
+                "{module}.{name}={valid} must serve"
+            );
+            assert!(
+                !params_supported(&entry_with_param(module, name, invalid)),
+                "{module}.{name}={invalid} must fail closed"
+            );
+        }
+    }
+
+    const STRUCTURED_PARAMS: &[(&str, &str, &str, &str)] = &[
+        (
+            "Credo.Check.Consistency.SpaceAroundOperators",
+            "ignore",
+            r#"[":|"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Design.AliasUsage",
+            "excluded_namespaces",
+            r#"["MyApp"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Design.AliasUsage",
+            "excluded_lastnames",
+            r#"["Parser"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Design.AliasUsage",
+            "only",
+            r#"{"regex":"^MyApp"}"#,
+            r#"{"regex":"["}"#,
+        ),
+        (
+            "Credo.Check.Design.DuplicatedCode",
+            "excluded_macros",
+            r#"[":quote"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Readability.AliasAs",
+            "ignore",
+            r#"[":Elixir.MyApp.Foo"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Readability.BlockPipe",
+            "exclude",
+            r#"[":case"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Readability.LargeNumbers",
+            "trailing_digits",
+            r#"{"range":[4,2]}"#,
+            r#"{"range":[2]}"#,
+        ),
+        (
+            "Credo.Check.Readability.ModuleDoc",
+            "ignore_names",
+            r#"[{"regex":"Controller$"}]"#,
+            r#"[{"regex":"["}]"#,
+        ),
+        (
+            "Credo.Check.Readability.ModuleDoc",
+            "ignore_modules_using",
+            r#"[":Elixir.Ecto.Schema"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Readability.ModuleNames",
+            "ignore",
+            r#"[":Elixir.Legacy"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Readability.StrictModuleLayout",
+            "order",
+            r#"[":moduledoc",":alias"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Readability.StrictModuleLayout",
+            "ignore",
+            r#"[":alias"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Readability.StrictModuleLayout",
+            "ignore_module_attributes",
+            r#"[":typedoc"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Refactor.ABCSize",
+            "excluded_functions",
+            r#"["where"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Refactor.ModuleDependencies",
+            "dependency_namespaces",
+            r#"["MyApp"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Refactor.ModuleDependencies",
+            "excluded_namespaces",
+            r#"["Ecto"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Refactor.ModuleDependencies",
+            "excluded_paths",
+            r#"[{"regex":"/test/"},"test"]"#,
+            r#"[{"regex":"["}]"#,
+        ),
+        (
+            "Credo.Check.Refactor.PipeChainStart",
+            "excluded_argument_types",
+            r#"[":list"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Refactor.PipeChainStart",
+            "excluded_functions",
+            r#"["build"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Warning.ForbiddenFunction",
+            "functions",
+            r#"[{"tuple":[":Elixir.System",":cmd","Use a wrapper."]}]"#,
+            r#"[{"tuple":[":Elixir.System"]}]"#,
+        ),
+        (
+            "Credo.Check.Warning.ForbiddenModule",
+            "modules",
+            r#"[{"tuple":[":Elixir.System","Use a wrapper."]}]"#,
+            r#"[{"tuple":[":Elixir.System",1]}]"#,
+        ),
+        (
+            "Credo.Check.Warning.LazyLogging",
+            "ignore",
+            r#"[":info",":warn"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Warning.MissedMetadataKeyInLoggerConfig",
+            "metadata_keys",
+            r#"[":request_id"]"#,
+            "{}",
+        ),
+        (
+            "Credo.Check.Warning.MissedMetadataKeyInLoggerConfig",
+            "metadata_keys",
+            "all",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Warning.MixEnv",
+            "excluded_paths",
+            r#"[{"regex":"/test/"},"test"]"#,
+            r#"[{"regex":"["}]"#,
+        ),
+        (
+            "Credo.Check.Warning.UnusedOperation",
+            "modules",
+            r#"[[":Elixir.Map",[":get"]],[":Elixir.URI",":all","Use the result."]]"#,
+            r#"[[":Elixir.Map",1]]"#,
+        ),
+    ];
+
+    #[test]
+    fn all_structured_check_params_are_validated() {
+        for &(module, name, valid, invalid) in STRUCTURED_PARAMS {
             assert!(
                 params_supported(&entry_with_param(module, name, valid)),
                 "{module}.{name}={valid} must serve"

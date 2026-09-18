@@ -111,10 +111,7 @@ fn read_order(params: &BTreeMap<String, String>) -> Vec<String> {
     let Some(raw) = params.get("order") else {
         return fallback();
     };
-    let parsed: Vec<String> = serde_json::from_str(raw).unwrap_or_default();
-    if parsed.is_empty() {
-        return fallback();
-    }
+    let parsed: Vec<String> = serde_json::from_str(raw).unwrap_or_else(|_| fallback());
     parsed
         .into_iter()
         .map(|name| {
@@ -564,6 +561,13 @@ mod tests {
             findings[0].message,
             "public guard must appear before private guard"
         );
+    }
+    #[test]
+    fn explicit_empty_order_disables_ordering() {
+        let mut params = BTreeMap::new();
+        params.insert("order".to_owned(), "[]".to_owned());
+        let src = "defmodule M do\n  alias Bar\n  use Foo\nend\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
     }
     #[test]
     fn callback_impl_groups() {

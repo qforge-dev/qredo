@@ -17,10 +17,10 @@ cannot serve both paths:
   unsoundness is a property of the check, not of promotion).
 
 Unsupported check params stay fail-closed (`custom-check-params:*`). Common
-issue/file params and documented scalar/enum options are type-validated;
-structured collection parameters remain per-check admissions. Parameters do
-not bypass the separate project/config check gates. The evidence below covers
-default project-check params only.
+issue/file params and all 81 documented rule-specific options are validated
+against per-check scalar and structured schemas. Parameters do not bypass the
+separate project/config check gates. The evidence below covers default
+project-check params only.
 
 ## Promoted (8 consistency checks)
 

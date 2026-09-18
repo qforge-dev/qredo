@@ -106,7 +106,10 @@ fn parse_modules(params: &BTreeMap<String, String>) -> Vec<ModuleConfig> {
     };
     let mut out = Vec::new();
     for item in &items {
-        let Some(entry) = item.as_array() else {
+        let Some(entry) = item
+            .as_array()
+            .or_else(|| item.get("tuple").and_then(serde_json::Value::as_array))
+        else {
             continue;
         };
         if entry.len() < 2 || entry.len() > 3 {
@@ -411,6 +414,15 @@ mod tests {
         assert_eq!(
             findings[0].message,
             "There should be no unused return values for `MyModule` functions."
+        );
+    }
+    #[test]
+    fn accepts_config_parser_tuple_encoding() {
+        let params = params(r#"[{"tuple":["Elixir.MyModule","all"]}]"#);
+        let src = "defmodule M do\n  def f(p) do\n    MyModule.transform(p)\n    :ok\n  end\nend\n";
+        assert_eq!(
+            check_prepared(&crate::batch::Prepared::lazy(src), &params).len(),
+            1
         );
     }
     #[test]

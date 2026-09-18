@@ -80,7 +80,11 @@ fn parse_trailing(params: &BTreeMap<String, String>) -> Vec<usize> {
                 let end = bounds[1]
                     .as_u64()
                     .map_or(0, |n| usize::try_from(n).unwrap_or(0));
-                (start..=end).collect()
+                if start <= end {
+                    (start..=end).collect()
+                } else {
+                    (end..=start).rev().collect()
+                }
             }
             _ => Vec::new(),
         },
@@ -305,6 +309,17 @@ mod tests {
         );
         let mut params = BTreeMap::new();
         params.insert("trailing_digits".to_owned(), "[2]".to_owned());
+        assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
+    }
+
+    #[test]
+    fn descending_trailing_digits_range_matches_elixir_range() {
+        let src = "x = 123_4567\n";
+        let mut params = BTreeMap::new();
+        params.insert(
+            "trailing_digits".to_owned(),
+            r#"{"range":[4,2]}"#.to_owned(),
+        );
         assert!(check_prepared(&crate::batch::Prepared::lazy(src), &params).is_empty());
     }
 }
