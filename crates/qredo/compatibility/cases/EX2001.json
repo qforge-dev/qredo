@@ -317,5 +317,41 @@
       }
     ],
     "excluded_reason": null
+  },
+  {
+    "id": "EX2001.reviewed.boundary-nesting-zero",
+    "origin": "Pinned native probe: if_nested_deeper_than lower boundary",
+    "assert": "assert_issue",
+    "source": "defmodule Sample do\n  def f do\n    MyApp.Widgets.Parser.call()\n  end\nend\n",
+    "params": {
+      "if_nested_deeper_than": 0
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Nested modules could be aliased at the top of the invoking module.",
+        "trigger": "MyApp.Widgets.Parser"
+      }
+    ],
+    "excluded_reason": null
+  },
+  {
+    "id": "EX2001.reviewed.boundary-calls-zero",
+    "origin": "Pinned native probe: if_called_more_often_than lower boundary",
+    "assert": "assert_issue",
+    "source": "defmodule Sample do\n  def f do\n    MyApp.Widgets.Parser.call()\n  end\nend\n",
+    "params": {
+      "if_called_more_often_than": 0
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Nested modules could be aliased at the top of the invoking module.",
+        "trigger": "MyApp.Widgets.Parser"
+      }
+    ],
+    "excluded_reason": null
   }
 ]

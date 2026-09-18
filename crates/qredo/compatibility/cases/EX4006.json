@@ -146,5 +146,23 @@
     "params": {},
     "findings": [],
     "excluded_reason": "Unit test of CyclomaticComplexity.complexity_for/1 via complexity/rounded_complexity helpers: asserts a numeric complexity (integer equality), not check issues; not transcribable to single-file {source, params, findings}."
+  },
+  {
+    "id": "EX4006.reviewed.boundary-zero",
+    "origin": "Pinned native probe: max_complexity lower boundary",
+    "assert": "assert_issue",
+    "source": "defmodule Sample do\n  def f, do: :ok\nend\n",
+    "params": {
+      "max_complexity": 0
+    },
+    "findings": [
+      {
+        "column": 7,
+        "line": 2,
+        "message": "Function is too complex (cyclomatic complexity is 1, max is 0).",
+        "trigger": "f"
+      }
+    ],
+    "excluded_reason": null
   }
 ]

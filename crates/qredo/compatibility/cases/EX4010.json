@@ -68,5 +68,23 @@
       }
     ],
     "excluded_reason": null
+  },
+  {
+    "id": "EX4010.reviewed.boundary-zero",
+    "origin": "Pinned native probe: max_arity lower boundary",
+    "assert": "assert_issue",
+    "source": "defmodule Sample do\n  def f(x), do: x\nend\n",
+    "params": {
+      "max_arity": 0
+    },
+    "findings": [
+      {
+        "column": 7,
+        "line": 2,
+        "message": "Function takes too many parameters (arity is 1, max is 0).",
+        "trigger": "f"
+      }
+    ],
+    "excluded_reason": null
   }
 ]

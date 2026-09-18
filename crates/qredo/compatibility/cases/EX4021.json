@@ -164,5 +164,23 @@
       }
     ],
     "excluded_reason": null
+  },
+  {
+    "id": "EX4021.reviewed.boundary-zero",
+    "origin": "Pinned native probe: max_nesting lower boundary",
+    "assert": "assert_issue",
+    "source": "defmodule Sample do\n  def f do\n    if true, do: :ok\n  end\nend\n",
+    "params": {
+      "max_nesting": 0
+    },
+    "findings": [
+      {
+        "column": 5,
+        "line": 3,
+        "message": "Function body is nested too deep (max depth is 0, was 1).",
+        "trigger": "if"
+      }
+    ],
+    "excluded_reason": null
   }
 ]
