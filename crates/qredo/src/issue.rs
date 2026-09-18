@@ -10,7 +10,7 @@
 /// Native cache values serialize this full shape; it is the native
 /// diagnostic shape, not the real-Credo JSON shape, so native and
 /// real-Credo cache namespaces must stay separated by tool identity.
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Issue {
     /// Check module, e.g. `Credo.Check.Readability.TrailingBlankLine`.
     pub check: String,
@@ -30,7 +30,7 @@ pub struct Issue {
 }
 
 /// Credo category with its default exit status.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Category {
     Consistency,
     Design,
@@ -64,7 +64,7 @@ impl Category {
 }
 
 /// Explicit trigger sentinel preserved separately from text triggers.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum IssueTrigger {
     NoTrigger,
     Text(String),

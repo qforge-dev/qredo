@@ -1,7 +1,9 @@
 # Architecture
 
 One Rust crate (`crates/qredo`) holds a library plus the `qredo` binary.
-There is no daemon, no cache store and no BEAM dependency at runtime.
+There is no daemon and no BEAM dependency at runtime. The only disk
+state is the opt-in `--stale` incremental cache (`~/.cache/qredo/`,
+see below); plain runs are stateless.
 
 ## Pipeline
 
@@ -36,6 +38,22 @@ needing deeper shapes (dataflow over parents, argument-content
 analysis, duplication models) keep explicit tree logic; the
 `residual_tree_walks` test pins exactly which files those are, so new
 tree walks fail loudly.
+
+## Incremental cache (`--stale`)
+
+`stale::execute_stale` serves `suggest --stale` / `list --stale` with
+output identical to a fresh run. Per file it stores the content hash,
+final issues, per-check consistency vote counts and the syntax-gate
+bit; globally it stores the config fingerprint and per-check majority
+winners (`stale_cache::DiskCache`, schema `cache-v1.json`).
+
+Each consistency collector exposes `collect_file` (per-file votes),
+`counts_of`, `winner` (same force normalization and suppression as
+`run`) and `emit_with_winner`, so the stale path merges cached counts
+with fresh-file votes, recomputes the majority and emits only fresh
+files — unchanged files are never parsed. A flipped winner, missing
+votes, or any fingerprint mismatch (tool version, config bytes, env
+snapshot, checks, selection, priority) fails open to a full run.
 
 ## Compatibility method
 

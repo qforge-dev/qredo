@@ -78,8 +78,9 @@ fn subset_gate(entry: &crate::CheckEntry) -> Option<Fallback> {
 
 /// Build the native runner over default-param enabled checks.
 /// Disabled checks matching `selection.enable_disabled` (case-insensitive
-/// regex, mirroring native) rejoin the run.
-fn runner_of(
+/// regex, mirroring native) rejoin the run. Exposed for `--stale`, which
+/// builds filtered sub-configs over the same resolution.
+pub(crate) fn runner_of(
     config: &crate::CredoConfig,
     min_priority: i32,
     selection: crate::Selection,

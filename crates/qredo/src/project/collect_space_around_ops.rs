@@ -25,24 +25,62 @@ pub(crate) fn run(files: &[ProjectFile], params: &BTreeMap<String, String>) -> V
     if counts.is_empty() {
         return Vec::new();
     }
-    let force = helpers::param_str(params, "force", "");
-    let force = if force.is_empty() { None } else { Some(force) };
-    let Some(expected) = majority(&counts, force) else {
+    let Some(expected) = winner(&counts, params) else {
         return Vec::new();
     };
-    let message = issue_message(&expected);
+    emit_with_winner(files, &per_file, &expected, params)
+}
+
+/// Majority winner under the `force` override, if any votes exist.
+/// Exposed for `--stale` cache validation (same normalization as `run`).
+pub(crate) fn winner(
+    counts: &BTreeMap<String, usize>,
+    params: &BTreeMap<String, String>,
+) -> Option<String> {
+    if counts.is_empty() {
+        return None;
+    }
+    let force = helpers::param_str(params, "force", "");
+    let force = if force.is_empty() { None } else { Some(force) };
+    majority(counts, force)
+}
+
+/// Per-file vote counts for `--stale` caching (no AST involved).
+pub(crate) fn counts_of(votes: &[OpVote]) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    for vote in votes {
+        if vote.with_v {
+            *counts.entry("with_space".to_owned()).or_insert(0) += 1;
+        }
+        if vote.without_v {
+            *counts.entry("without_space".to_owned()).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
+/// Emit issues for one known winner. Used by `--stale` to rebuild fresh
+/// files without recomputing the project majority.
+pub(crate) fn emit_with_winner(
+    files: &[ProjectFile],
+    per_file: &[Vec<OpVote>],
+    winner: &str,
+    params: &BTreeMap<String, String>,
+) -> Vec<ProjectIssue> {
+    let message = issue_message(winner);
     let ignored = ignored_triggers(params);
     let mut issues = Vec::new();
     for (index, file) in files.iter().enumerate() {
-        let unexpected = per_file[index]
-            .iter()
-            .any(|vote| votes_against(vote, &expected));
+        let Some(votes) = per_file.get(index) else {
+            continue;
+        };
+        let unexpected = votes.iter().any(|vote| votes_against(vote, winner));
         if !unexpected {
             continue;
         }
         let lines: Vec<&str> = file.source.split('\n').collect();
-        for vote in &per_file[index] {
-            if !votes_against(vote, &expected) || ignored.iter().any(|item| item == &vote.trigger) {
+        for vote in votes {
+            if !votes_against(vote, winner) || ignored.iter().any(|item| item == &vote.trigger) {
                 continue;
             }
             let line = lines.get(vote.line.wrapping_sub(1)).unwrap_or(&"");
@@ -67,7 +105,7 @@ fn tally(files: &[ProjectFile]) -> (BTreeMap<String, usize>, Vec<Vec<OpVote>>) {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut per_file: Vec<Vec<OpVote>> = Vec::new();
     for file in files {
-        let votes = collect(&file.source);
+        let votes = collect_file(&file.source);
         for vote in &votes {
             if vote.with_v {
                 *counts.entry("with_space".to_owned()).or_insert(0) += 1;
@@ -82,17 +120,18 @@ fn tally(files: &[ProjectFile]) -> (BTreeMap<String, usize>, Vec<Vec<OpVote>>) {
 }
 
 /// One examined operator with its spacing verdicts.
-struct OpVote {
-    line: usize,
-    col: usize,
-    trigger: String,
-    with_v: bool,
-    without_v: bool,
-    callish_prev: bool,
+#[derive(Debug, Clone)]
+pub(crate) struct OpVote {
+    pub(crate) line: usize,
+    pub(crate) col: usize,
+    pub(crate) trigger: String,
+    pub(crate) with_v: bool,
+    pub(crate) without_v: bool,
+    pub(crate) callish_prev: bool,
 }
 
 /// Per-file operator verdicts in document order.
-fn collect(source: &str) -> Vec<OpVote> {
+pub(crate) fn collect_file(source: &str) -> Vec<OpVote> {
     let toks = tokenize(source);
     let lines: Vec<&str> = source.split('\n').collect();
     let mut votes = Vec::new();
@@ -1235,7 +1274,7 @@ mod tests {
         ];
         for (id, (with_space, without_space)) in cases {
             let (mut with_count, mut without_count) = (0_usize, 0_usize);
-            for vote in collect(&source_of(id)) {
+            for vote in collect_file(&source_of(id)) {
                 with_count += usize::from(vote.with_v);
                 without_count += usize::from(vote.without_v);
             }
@@ -1250,7 +1289,7 @@ mod tests {
     #[test]
     fn multibyte_text_hides_operators_without_hanging() {
         let source = "λ = \"μ+μ\"\ny = 1 + 2\n";
-        let votes = collect(source);
+        let votes = collect_file(source);
         assert_eq!(votes.len(), 3);
         assert!(votes.iter().all(|vote| vote.with_v && !vote.without_v));
     }
@@ -1268,7 +1307,7 @@ mod tests {
             ),
             ("{:->, _, _} = child\n", vec!["->"]),
         ] {
-            let votes = collect(source);
+            let votes = collect_file(source);
             let triggers: Vec<&str> = votes.iter().map(|vote| vote.trigger.as_str()).collect();
             for atom_op in &atom_ops {
                 assert!(
@@ -1283,7 +1322,7 @@ mod tests {
     fn power_operator_casts_no_votes() {
         // `**` lexes as one power-op token, which native `operator?/1`
         // rejects: never an operator occurrence.
-        let votes = collect("x = 2 ** (n - 1)\n");
+        let votes = collect_file("x = 2 ** (n - 1)\n");
         assert!(
             votes.iter().all(|vote| vote.trigger != "*"),
             "power votes: {:?}",
@@ -1299,7 +1338,7 @@ mod tests {
             ("query = uri.query |> Kernel.||(\"\")\n", "||"),
             ("x = Kernel.<>(a, b)\n", "<>"),
         ] {
-            let votes = collect(source);
+            let votes = collect_file(source);
             let triggers: Vec<&str> = votes.iter().map(|vote| vote.trigger.as_str()).collect();
             assert!(
                 !triggers.contains(&call_op),

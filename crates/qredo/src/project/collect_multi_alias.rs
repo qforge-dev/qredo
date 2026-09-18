@@ -36,13 +36,13 @@ pub(crate) fn run(files: &[ProjectFile], params: &BTreeMap<String, String>) -> V
 pub(crate) fn run_with_facts(
     files: &[ProjectFile],
     facts: &[&crate::facts::Facts],
-    _params: &BTreeMap<String, String>,
+    params: &BTreeMap<String, String>,
 ) -> Vec<ProjectIssue> {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut per_file = Vec::with_capacity(files.len());
     for (position, file) in files.iter().enumerate() {
         let modules = match facts.get(position) {
-            Some(facts) => collect_from_facts(&file.source, facts),
+            Some(facts) => collect_file(&file.source, facts),
             None => BTreeMap::new(),
         };
         let stats = file_stats(&modules);
@@ -54,28 +54,67 @@ pub(crate) fn run_with_facts(
     if counts.is_empty() {
         return Vec::new();
     }
-    let Some(expected) = majority(&counts, None) else {
+    let Some(expected) = winner(&counts, params) else {
         return Vec::new();
     };
+    emit_with_winner(files, &per_file, &expected)
+}
+
+/// Majority winner (no parameters), if any votes exist.
+/// Exposed for `--stale` cache validation (same semantics as `run`).
+pub(crate) fn winner(
+    counts: &BTreeMap<String, usize>,
+    _params: &BTreeMap<String, String>,
+) -> Option<String> {
+    if counts.is_empty() {
+        return None;
+    }
+    majority(counts, None)
+}
+
+/// Per-file vote counts for `--stale` caching.
+pub(crate) fn counts_of(modules: &BTreeMap<String, Vec<Entry>>) -> BTreeMap<String, usize> {
+    file_stats(modules)
+}
+
+/// Single-file collection over shared facts, exposed for `--stale` so
+/// unchanged files skip parsing entirely.
+pub(crate) fn collect_file(
+    source: &str,
+    facts: &crate::facts::Facts,
+) -> BTreeMap<String, Vec<Entry>> {
+    collect_from_facts(source, facts)
+}
+
+/// Emit issues for one known winner over subset-relative per-file data.
+/// Used by `--stale`; callers remap `file` to global indices.
+pub(crate) fn emit_with_winner(
+    files: &[ProjectFile],
+    per_file: &[ModuleVotes],
+    winner: &str,
+) -> Vec<ProjectIssue> {
     let mut issues = Vec::new();
     for (index, file) in files.iter().enumerate() {
-        let (stats, modules) = &per_file[index];
-        let flagged = stats.keys().any(|key| key != &expected);
+        let Some((stats, modules)) = per_file.get(index) else {
+            continue;
+        };
+        let flagged = stats.keys().any(|key| key != winner);
         if !flagged {
             continue;
         }
-        for line in locations(modules, &expected) {
-            issues.push(issue_for(index, &file.source, line, &expected));
+        for line in locations(modules, winner) {
+            issues.push(issue_for(index, &file.source, line, winner));
         }
     }
     issues
 }
 
 /// One directive occurrence: `base` is `None` for multi syntax.
-struct Entry {
-    directive: String,
-    base: Option<String>,
-    line: usize,
+#[derive(Debug, Clone)]
+pub(crate) struct Entry {
+    pub(crate) directive: String,
+    pub(crate) base: Option<String>,
+    pub(crate) line: usize,
 }
 
 /// Merged per-module stats for one file: multi counts every multi line,
@@ -168,6 +207,7 @@ enum Event<'a> {
 /// Per-module directive entries in source order. A repeated `defmodule` name
 /// resets its entries (`Map.put` upstream); `def`/`defp` bodies are pruned.
 /// `facts` reuses the prepare-phase single walk; the error gate applies.
+pub(crate) type ModuleVotes = (BTreeMap<String, usize>, BTreeMap<String, Vec<Entry>>);
 fn collect_from_facts(source: &str, facts: &crate::facts::Facts) -> BTreeMap<String, Vec<Entry>> {
     if facts.has_error {
         return BTreeMap::new();

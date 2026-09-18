@@ -15,7 +15,7 @@ pub(crate) fn run(files: &[ProjectFile], params: &BTreeMap<String, String>) -> V
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut per_file: Vec<BTreeMap<String, usize>> = Vec::new();
     for file in files {
-        let votes = collect(&file.source);
+        let votes = collect_file(&file.source);
         for (ending, count) in &votes {
             *counts.entry(ending.clone()).or_insert(0) += count;
         }
@@ -24,19 +24,44 @@ pub(crate) fn run(files: &[ProjectFile], params: &BTreeMap<String, String>) -> V
     if counts.is_empty() {
         return Vec::new();
     }
-    let force = helpers::param_str(params, "force", "");
-    let force = if force.is_empty() { None } else { Some(force) };
-    let Some(expected) = majority(&counts, force) else {
+    let Some(expected) = winner(&counts, params) else {
         return Vec::new();
     };
+    emit_with_winner(files, &per_file, &expected)
+}
+
+/// Majority winner under the `force` override, if any votes exist.
+/// Exposed for `--stale` cache validation (same normalization as `run`).
+pub(crate) fn winner(
+    counts: &BTreeMap<String, usize>,
+    params: &BTreeMap<String, String>,
+) -> Option<String> {
+    if counts.is_empty() {
+        return None;
+    }
+    let force = helpers::param_str(params, "force", "");
+    let force = if force.is_empty() { None } else { Some(force) };
+    majority(counts, force)
+}
+
+/// Emit issues for one known winner without recomputing the majority.
+/// Used by `--stale` to rebuild from cached per-file votes.
+pub(crate) fn emit_with_winner(
+    files: &[ProjectFile],
+    per_file: &[BTreeMap<String, usize>],
+    winner: &str,
+) -> Vec<ProjectIssue> {
     let mut issues = Vec::new();
     for (index, file) in files.iter().enumerate() {
-        let unexpected = per_file[index].keys().any(|ending| ending != &expected);
+        let Some(votes) = per_file.get(index) else {
+            continue;
+        };
+        let unexpected = votes.keys().any(|ending| ending != winner);
         if !unexpected {
             continue;
         }
-        if let Some(line) = first_divergent_line(&file.source, &expected) {
-            let (message, trigger) = issue_text(&expected);
+        if let Some(line) = first_divergent_line(&file.source, winner) {
+            let (message, trigger) = issue_text(winner);
             issues.push(ProjectIssue {
                 file: index,
                 line: Some(line),
@@ -51,7 +76,7 @@ pub(crate) fn run(files: &[ProjectFile], params: &BTreeMap<String, String>) -> V
 }
 
 /// Per-file votes over all line segments except the last.
-fn collect(source: &str) -> BTreeMap<String, usize> {
+pub(crate) fn collect_file(source: &str) -> BTreeMap<String, usize> {
     let mut votes: BTreeMap<String, usize> = BTreeMap::new();
     let lines: Vec<&str> = source.split('\n').collect();
     let lines = lines.get(..lines.len().saturating_sub(1)).unwrap_or(&[]);

@@ -23,18 +23,31 @@ cargo install --path crates/qredo
 ## Usage
 
 ```sh
-qredo [PATH] [--config-file FILE] [--config-name NAME] [--strict] [--min-priority N] [--mute-exit-status] [--only CHECK,...] [--ignore CHECK,...] [--format text|json]
+qredo [PATH] [--config-file FILE] [--config-name NAME] [--strict] [--min-priority N] [--mute-exit-status] [--only CHECK,...] [--ignore CHECK,...] [--format text|json] [--stale]
 ```
 
 ```sh
 qredo apps/my_app --strict
 qredo --only IoInspect,Dbg --format json
+qredo --stale  # reuse cached results for unchanged files
 ```
 
 Files come from the config's `files.included` (defaulting to `lib/` and
 `test/`), minus `files.excluded`; build directories are never
 descended into. On an unsupported configuration qredo prints the
 reason and exits 2 instead of running partial analysis.
+
+## Incremental runs (`--stale`)
+
+`qredo suggest --stale` (and `list --stale`) reuse cached results for
+unchanged files: per-file issues are keyed by content hash, consistency
+votes by per-file counts, and the global majority is recomputed from
+merged counts without re-parsing cached files. The cache lives under
+`~/.cache/qredo/` (or `$XDG_CACHE_HOME/qredo`), keyed by project root
+plus a fingerprint over tool version, config bytes, environment snapshot,
+check list, selection and minimum priority. Any mismatch — or a flipped
+consistency majority — fails open to a full run, so `--stale` output
+always matches a fresh run.
 
 ## Library
 

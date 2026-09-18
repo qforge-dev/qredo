@@ -35,32 +35,73 @@ pub(crate) fn run(files: &[ProjectFile], params: &BTreeMap<String, String>) -> V
 pub(crate) fn run_with_facts(
     files: &[ProjectFile],
     facts: &[&crate::facts::Facts],
-    _params: &BTreeMap<String, String>,
+    params: &BTreeMap<String, String>,
 ) -> Vec<ProjectIssue> {
     let (counts, per_file) = collect_all(files, facts);
     if counts.is_empty() {
         return Vec::new();
     }
-    let Some(expected) = majority(&counts, None) else {
+    let Some(expected) = winner(&counts, params) else {
         return Vec::new();
     };
-    // The check passes `supress_issues_for_single_match? = true`: a winning
-    // count of one means every vote is unique, so nothing is reported.
-    if counts.get(&expected).is_none_or(|count| *count <= 1) {
-        return Vec::new();
+    emit_with_winner(files, &per_file, &expected)
+}
+
+/// Majority winner with the single-match suppression of the check: a
+/// winning count of one means every vote is unique, so nothing reports.
+/// Exposed for `--stale` cache validation (same semantics as `run`).
+pub(crate) fn winner(
+    counts: &BTreeMap<String, usize>,
+    _params: &BTreeMap<String, String>,
+) -> Option<String> {
+    if counts.is_empty() {
+        return None;
     }
+    let expected = majority(counts, None)?;
+    if counts.get(&expected).is_none_or(|count| *count <= 1) {
+        return None;
+    }
+    Some(expected)
+}
+
+/// Per-file vote counts for `--stale` caching.
+pub(crate) fn counts_of(found: &[Exception]) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    for exception in found {
+        *counts.entry(prefix_key(&exception.prefix)).or_insert(0) += 1;
+        *counts.entry(suffix_key(&exception.suffix)).or_insert(0) += 1;
+    }
+    counts
+}
+
+/// Single-file collection over shared facts, exposed for `--stale` so
+/// unchanged files skip parsing entirely.
+pub(crate) fn collect_file(source: &str, facts: &crate::facts::Facts) -> Vec<Exception> {
+    collect_from_facts(source, facts)
+}
+
+/// Emit issues for one known winner. Used by `--stale` to rebuild fresh
+/// files without recomputing the project majority.
+pub(crate) fn emit_with_winner(
+    files: &[ProjectFile],
+    per_file: &[Vec<Exception>],
+    winner: &str,
+) -> Vec<ProjectIssue> {
     let mut issues = Vec::new();
     for (index, file) in files.iter().enumerate() {
-        let flagged = per_file[index]
+        let Some(exceptions) = per_file.get(index) else {
+            continue;
+        };
+        let flagged = exceptions
             .iter()
             .flat_map(exception_keys)
-            .any(|key| key != expected);
+            .any(|key| key != winner);
         if !flagged {
             continue;
         }
-        for exception in &per_file[index] {
-            if loses(exception, &expected) {
-                issues.push(issue_for(index, &file.source, exception, &expected));
+        for exception in exceptions {
+            if loses(exception, winner) {
+                issues.push(issue_for(index, &file.source, exception, winner));
             }
         }
     }
@@ -138,11 +179,12 @@ fn collect_from_facts(source: &str, facts: &crate::facts::Facts) -> Vec<Exceptio
 }
 
 /// One exception module: its written name, `PascalCase` parts and defmodule line.
-struct Exception {
-    name: String,
-    prefix: String,
-    suffix: String,
-    line: usize,
+#[derive(Debug, Clone)]
+pub(crate) struct Exception {
+    pub(crate) name: String,
+    pub(crate) prefix: String,
+    pub(crate) suffix: String,
+    pub(crate) line: usize,
 }
 
 /// Vote keys of one exception across the combined key space.

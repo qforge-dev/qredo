@@ -17,16 +17,17 @@ use super::{ProjectFile, ProjectIssue, majority};
 use crate::helpers;
 
 /// One unused-variable occurrence in binding position.
-struct Occurrence {
-    line: usize,
-    column: usize,
-    kind: String,
-    trigger: String,
+#[derive(Debug, Clone)]
+pub(crate) struct Occurrence {
+    pub(crate) line: usize,
+    pub(crate) column: usize,
+    pub(crate) kind: String,
+    pub(crate) trigger: String,
     /// One vote per enclosing binding region: the upstream prewalk reduces
     /// every nested `=`/`<-`/head/context/`->` subtree, so an identifier in
     /// overlapping regions (like `%S{_a: _a} = _s` in a `def` head) votes
     /// more than once and can flip the majority.
-    votes: usize,
+    pub(crate) votes: usize,
 }
 
 /// Run the check over a file set.
@@ -55,7 +56,7 @@ pub(crate) fn run_with_facts(
     let mut per_file = Vec::new();
     for (position, file) in files.iter().enumerate() {
         let found = match facts.get(position) {
-            Some(facts) => collect_from_facts(&file.source, facts),
+            Some(facts) => collect_file(&file.source, facts),
             None => Vec::new(),
         };
         for vote in &found {
@@ -66,24 +67,52 @@ pub(crate) fn run_with_facts(
     if counts.is_empty() {
         return Vec::new();
     }
+    let Some(expected) = winner(&counts, params) else {
+        return Vec::new();
+    };
+    emit_with_winner(&per_file, &expected)
+}
+
+/// Majority winner under the `force` override, if any votes exist.
+/// Exposed for `--stale` cache validation (same normalization as `run`).
+pub(crate) fn winner(
+    counts: &BTreeMap<String, usize>,
+    params: &BTreeMap<String, String>,
+) -> Option<String> {
+    if counts.is_empty() {
+        return None;
+    }
     let force = helpers::param_str(params, "force", "");
     let force = force.strip_prefix(':').unwrap_or(force);
     let force = if force.is_empty() { None } else { Some(force) };
-    let Some(expected) = majority(&counts, force) else {
-        return Vec::new();
-    };
+    majority(counts, force)
+}
+
+/// Per-file vote counts for `--stale` caching (weighted by enclosing
+/// region count, mirroring the merge).
+pub(crate) fn counts_of(found: &[Occurrence]) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    for vote in found {
+        *counts.entry(vote.kind.clone()).or_insert(0) += vote.votes;
+    }
+    counts
+}
+
+/// Emit issues for one known winner over subset-relative per-file details.
+/// Used by `--stale`; positions are subset-relative, callers remap `file`.
+pub(crate) fn emit_with_winner(per_file: &[Vec<Occurrence>], winner: &str) -> Vec<ProjectIssue> {
     let mut issues = Vec::new();
     for (index, found) in per_file.iter().enumerate() {
-        if !found.iter().any(|vote| vote.kind != expected) {
+        if !found.iter().any(|vote| vote.kind != winner) {
             continue;
         }
-        for vote in mismatches(found, &expected) {
+        for vote in mismatches(found, winner) {
             issues.push(ProjectIssue {
                 file: index,
                 line: Some(vote.line),
                 column: Some(vote.column),
                 trigger: vote.trigger.clone(),
-                message: message_for(&expected, &vote.trigger),
+                message: message_for(winner, &vote.trigger),
                 severity: None,
             });
         }
@@ -104,8 +133,9 @@ fn mismatches<'a>(found: &'a [Occurrence], expected: &str) -> Vec<&'a Occurrence
 }
 
 /// Every unused-variable occurrence holding a binding position, with
-/// one vote per containing binding region.
-fn collect_from_facts(source: &str, facts: &crate::facts::Facts) -> Vec<Occurrence> {
+/// one vote per containing binding region. Exposed for `--stale` so
+/// unchanged files skip parsing entirely.
+pub(crate) fn collect_file(source: &str, facts: &crate::facts::Facts) -> Vec<Occurrence> {
     let starts = line_starts(source);
     let mut votes = Vec::new();
     for ident in &facts.var_idents {

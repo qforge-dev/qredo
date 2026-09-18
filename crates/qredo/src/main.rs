@@ -142,6 +142,7 @@ struct SuggestArgs {
     files_excluded: Vec<String>,
     color: Option<bool>,
     format: Format,
+    stale: bool,
 }
 
 impl Default for SuggestArgs {
@@ -165,6 +166,7 @@ impl Default for SuggestArgs {
             files_excluded: Vec::new(),
             color: None,
             format: Format::Default,
+            stale: false,
         }
     }
 }
@@ -545,6 +547,7 @@ fn parse_suggest_flag(
 ) -> Result<(), ParseError> {
     match flag {
         "--strict" => args.strict = true,
+        "--stale" => args.stale = true,
         "--all-priorities" | "-A" => args.all_priorities = true,
         "--all" | "-a" => args.all = true,
         "--mute-exit-status" => args.mute_exit_status = true,
@@ -1019,6 +1022,38 @@ fn discover_config(dir: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Execute the pipeline, using the incremental disk cache under `--stale`.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one call-site spine shared by suggest and list"
+)]
+fn execute_cached(
+    args: &SuggestArgs,
+    config_source: &str,
+    files: &[qredo::RunnerFile],
+    min_priority: i32,
+    selection: qredo::Selection,
+    root: &Path,
+) -> Result<qredo::RunReport, qredo::integration::Fallback> {
+    if args.stale {
+        qredo::stale::execute_stale(
+            config_source,
+            &args.config_name,
+            files,
+            min_priority,
+            selection,
+            root,
+        )
+    } else {
+        qredo::integration::execute_selected(
+            config_source,
+            &args.config_name,
+            files,
+            min_priority,
+            selection,
+        )
+    }
+}
 /// Rendered stdout for one `suggest` run: native-shape formatters over
 /// absolute filenames (native resolves display paths absolutely).
 fn print_report(
@@ -1372,12 +1407,13 @@ fn run_list(args: &SuggestArgs) -> i32 {
         mute_exit_status: args.mute_exit_status,
     };
     let run_start = std::time::Instant::now();
-    let outcome = qredo::integration::execute_selected(
+    let outcome = execute_cached(
+        args,
         &loaded.config_source,
-        &args.config_name,
         &files,
         min_priority,
         selection,
+        &loaded.root,
     );
     let mut context = context;
     context.run_microseconds = micros(run_start.elapsed());
@@ -1731,12 +1767,13 @@ fn report_exit(
         }
     };
     let run_start = std::time::Instant::now();
-    let outcome = qredo::integration::execute_selected(
+    let outcome = execute_cached(
+        args,
         config_source,
-        &args.config_name,
         files,
         min_priority,
         selection,
+        &context.root,
     );
     context.run_microseconds = micros(run_start.elapsed());
     match outcome {
@@ -1903,6 +1940,13 @@ mod tests {
                 "** (credo) Unknown switch for `info` command: --nope".to_owned()
             )
         );
+    }
+
+    #[test]
+    fn stale_flag_parses() {
+        let parsed = suggest(&["--stale"]);
+        assert!(parsed.stale);
+        assert!(!SuggestArgs::default().stale);
     }
 
     #[test]

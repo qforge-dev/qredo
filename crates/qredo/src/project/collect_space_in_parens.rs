@@ -16,7 +16,7 @@ pub(crate) fn run(files: &[ProjectFile], params: &BTreeMap<String, String>) -> V
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut per_file: Vec<BTreeMap<String, Vec<Loc>>> = Vec::new();
     for file in files {
-        let votes = collect(&file.source);
+        let votes = collect_file(&file.source);
         for (kind, locs) in &votes {
             *counts.entry(kind.clone()).or_insert(0) += locs.len();
         }
@@ -25,12 +25,43 @@ pub(crate) fn run(files: &[ProjectFile], params: &BTreeMap<String, String>) -> V
     if counts.is_empty() {
         return Vec::new();
     }
-    let force = normalized_force(params);
-    let Some(expected) = majority(&counts, force.as_deref()) else {
+    let Some(expected) = winner(&counts, params) else {
         return Vec::new();
     };
+    emit_with_winner(&per_file, &expected, params)
+}
+
+/// Majority winner under the `force` override, if any votes exist.
+/// Exposed for `--stale` cache validation (same normalization as `run`).
+pub(crate) fn winner(
+    counts: &BTreeMap<String, usize>,
+    params: &BTreeMap<String, String>,
+) -> Option<String> {
+    if counts.is_empty() {
+        return None;
+    }
+    let force = normalized_force(params);
+    majority(counts, force.as_deref())
+}
+
+/// Per-file vote counts for `--stale` caching (no AST involved).
+pub(crate) fn counts_of(votes: &BTreeMap<String, Vec<Loc>>) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    for (kind, locs) in votes {
+        *counts.entry(kind.clone()).or_insert(0) += locs.len();
+    }
+    counts
+}
+
+/// Emit issues for one known winner. Used by `--stale` to rebuild fresh
+/// files without recomputing the project majority.
+pub(crate) fn emit_with_winner(
+    per_file: &[BTreeMap<String, Vec<Loc>>],
+    winner: &str,
+    params: &BTreeMap<String, String>,
+) -> Vec<ProjectIssue> {
     let allow_empty_enums = helpers::param_bool(params, "allow_empty_enums", false);
-    let (actual, message) = issue_text(&expected, allow_empty_enums);
+    let (actual, message) = issue_text(winner, allow_empty_enums);
     let mut issues = Vec::new();
     for (index, votes) in per_file.iter().enumerate() {
         if let Some(locs) = votes.get(actual) {
@@ -51,10 +82,10 @@ pub(crate) fn run(files: &[ProjectFile], params: &BTreeMap<String, String>) -> V
 
 /// One reported paren location in token order (already ascending).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Loc {
-    trigger: &'static str,
-    line: usize,
-    column: usize,
+pub(crate) struct Loc {
+    pub(crate) trigger: &'static str,
+    pub(crate) line: usize,
+    pub(crate) column: usize,
 }
 
 impl Loc {
@@ -68,7 +99,7 @@ impl Loc {
 }
 
 /// Collect per-kind locations over the token stream.
-fn collect(source: &str) -> BTreeMap<String, Vec<Loc>> {
+pub(crate) fn collect_file(source: &str) -> BTreeMap<String, Vec<Loc>> {
     let toks = tokenize(source);
     let mut out: BTreeMap<String, Vec<Loc>> = BTreeMap::new();
     for (index, cur) in toks.iter().enumerate() {
@@ -725,10 +756,7 @@ mod tests {
     }
 
     fn counts_of(source: &str) -> BTreeMap<String, usize> {
-        collect(source)
-            .into_iter()
-            .map(|(kind, locs)| (kind, locs.len()))
-            .collect()
+        super::counts_of(&super::collect_file(source))
     }
 
     #[test]

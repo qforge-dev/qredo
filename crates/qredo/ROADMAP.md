@@ -38,7 +38,10 @@ never auto-updated, full diagnostics compared (never bare counts),
 - **P1 CLI surface.** Missing flags, discovery rules, selection
   semantics, exit-code matrix, invalid-input errors — verified against
   `mix credo --help` behavior and error cases, not happy paths.
-  *Gate: flag-level parity table, every row verified.*
+  *Gate: flag-level parity table, every row verified.* Note: `--stale`
+  is an intentional qredo-only extension (no upstream counterpart);
+  its contract is equivalence with a fresh `qredo` run, not Credo
+  parity.
 - **P2 Parameters.** Per-check audits from the inventory (81
   rule-specific + 5 general): types, defaults, invalid values,
   interactions, each with differential cases in its corpus.

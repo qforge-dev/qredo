@@ -17,7 +17,7 @@ pub(crate) fn run(files: &[ProjectFile], params: &BTreeMap<String, String>) -> V
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut per_file: Vec<Vec<ParamMatch>> = Vec::new();
     for file in files {
-        let found = collect(&file.source);
+        let found = collect_file(&file.source);
         for found_match in &found {
             *counts.entry(found_match.kind.clone()).or_insert(0) += 1;
         }
@@ -26,29 +26,63 @@ pub(crate) fn run(files: &[ProjectFile], params: &BTreeMap<String, String>) -> V
     if counts.is_empty() {
         return Vec::new();
     }
-    let force = helpers::param_str(params, "force", "");
-    let force = if force.is_empty() { None } else { Some(force) };
-    let Some(expected) = majority(&counts, force) else {
+    let Some(expected) = winner(&counts, params) else {
         return Vec::new();
     };
-    let message = issue_message(&expected);
+    emit_with_winner(files, &per_file, &expected)
+}
+
+/// Majority winner under the `force` override, if any votes exist.
+/// Exposed for `--stale` cache validation (same normalization as `run`).
+pub(crate) fn winner(
+    counts: &BTreeMap<String, usize>,
+    params: &BTreeMap<String, String>,
+) -> Option<String> {
+    if counts.is_empty() {
+        return None;
+    }
+    let force = helpers::param_str(params, "force", "");
+    let force = if force.is_empty() { None } else { Some(force) };
+    majority(counts, force)
+}
+
+/// Per-file vote counts for `--stale` caching (no AST involved).
+pub(crate) fn counts_of(found: &[ParamMatch]) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    for found_match in found {
+        *counts.entry(found_match.kind.clone()).or_insert(0) += 1;
+    }
+    counts
+}
+
+/// Emit issues for one known winner. Used by `--stale` to rebuild fresh
+/// files without recomputing the project majority.
+pub(crate) fn emit_with_winner(
+    files: &[ProjectFile],
+    per_file: &[Vec<ParamMatch>],
+    winner: &str,
+) -> Vec<ProjectIssue> {
+    let message = issue_message(winner);
     let mut issues = Vec::new();
     for (index, file) in files.iter().enumerate() {
-        let unexpected = per_file[index].iter().any(|found| found.kind != expected);
+        let Some(found) = per_file.get(index) else {
+            continue;
+        };
+        let unexpected = found.iter().any(|item| item.kind != winner);
         if !unexpected {
             continue;
         }
         let lines: Vec<&str> = file.source.split('\n').collect();
-        for found in &per_file[index] {
-            if found.kind == expected {
+        for item in found {
+            if item.kind == winner {
                 continue;
             }
-            let line = lines.get(found.line.wrapping_sub(1)).unwrap_or(&"");
+            let line = lines.get(item.line.wrapping_sub(1)).unwrap_or(&"");
             issues.push(ProjectIssue {
                 file: index,
-                line: Some(found.line),
-                column: backfilled_column(line, &found.name),
-                trigger: found.name.clone(),
+                line: Some(item.line),
+                column: backfilled_column(line, &item.name),
+                trigger: item.name.clone(),
                 message: message.clone(),
                 severity: None,
             });
@@ -58,14 +92,15 @@ pub(crate) fn run(files: &[ProjectFile], params: &BTreeMap<String, String>) -> V
 }
 
 /// One top-level `=` parameter: its style, variable line and capture name.
-struct ParamMatch {
-    kind: String,
-    line: usize,
-    name: String,
+#[derive(Debug, Clone)]
+pub(crate) struct ParamMatch {
+    pub(crate) kind: String,
+    pub(crate) line: usize,
+    pub(crate) name: String,
 }
 
 /// Per-file matches in document order over the masked source.
-fn collect(source: &str) -> Vec<ParamMatch> {
+pub(crate) fn collect_file(source: &str) -> Vec<ParamMatch> {
     let masked = helpers::mask_strings_comments(source);
     let bytes = masked.as_bytes();
     let starts = line_starts(&masked);
@@ -509,7 +544,7 @@ mod tests {
                 .map(|(kind, count)| ((*kind).to_owned(), *count))
                 .collect();
             let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-            for found in collect(&source_of(id)) {
+            for found in collect_file(&source_of(id)) {
                 *counts.entry(found.kind).or_insert(0) += 1;
             }
             assert_eq!(counts, expected, "counts for {id}");
@@ -519,7 +554,7 @@ mod tests {
     #[test]
     fn multibyte_literals_do_not_shift_lines() {
         let source = "defmodule M do\n  @doc \"μ def (a = b) μ\"\n  def test(foo = %{a: b}) do\n    nil\n  end\nend\n";
-        let found = collect(source);
+        let found = collect_file(source);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].line, 3);
         assert_eq!(found[0].name, "foo");

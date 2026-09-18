@@ -182,6 +182,282 @@ pub(crate) fn project_finding(issue: &ProjectIssue) -> Finding {
     }
 }
 
+/// Per-check fresh-file details for `--stale` rebuilds (in-memory only,
+/// never serialized). Counts go to disk; details stay alive just long
+/// enough to emit fresh-file issues under the merged global winner.
+#[derive(Debug)]
+pub(crate) enum StaleDetails {
+    /// `TabsOrSpaces`, `LineEndings`: counts are the details.
+    Counts(Vec<BTreeMap<String, usize>>),
+    ParamPattern(Vec<Vec<collect_param_pattern::ParamMatch>>),
+    SpaceInParens(Vec<BTreeMap<String, Vec<collect_space_in_parens::Loc>>>),
+    SpaceAroundOps(Vec<Vec<collect_space_around_ops::OpVote>>),
+    ExceptionNames(Vec<Vec<collect_exception_names::Exception>>),
+    MultiAlias(Vec<collect_multi_alias::ModuleVotes>),
+    UnusedVarNames(Vec<Vec<collect_unused_var_names::Occurrence>>),
+}
+
+/// Collect per-file votes for fresh files under `--stale`.
+///
+/// Returns the merged fresh counts plus the in-memory details needed to
+/// emit fresh-file issues once the global winner is known. `facts` aligns
+/// with `files` for the `Facts`-backed checks (callers parse fresh files
+/// once and share). Returns `None` for checks without incremental support
+/// (`DuplicatedCode`, unknown rules): callers fail open to a full run.
+#[allow(
+    clippy::too_many_lines,
+    clippy::cognitive_complexity,
+    reason = "8-arm per-check dispatch mirroring run_project_check; each arm is one collect call"
+)]
+pub(crate) fn stale_collect(
+    rule: &str,
+    files: &[ProjectFile],
+    facts: &[&crate::facts::Facts],
+) -> Option<(BTreeMap<String, usize>, StaleDetails)> {
+    match rule {
+        "Credo.Check.Consistency.TabsOrSpaces" => {
+            let mut counts = BTreeMap::new();
+            let mut per_file = Vec::with_capacity(files.len());
+            for file in files {
+                let votes = collect_tabs_or_spaces::collect_file(&file.source);
+                for (kind, count) in &votes {
+                    *counts.entry(kind.clone()).or_insert(0) += count;
+                }
+                per_file.push(votes);
+            }
+            Some((counts, StaleDetails::Counts(per_file)))
+        }
+        "Credo.Check.Consistency.LineEndings" => {
+            let mut counts = BTreeMap::new();
+            let mut per_file = Vec::with_capacity(files.len());
+            for file in files {
+                let votes = line_endings::collect_file(&file.source);
+                for (kind, count) in &votes {
+                    *counts.entry(kind.clone()).or_insert(0) += count;
+                }
+                per_file.push(votes);
+            }
+            Some((counts, StaleDetails::Counts(per_file)))
+        }
+        "Credo.Check.Consistency.ParameterPatternMatching" => {
+            let mut counts = BTreeMap::new();
+            let mut per_file = Vec::with_capacity(files.len());
+            for file in files {
+                let found = collect_param_pattern::collect_file(&file.source);
+                for (kind, count) in collect_param_pattern::counts_of(&found) {
+                    *counts.entry(kind).or_insert(0) += count;
+                }
+                per_file.push(found);
+            }
+            Some((counts, StaleDetails::ParamPattern(per_file)))
+        }
+        "Credo.Check.Consistency.SpaceInParentheses" => {
+            let mut counts = BTreeMap::new();
+            let mut per_file = Vec::with_capacity(files.len());
+            for file in files {
+                let votes = collect_space_in_parens::collect_file(&file.source);
+                for (kind, count) in collect_space_in_parens::counts_of(&votes) {
+                    *counts.entry(kind).or_insert(0) += count;
+                }
+                per_file.push(votes);
+            }
+            Some((counts, StaleDetails::SpaceInParens(per_file)))
+        }
+        "Credo.Check.Consistency.SpaceAroundOperators" => {
+            let mut counts = BTreeMap::new();
+            let mut per_file = Vec::with_capacity(files.len());
+            for file in files {
+                let votes = collect_space_around_ops::collect_file(&file.source);
+                for (kind, count) in collect_space_around_ops::counts_of(&votes) {
+                    *counts.entry(kind).or_insert(0) += count;
+                }
+                per_file.push(votes);
+            }
+            Some((counts, StaleDetails::SpaceAroundOps(per_file)))
+        }
+        "Credo.Check.Consistency.ExceptionNames" => {
+            let mut counts = BTreeMap::new();
+            let mut per_file = Vec::with_capacity(files.len());
+            for (position, file) in files.iter().enumerate() {
+                let found = match facts.get(position) {
+                    Some(facts) => collect_exception_names::collect_file(&file.source, facts),
+                    None => Vec::new(),
+                };
+                for (kind, count) in collect_exception_names::counts_of(&found) {
+                    *counts.entry(kind).or_insert(0) += count;
+                }
+                per_file.push(found);
+            }
+            Some((counts, StaleDetails::ExceptionNames(per_file)))
+        }
+        "Credo.Check.Consistency.MultiAliasImportRequireUse" => {
+            let mut counts = BTreeMap::new();
+            let mut per_file = Vec::with_capacity(files.len());
+            for (position, file) in files.iter().enumerate() {
+                let modules = match facts.get(position) {
+                    Some(facts) => collect_multi_alias::collect_file(&file.source, facts),
+                    None => BTreeMap::new(),
+                };
+                let stats = collect_multi_alias::counts_of(&modules);
+                for (kind, count) in &stats {
+                    *counts.entry(kind.clone()).or_insert(0) += count;
+                }
+                per_file.push((stats, modules));
+            }
+            Some((counts, StaleDetails::MultiAlias(per_file)))
+        }
+        "Credo.Check.Consistency.UnusedVariableNames" => {
+            let mut counts = BTreeMap::new();
+            let mut per_file = Vec::with_capacity(files.len());
+            for (position, file) in files.iter().enumerate() {
+                let found = match facts.get(position) {
+                    Some(facts) => collect_unused_var_names::collect_file(&file.source, facts),
+                    None => Vec::new(),
+                };
+                for (kind, count) in collect_unused_var_names::counts_of(&found) {
+                    *counts.entry(kind).or_insert(0) += count;
+                }
+                per_file.push(found);
+            }
+            Some((counts, StaleDetails::UnusedVarNames(per_file)))
+        }
+        _ => None,
+    }
+}
+
+/// Emit fresh-file issues under one known global winner. Positions in the
+/// returned issues are subset-relative; callers remap `file` to global
+/// indices. Returns `None` for checks without incremental support.
+pub(crate) fn stale_emit(
+    rule: &str,
+    files: &[ProjectFile],
+    details: &StaleDetails,
+    winner: &str,
+    params: &BTreeMap<String, String>,
+) -> Option<Vec<ProjectIssue>> {
+    match (rule, details) {
+        ("Credo.Check.Consistency.TabsOrSpaces", StaleDetails::Counts(per_file)) => Some(
+            collect_tabs_or_spaces::emit_with_winner(files, per_file, winner),
+        ),
+        ("Credo.Check.Consistency.LineEndings", StaleDetails::Counts(per_file)) => {
+            Some(line_endings::emit_with_winner(files, per_file, winner))
+        }
+        (
+            "Credo.Check.Consistency.ParameterPatternMatching",
+            StaleDetails::ParamPattern(per_file),
+        ) => Some(collect_param_pattern::emit_with_winner(
+            files, per_file, winner,
+        )),
+        ("Credo.Check.Consistency.SpaceInParentheses", StaleDetails::SpaceInParens(per_file)) => {
+            Some(collect_space_in_parens::emit_with_winner(
+                per_file, winner, params,
+            ))
+        }
+        (
+            "Credo.Check.Consistency.SpaceAroundOperators",
+            StaleDetails::SpaceAroundOps(per_file),
+        ) => Some(collect_space_around_ops::emit_with_winner(
+            files, per_file, winner, params,
+        )),
+        ("Credo.Check.Consistency.ExceptionNames", StaleDetails::ExceptionNames(per_file)) => Some(
+            collect_exception_names::emit_with_winner(files, per_file, winner),
+        ),
+        (
+            "Credo.Check.Consistency.MultiAliasImportRequireUse",
+            StaleDetails::MultiAlias(per_file),
+        ) => Some(collect_multi_alias::emit_with_winner(
+            files, per_file, winner,
+        )),
+        ("Credo.Check.Consistency.UnusedVariableNames", StaleDetails::UnusedVarNames(per_file)) => {
+            Some(collect_unused_var_names::emit_with_winner(per_file, winner))
+        }
+        _ => None,
+    }
+}
+
+/// Majority winner for one project check under `--stale`, using the same
+/// force normalization and suppression as its `run`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum StaleWinner {
+    /// Supported check with its merged winner (`None` = no votes).
+    Known(Option<String>),
+    /// No incremental support (`DuplicatedCode`, unknown rules).
+    Unsupported,
+}
+
+/// Majority winner for one project check under `--stale`, using the same
+/// force normalization and suppression as its `run`. Returns
+/// [`StaleWinner::Unsupported`] for checks without incremental support.
+pub(crate) fn stale_winner(
+    rule: &str,
+    counts: &BTreeMap<String, usize>,
+    params: &BTreeMap<String, String>,
+) -> StaleWinner {
+    match rule {
+        "Credo.Check.Consistency.TabsOrSpaces" => {
+            StaleWinner::Known(collect_tabs_or_spaces::winner(counts, params))
+        }
+        "Credo.Check.Consistency.LineEndings" => {
+            StaleWinner::Known(line_endings::winner(counts, params))
+        }
+        "Credo.Check.Consistency.ParameterPatternMatching" => {
+            StaleWinner::Known(collect_param_pattern::winner(counts, params))
+        }
+        "Credo.Check.Consistency.SpaceInParentheses" => {
+            StaleWinner::Known(collect_space_in_parens::winner(counts, params))
+        }
+        "Credo.Check.Consistency.SpaceAroundOperators" => {
+            StaleWinner::Known(collect_space_around_ops::winner(counts, params))
+        }
+        "Credo.Check.Consistency.ExceptionNames" => {
+            StaleWinner::Known(collect_exception_names::winner(counts, params))
+        }
+        "Credo.Check.Consistency.MultiAliasImportRequireUse" => {
+            StaleWinner::Known(collect_multi_alias::winner(counts, params))
+        }
+        "Credo.Check.Consistency.UnusedVariableNames" => {
+            StaleWinner::Known(collect_unused_var_names::winner(counts, params))
+        }
+        _ => StaleWinner::Unsupported,
+    }
+}
+
+/// Per-file vote counts by collector, re-exported for `--stale` cache
+/// saves so the disk view shares each collector's merge accounting.
+pub(crate) fn collect_param_pattern_counts(
+    found: &[collect_param_pattern::ParamMatch],
+) -> BTreeMap<String, usize> {
+    collect_param_pattern::counts_of(found)
+}
+
+/// Per-file vote counts by collector (see above).
+pub(crate) fn collect_space_in_parens_counts(
+    votes: &BTreeMap<String, Vec<collect_space_in_parens::Loc>>,
+) -> BTreeMap<String, usize> {
+    collect_space_in_parens::counts_of(votes)
+}
+
+/// Per-file vote counts by collector (see above).
+pub(crate) fn collect_space_around_ops_counts(
+    votes: &[collect_space_around_ops::OpVote],
+) -> BTreeMap<String, usize> {
+    collect_space_around_ops::counts_of(votes)
+}
+
+/// Per-file vote counts by collector (see above).
+pub(crate) fn collect_exception_names_counts(
+    found: &[collect_exception_names::Exception],
+) -> BTreeMap<String, usize> {
+    collect_exception_names::counts_of(found)
+}
+
+/// Per-file vote counts by collector (see above).
+pub(crate) fn collect_unused_var_names_counts(
+    found: &[collect_unused_var_names::Occurrence],
+) -> BTreeMap<String, usize> {
+    collect_unused_var_names::counts_of(found)
+}
+
 /// Winning match across merged per-file counts: explicit `force` wins,
 /// otherwise the highest count, ties broken toward the smallest key
 /// (mirrors `Enum.sort() |> Enum.max_by(&elem(&1, 1))`, verified natively).
