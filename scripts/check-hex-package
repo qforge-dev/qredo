@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Ensure the exact Hex payload remains a compilable Mix dependency.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+package_dir=$(mktemp -d "${TMPDIR:-/tmp}/qredo-hex-package.XXXXXX")
+trap 'rm -rf "$package_dir"' EXIT
+cd "$root"
+mix hex.build --unpack --output "$package_dir" >/dev/null
+[[ -f "$package_dir/mix.exs" ]] || {
+    echo "Hex package is missing mix.exs" >&2
+    exit 1
+}
+cd "$package_dir"
+MIX_ENV=prod mix compile --warnings-as-errors

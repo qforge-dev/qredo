@@ -50,6 +50,7 @@ defmodule Qredo.MixProject do
         "crates/qredo/ROADMAP.md",
         "crates/qredo/ARCHITECTURE.md",
         "crates/qredo/AGENTS.md",
+        "mix.exs",
         "Cargo.toml",
         "Cargo.lock",
         "rust-toolchain.toml",
