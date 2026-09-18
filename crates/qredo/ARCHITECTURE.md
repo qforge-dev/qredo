@@ -56,6 +56,8 @@ with fresh-file votes, recomputes the majority and emits only fresh
 files — unchanged files are never parsed. A flipped winner, missing
 votes, or any fingerprint mismatch (tool version, config bytes, env
 snapshot, checks, selection, priority) fails open to a full run.
+An unchanged hit leaves the existing cache file untouched rather than
+serializing and atomically rewriting an identical payload.
 
 ## Compatibility method
 

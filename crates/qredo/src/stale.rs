@@ -451,6 +451,7 @@ fn incremental(
     ) else {
         return full_run_and_save(files, runner_config, fingerprint, saver);
     };
+    let cache_is_current = clean_hit_matches_cache(files, cache, &plan, &phase.new_winners);
     // Pattern-errored project checks contribute nothing: strip them.
     issues.retain(|issue| !phase.drop_checks.contains(&issue.check));
     issues.extend(phase.fresh_issues);
@@ -468,19 +469,21 @@ fn incremental(
         .iter()
         .fold(0, |status, issue| status | issue.exit_status);
 
-    persist_cache(
-        files,
-        runner_config,
-        cache,
-        fingerprint,
-        saver,
-        &plan,
-        phase.new_winners,
-        &phase.drop_checks,
-        &fresh_run.fresh_valid,
-        &fresh_run.prepared,
-        &issues,
-    );
+    if !cache_is_current {
+        persist_cache(
+            files,
+            runner_config,
+            cache,
+            fingerprint,
+            saver,
+            &plan,
+            phase.new_winners,
+            &phase.drop_checks,
+            &fresh_run.fresh_valid,
+            &fresh_run.prepared,
+            &issues,
+        );
+    }
 
     crate::RunReport {
         issues,
@@ -488,6 +491,26 @@ fn incremental(
         errors: plan.errors,
         skipped_invalid: fresh_run.skipped_invalid,
     }
+}
+
+/// True when an incremental run changed no cache-bearing input: every
+/// non-errored file is still present by hash, no file was added or deleted,
+/// and every project winner is unchanged. In that case rebuilding and
+/// atomically rewriting the same payload is pure overhead.
+fn clean_hit_matches_cache(
+    files: &[crate::RunnerFile],
+    cache: &DiskCache,
+    plan: &Partition,
+    new_winners: &BTreeMap<String, Option<String>>,
+) -> bool {
+    if !plan.fresh.is_empty() || &cache.winners != new_winners {
+        return false;
+    }
+    let mut cache_bearing = files
+        .iter()
+        .filter(|file| !plan.errored_file.contains(file.filename.as_str()));
+    cache_bearing.clone().count() == cache.files.len()
+        && cache_bearing.all(|file| cache.files.contains_key(&file.filename))
 }
 
 /// Reused kernel/filename issues (pattern-stopped checks stripped) plus
@@ -1402,6 +1425,29 @@ mod tests {
                 panic!("missing votes must count as empty, not fail open");
             }
         }
+    }
+
+    #[test]
+    fn clean_hit_does_not_save_unchanged_cache() {
+        let files = files();
+        let config = crate::parse_config(TWO_CHECKS, "default").expect("config parses");
+        let runner = crate::integration::runner_of(&config, -99, crate::Selection::default());
+        let fingerprint = crate::stale_cache::fingerprint(
+            TWO_CHECKS,
+            "default",
+            &config.env_snapshot,
+            &runner.checks,
+            &runner.selection,
+            -99,
+        );
+        let expected = crate::run_checks(&files, &runner);
+        let cache = cold_cache(&files, &expected, &runner, &fingerprint);
+        let saves = std::cell::Cell::new(0_usize);
+        let actual = incremental(&files, &runner, &cache, &fingerprint, &|_| {
+            saves.set(saves.get() + 1);
+        });
+        assert_eq!(actual, expected);
+        assert_eq!(saves.get(), 0, "clean hit must not rewrite its cache");
     }
 
     #[test]
