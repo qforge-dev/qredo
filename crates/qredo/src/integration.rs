@@ -1,7 +1,7 @@
 //! Swappable native lint engine with fail-closed fallback.
 //!
-//! [`select`] serves static `.credo.exs` configs whose enabled checks are all
-//! implemented with default parameters. Anything else reports a stable
+//! [`select`] serves static `.credo.exs` configs whose enabled checks and
+//! parameter schemas are implemented. Anything else reports a stable
 //! machine-readable reason instead of running. Issue presence and locations
 //! must match on served configs; message text and severities are
 //! non-contractual. Only differential failures on real targets authorize
@@ -56,12 +56,59 @@ fn gate(entry: &crate::CheckEntry) -> Option<Fallback> {
             reason: format!("project-scope-check:{}", entry.module),
         });
     }
-    if !entry.params.is_empty() {
+    if !params_supported(entry) {
         return Some(Fallback {
             reason: format!("custom-check-params:{}", entry.module),
         });
     }
     None
+}
+
+/// True when every configured parameter is consumed with the same scalar
+/// shape as the native implementation. Anything not explicitly promoted
+/// remains on the real-Credo path rather than silently running defaults.
+fn params_supported(entry: &crate::CheckEntry) -> bool {
+    entry
+        .params
+        .iter()
+        .all(|(name, value)| match name.as_str() {
+            "priority" => crate::resolve_priority(&entry.module, None, &entry.params).is_ok(),
+            "exit_status" => valid_exit_status(value),
+            "category" => valid_category(value),
+            // The static parser has already required lists of plain strings and
+            // flattened them to the comma-separated form consumed by file_select.
+            "files.included" | "files.excluded" => true,
+            _ => supported_check_param(&entry.module, name, value),
+        })
+}
+
+/// Per-check schemas for the first real-project parameter slice.
+fn supported_check_param(module: &str, name: &str, value: &str) -> bool {
+    let nonnegative_integer = || value.parse::<usize>().is_ok();
+    match (module, name) {
+        (
+            "Credo.Check.Design.AliasUsage",
+            "if_nested_deeper_than" | "if_called_more_often_than",
+        )
+        | ("Credo.Check.Refactor.CyclomaticComplexity", "max_complexity")
+        | ("Credo.Check.Refactor.FunctionArity", "max_arity")
+        | ("Credo.Check.Refactor.Nesting", "max_nesting") => nonnegative_integer(),
+        _ => false,
+    }
+}
+
+/// Configured categories qredo can represent without changing issue shape.
+fn valid_category(value: &str) -> bool {
+    matches!(
+        value,
+        "consistency" | "design" | "readability" | "refactor" | "warning"
+    )
+}
+
+/// Native accepts integer statuses or category atoms. Unknown atoms map to
+/// zero upstream, but are rejected here so a typo cannot silently change CI.
+fn valid_exit_status(value: &str) -> bool {
+    value.parse::<i32>().is_ok() || valid_category(value)
 }
 
 /// Fail-closed gate for one enabled check in a subset run: project-lane
@@ -76,7 +123,7 @@ fn subset_gate(entry: &crate::CheckEntry) -> Option<Fallback> {
     gate(entry)
 }
 
-/// Build the native runner over default-param enabled checks.
+/// Build the native runner over enabled checks and their configured params.
 /// Disabled checks matching `selection.enable_disabled` (case-insensitive
 /// regex, mirroring native) rejoin the run. Exposed for `--stale`, which
 /// builds filtered sub-configs over the same resolution.
@@ -493,6 +540,81 @@ mod tests {
                 .map(String::as_str),
             Some("2")
         );
+    }
+
+    #[test]
+    fn labqoat_configured_params_serve() {
+        let source = "%{\n  configs: [\n    %{\n      name: \"default\",\n      checks: %{enabled: [\n        {Credo.Check.Design.AliasUsage, [priority: :low, if_nested_deeper_than: 2, if_called_more_often_than: 0]},\n        {Credo.Check.Design.TagTODO, [exit_status: 2]},\n        {Credo.Check.Refactor.CyclomaticComplexity, [max_complexity: 8]},\n        {Credo.Check.Refactor.FunctionArity, [max_arity: 8]},\n        {Credo.Check.Refactor.Nesting, [max_nesting: 3]}\n      ]}\n    }\n  ]\n}\n";
+        assert!(
+            matches!(select(source, "default"), Outcome::Serve { .. }),
+            "labqoat params must serve"
+        );
+    }
+
+    #[test]
+    fn promoted_numeric_params_accept_zero_boundary() {
+        for (module, param) in [
+            ("Credo.Check.Design.AliasUsage", "if_nested_deeper_than"),
+            ("Credo.Check.Design.AliasUsage", "if_called_more_often_than"),
+            (
+                "Credo.Check.Refactor.CyclomaticComplexity",
+                "max_complexity",
+            ),
+            ("Credo.Check.Refactor.FunctionArity", "max_arity"),
+            ("Credo.Check.Refactor.Nesting", "max_nesting"),
+        ] {
+            let source = format!(
+                "%{{configs: [%{{name: \"default\", checks: %{{enabled: [{{{module}, [{param}: 0]}}]}}}}]}}\n"
+            );
+            assert!(
+                matches!(select(&source, "default"), Outcome::Serve { .. }),
+                "{module}.{param} must accept zero"
+            );
+        }
+    }
+
+    #[test]
+    fn common_builtin_params_serve_when_valid() {
+        let source = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Warning.IoInspect, [priority: :ignore, exit_status: 0, category: :warning, files: %{included: [\"lib/\"], excluded: [\"lib/generated/\"]}]}]}}]}\n";
+        assert!(matches!(select(source, "default"), Outcome::Serve { .. }));
+    }
+
+    #[test]
+    fn invalid_promoted_param_values_fall_back_closed() {
+        for (module, param, value) in [
+            ("Credo.Check.Design.AliasUsage", "priority", ":urgent"),
+            (
+                "Credo.Check.Design.AliasUsage",
+                "if_nested_deeper_than",
+                "-1",
+            ),
+            (
+                "Credo.Check.Design.AliasUsage",
+                "if_called_more_often_than",
+                "false",
+            ),
+            ("Credo.Check.Design.TagTODO", "exit_status", ":urgent"),
+            (
+                "Credo.Check.Refactor.CyclomaticComplexity",
+                "max_complexity",
+                "-1",
+            ),
+            ("Credo.Check.Refactor.FunctionArity", "max_arity", "false"),
+            ("Credo.Check.Refactor.Nesting", "max_nesting", ":deep"),
+            ("Credo.Check.Design.AliasUsage", "max_complexity", "8"),
+            ("Credo.Check.Warning.IoInspect", "category", ":unknown"),
+        ] {
+            let source = format!(
+                "%{{configs: [%{{name: \"default\", checks: %{{enabled: [{{{module}, [{param}: {value}]}}]}}}}]}}\n"
+            );
+            assert_eq!(
+                select(&source, "default"),
+                Outcome::Fallback {
+                    reason: format!("custom-check-params:{module}"),
+                },
+                "{module}.{param}={value} must fail closed"
+            );
+        }
     }
 
     #[test]

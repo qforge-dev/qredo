@@ -52,7 +52,7 @@ explicit carve-out.
 | malformed config | 129 | 129 via `parse_config` failure (message shape differs; native prints an Elixir warning + stack — carve-out, see below) |
 | wrong-shape config / bad regex / bad priority | crash, exit 1 | exit 1 with first-line shapes, tested |
 | unknown switch / missing flag value | exit 130 `** (credo) Unknown switch` | same shape + code, tested |
-| unserved config (custom params, project checks, unknown checks) | n/a (native runs) | fail-closed 2 with reason |
+| unserved config (unsupported params, project checks, unknown checks) | n/a (native runs) | fail-closed 2 with reason |
 | `version` / `help` | `1.8.0-dev` / help text, exit 0 | version prints crate version, help texts present, exit 0 |
 | `list categories info explain diff gen.check gen.config` | full subcommands | explicit `Unimplemented` refusal, exit 2 (P1d follow-up per command) |
 
