@@ -313,18 +313,40 @@ fn none_last(left: Option<usize>, right: Option<usize>) -> Ordering {
 /// `Execution.get_issues/1` order: filenames ascending, then check id, line
 /// and column within each file.
 fn machine_order<'a>(issues: &'a [Issue], ctx: &MachineContext) -> Vec<&'a Issue> {
-    let mut keyed: Vec<(String, &'a Issue)> = issues
+    let ranks = machine_check_ranks(issues, ctx);
+    let mut keyed: Vec<(usize, &'a Issue)> = issues
         .iter()
-        .map(|issue| (ctx.rule_id(&issue.check), issue))
+        .map(|issue| (ranks[issue.check.as_str()], issue))
         .collect();
-    keyed.sort_by(|(left_id, left), (right_id, right)| {
+    keyed.sort_by(|(left_rank, left), (right_rank, right)| {
         left.filename
             .cmp(&right.filename)
-            .then_with(|| left_id.cmp(right_id))
+            .then_with(|| left_rank.cmp(right_rank))
             .then_with(|| none_last(left.line_no, right.line_no))
             .then_with(|| none_last(left.column, right.column))
     });
     keyed.into_iter().map(|(_, issue)| issue).collect()
+}
+
+/// Lexicographic rule-id rank per distinct check. Resolving once per check
+/// avoids allocating the same rule-id string for every issue.
+fn machine_check_ranks<'a>(issues: &'a [Issue], ctx: &MachineContext) -> BTreeMap<&'a str, usize> {
+    let mut ids: BTreeMap<&str, String> = BTreeMap::new();
+    for issue in issues {
+        ids.entry(&issue.check)
+            .or_insert_with(|| ctx.rule_id(&issue.check));
+    }
+    let mut sorted: Vec<(&str, String)> = ids.into_iter().collect();
+    sorted.sort_by(|(left_check, left_id), (right_check, right_id)| {
+        left_id
+            .cmp(right_id)
+            .then_with(|| left_check.cmp(right_check))
+    });
+    sorted
+        .into_iter()
+        .enumerate()
+        .map(|(rank, (check, _))| (check, rank))
+        .collect()
 }
 
 /// Pinned check `id/0` table for the 120 upstream checks (`ea1ccb9`).
@@ -1085,6 +1107,21 @@ mod tests {
         assert!(
             lines[2].starts_with("/tmp/p6probe/lib/smells.ex:4:5"),
             "{out}"
+        );
+    }
+
+    #[test]
+    fn machine_order_ranks_each_check_once() {
+        let issues = vec![
+            tiny_issue("Credo.Check.Warning.IoInspect", 3, 1, 0),
+            tiny_issue("Credo.Check.Warning.IoInspect", 4, 1, 0),
+            tiny_issue("Credo.Check.Warning.Dbg", 2, 1, 0),
+        ];
+        let ranks = machine_check_ranks(&issues, &fixture_ctx());
+        assert_eq!(ranks.len(), 2, "one rank per distinct check");
+        assert!(
+            ranks["Credo.Check.Warning.IoInspect"] < ranks["Credo.Check.Warning.Dbg"],
+            "EX5006 sorts before EX5026"
         );
     }
 

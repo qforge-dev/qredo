@@ -14,6 +14,8 @@ project / filename lanes, config-comment suppression, priority
 filtering, relevant ordering and OR-combined exit status.
 File-selection globs and regexes compile once per check and retain
 upstream's lazy pattern-error ordering when matched across files.
+Machine-format ordering resolves the Credo rule id once per distinct check,
+then sorts issues by compact numeric ranks rather than per-issue strings.
 
 `integration::{select, execute}` is the product contract: static
 default-parameter configs whose checks are all implemented are served
