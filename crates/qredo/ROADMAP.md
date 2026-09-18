@@ -45,9 +45,9 @@ never auto-updated, full diagnostics compared (never bare counts),
 - **P2 Parameters.** Per-check audits from the inventory (81
   rule-specific + 5 general): types, defaults, invalid values,
   interactions, each with differential cases in its corpus.
-  The first admitted flow-level slice covers common issue/file parameters
-  and the scalar thresholds used by labqoat's real config; every other key
-  remains fail-closed pending its own audit.
+  Common issue/file parameters and every documented scalar/enum option are
+  admitted; structured collection shapes remain per-check audits and stay
+  fail-closed until promoted.
   *Gate: every parameter covered by passing assertions.*
 - **P3 Check promotion.** Project-lane and validated-config checks,
   one at a time: differential campaign on real targets, then flip its

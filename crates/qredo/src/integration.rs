@@ -82,17 +82,140 @@ fn params_supported(entry: &crate::CheckEntry) -> bool {
         })
 }
 
-/// Per-check schemas for the first real-project parameter slice.
+/// Boolean check params from the pinned Credo inventory.
+const BOOL_PARAMS: &[(&str, &str)] = &[
+    (
+        "Credo.Check.Consistency.SpaceInParentheses",
+        "allow_empty_enums",
+    ),
+    ("Credo.Check.Design.AliasUsage", "if_referenced"),
+    ("Credo.Check.Design.TagFIXME", "include_doc"),
+    ("Credo.Check.Design.TagTODO", "include_doc"),
+    (
+        "Credo.Check.Readability.CaptureOperator",
+        "allow_field_access",
+    ),
+    (
+        "Credo.Check.Readability.CaptureOperator",
+        "allow_function_with_arity",
+    ),
+    ("Credo.Check.Readability.FunctionNames", "allow_acronyms"),
+    (
+        "Credo.Check.Readability.MaxLineLength",
+        "ignore_definitions",
+    ),
+    ("Credo.Check.Readability.MaxLineLength", "ignore_heredocs"),
+    ("Credo.Check.Readability.MaxLineLength", "ignore_specs"),
+    ("Credo.Check.Readability.MaxLineLength", "ignore_sigils"),
+    ("Credo.Check.Readability.MaxLineLength", "ignore_strings"),
+    ("Credo.Check.Readability.MaxLineLength", "ignore_urls"),
+    (
+        "Credo.Check.Readability.ParenthesesOnZeroArityDefs",
+        "parens",
+    ),
+    (
+        "Credo.Check.Readability.SinglePipe",
+        "allow_0_arity_functions",
+    ),
+    ("Credo.Check.Readability.SinglePipe", "allow_blocks"),
+    ("Credo.Check.Readability.SinglePipe", "allow_lists"),
+    ("Credo.Check.Readability.SinglePipe", "allow_maps"),
+    ("Credo.Check.Readability.Specs", "include_defp"),
+    (
+        "Credo.Check.Readability.TrailingWhiteSpace",
+        "ignore_strings",
+    ),
+    (
+        "Credo.Check.Refactor.CondInsteadOfIfElse",
+        "allow_one_liners",
+    ),
+    ("Credo.Check.Refactor.FunctionArity", "ignore_defp"),
+    ("Credo.Check.Refactor.LongQuoteBlocks", "ignore_comments"),
+    (
+        "Credo.Check.Refactor.MatchInCondition",
+        "allow_tagged_tuples",
+    ),
+    ("Credo.Check.Refactor.MatchInCondition", "allow_operators"),
+    (
+        "Credo.Check.Refactor.PassAsyncInTestCases",
+        "force_comment_on_explicit_false",
+    ),
+    ("Credo.Check.Refactor.VariableRebinding", "allow_bang"),
+    ("Credo.Check.Warning.Dbg", "allow_captures"),
+];
+
+/// Non-negative integer check params from the pinned Credo inventory.
+const USIZE_PARAMS: &[(&str, &str)] = &[
+    ("Credo.Check.Design.AliasUsage", "if_nested_deeper_than"),
+    ("Credo.Check.Design.AliasUsage", "if_called_more_often_than"),
+    ("Credo.Check.Design.DuplicatedCode", "mass_threshold"),
+    ("Credo.Check.Design.DuplicatedCode", "nodes_threshold"),
+    ("Credo.Check.Readability.MaxLineLength", "max_length"),
+    (
+        "Credo.Check.Readability.NestedFunctionCalls",
+        "min_pipeline_length",
+    ),
+    (
+        "Credo.Check.Readability.RedundantBlankLines",
+        "max_blank_lines",
+    ),
+    (
+        "Credo.Check.Readability.StringSigils",
+        "maximum_allowed_quotes",
+    ),
+    (
+        "Credo.Check.Refactor.CyclomaticComplexity",
+        "max_complexity",
+    ),
+    ("Credo.Check.Refactor.PerceivedComplexity", "max_complexity"),
+    ("Credo.Check.Refactor.FunctionArity", "max_arity"),
+    ("Credo.Check.Refactor.LongQuoteBlocks", "max_line_count"),
+    ("Credo.Check.Refactor.ModuleDependencies", "max_deps"),
+    ("Credo.Check.Refactor.Nesting", "max_nesting"),
+    ("Credo.Check.Warning.StructFieldAmount", "max_fields"),
+];
+
+/// Per-check schemas for scalar values and enums.
 fn supported_check_param(module: &str, name: &str, value: &str) -> bool {
-    let nonnegative_integer = || value.parse::<usize>().is_ok();
-    match (module, name) {
-        (
-            "Credo.Check.Design.AliasUsage",
-            "if_nested_deeper_than" | "if_called_more_often_than",
-        )
-        | ("Credo.Check.Refactor.CyclomaticComplexity", "max_complexity")
-        | ("Credo.Check.Refactor.FunctionArity", "max_arity")
-        | ("Credo.Check.Refactor.Nesting", "max_nesting") => nonnegative_integer(),
+    let key = (module, name);
+    if BOOL_PARAMS.contains(&key) {
+        return matches!(value, "true" | "false");
+    }
+    if USIZE_PARAMS.contains(&key) {
+        return value.parse::<usize>().is_ok();
+    }
+    if matches!(
+        key,
+        ("Credo.Check.Readability.LargeNumbers", "only_greater_than")
+            | ("Credo.Check.Refactor.ABCSize", "max_size")
+    ) {
+        return value.parse::<f64>().is_ok_and(f64::is_finite);
+    }
+    valid_enum_param(key, value)
+}
+
+/// Enumerated atom options documented by upstream.
+fn valid_enum_param(key: (&str, &str), value: &str) -> bool {
+    match key {
+        ("Credo.Check.Consistency.LineEndings", "force") => {
+            matches!(value, "unix" | "windows")
+        }
+        ("Credo.Check.Consistency.ParameterPatternMatching", "force") => {
+            matches!(value, "after" | "before")
+        }
+        ("Credo.Check.Consistency.TabsOrSpaces", "force") => {
+            matches!(value, "spaces" | "tabs")
+        }
+        ("Credo.Check.Consistency.UnusedVariableNames", "force") => {
+            matches!(value, "meaningful" | "anonymous")
+        }
+        ("Credo.Check.Design.MissingCheckInConfig", "compare_to") => matches!(
+            value,
+            "all" | "credo_checks" | "credo_checks_enabled_by_default"
+        ),
+        ("Credo.Check.Readability.AliasOrder", "sort_method") => {
+            matches!(value, "alpha" | "ascii")
+        }
         _ => false,
     }
 }
@@ -513,7 +636,7 @@ mod execute_tests {
                 reason: "unsupported-check:Credo.Check.Custom.NotARealCheck".to_owned(),
             }
         );
-        let params = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Design.TagTODO, [include_doc: false]}]}}]}\n";
+        let params = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Design.TagTODO, [unknown: false]}]}}]}\n";
         assert!(matches!(
             execute(params, "default", &files(), -99),
             Err(Fallback { reason }) if reason.starts_with("custom-check-params:")
@@ -524,6 +647,7 @@ mod execute_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     const MINIMAL: &str = "%{\n  configs: [\n    %{\n      name: \"default\",\n      files: %{included: [\"lib/\", \"test/\"]},\n      checks: %{enabled: [{Credo.Check.Warning.IoInspect, []}]}\n    }\n  ]\n}\n";
 
@@ -613,6 +737,315 @@ mod tests {
                     reason: format!("custom-check-params:{module}"),
                 },
                 "{module}.{param}={value} must fail closed"
+            );
+        }
+    }
+
+    const SCALAR_PARAMS: &[(&str, &str, &str, &str)] = &[
+        (
+            "Credo.Check.Consistency.LineEndings",
+            "force",
+            "unix",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Consistency.ParameterPatternMatching",
+            "force",
+            "after",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Consistency.SpaceInParentheses",
+            "allow_empty_enums",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Consistency.TabsOrSpaces",
+            "force",
+            "tabs",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Consistency.UnusedVariableNames",
+            "force",
+            "anonymous",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Design.AliasUsage",
+            "if_referenced",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Design.DuplicatedCode",
+            "mass_threshold",
+            "40",
+            "-1",
+        ),
+        (
+            "Credo.Check.Design.DuplicatedCode",
+            "nodes_threshold",
+            "2",
+            "-1",
+        ),
+        (
+            "Credo.Check.Design.MissingCheckInConfig",
+            "compare_to",
+            "credo_checks",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Design.TagFIXME",
+            "include_doc",
+            "false",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Design.TagTODO",
+            "include_doc",
+            "false",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.AliasOrder",
+            "sort_method",
+            "ascii",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.CaptureOperator",
+            "allow_field_access",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.CaptureOperator",
+            "allow_function_with_arity",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.FunctionNames",
+            "allow_acronyms",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.LargeNumbers",
+            "only_greater_than",
+            "10.5",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.MaxLineLength",
+            "max_length",
+            "80",
+            "-1",
+        ),
+        (
+            "Credo.Check.Readability.MaxLineLength",
+            "ignore_definitions",
+            "false",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.MaxLineLength",
+            "ignore_heredocs",
+            "false",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.MaxLineLength",
+            "ignore_specs",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.MaxLineLength",
+            "ignore_sigils",
+            "false",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.MaxLineLength",
+            "ignore_strings",
+            "false",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.MaxLineLength",
+            "ignore_urls",
+            "false",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.NestedFunctionCalls",
+            "min_pipeline_length",
+            "0",
+            "-1",
+        ),
+        (
+            "Credo.Check.Readability.ParenthesesOnZeroArityDefs",
+            "parens",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.RedundantBlankLines",
+            "max_blank_lines",
+            "0",
+            "-1",
+        ),
+        (
+            "Credo.Check.Readability.SinglePipe",
+            "allow_0_arity_functions",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.SinglePipe",
+            "allow_blocks",
+            "false",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.SinglePipe",
+            "allow_lists",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.SinglePipe",
+            "allow_maps",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.Specs",
+            "include_defp",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Readability.StringSigils",
+            "maximum_allowed_quotes",
+            "0",
+            "-1",
+        ),
+        (
+            "Credo.Check.Readability.TrailingWhiteSpace",
+            "ignore_strings",
+            "false",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Refactor.ABCSize",
+            "max_size",
+            "12.5",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Refactor.CondInsteadOfIfElse",
+            "allow_one_liners",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Refactor.CyclomaticComplexity",
+            "max_complexity",
+            "0",
+            "-1",
+        ),
+        ("Credo.Check.Refactor.FunctionArity", "max_arity", "0", "-1"),
+        (
+            "Credo.Check.Refactor.FunctionArity",
+            "ignore_defp",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Refactor.LongQuoteBlocks",
+            "max_line_count",
+            "0",
+            "-1",
+        ),
+        (
+            "Credo.Check.Refactor.LongQuoteBlocks",
+            "ignore_comments",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Refactor.MatchInCondition",
+            "allow_tagged_tuples",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Refactor.MatchInCondition",
+            "allow_operators",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Refactor.ModuleDependencies",
+            "max_deps",
+            "0",
+            "-1",
+        ),
+        ("Credo.Check.Refactor.Nesting", "max_nesting", "0", "-1"),
+        (
+            "Credo.Check.Refactor.PassAsyncInTestCases",
+            "force_comment_on_explicit_false",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Refactor.PerceivedComplexity",
+            "max_complexity",
+            "0",
+            "-1",
+        ),
+        (
+            "Credo.Check.Refactor.VariableRebinding",
+            "allow_bang",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Warning.Dbg",
+            "allow_captures",
+            "true",
+            "invalid",
+        ),
+        (
+            "Credo.Check.Warning.StructFieldAmount",
+            "max_fields",
+            "0",
+            "-1",
+        ),
+    ];
+
+    fn entry_with_param(module: &str, name: &str, value: &str) -> crate::CheckEntry {
+        crate::CheckEntry {
+            module: module.to_owned(),
+            enabled: true,
+            params: BTreeMap::from([(name.to_owned(), value.to_owned())]),
+        }
+    }
+
+    #[test]
+    fn all_scalar_check_params_are_validated() {
+        for &(module, name, valid, invalid) in SCALAR_PARAMS {
+            assert!(
+                params_supported(&entry_with_param(module, name, valid)),
+                "{module}.{name}={valid} must serve"
+            );
+            assert!(
+                !params_supported(&entry_with_param(module, name, invalid)),
+                "{module}.{name}={invalid} must fail closed"
             );
         }
     }

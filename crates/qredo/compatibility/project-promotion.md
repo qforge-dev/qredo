@@ -16,11 +16,11 @@ cannot serve both paths:
 - `supports_per_file()` stays false for all project-lane checks (subset
   unsoundness is a property of the check, not of promotion).
 
-Unsupported check params stay fail-closed (`custom-check-params:*`). The
-first admitted schemas cover common issue/file params and labqoat's scalar
-`AliasUsage`, `CyclomaticComplexity`, `FunctionArity` and `Nesting`
-thresholds; project-check parameters remain unpromoted. The evidence below
-covers default project-check params only.
+Unsupported check params stay fail-closed (`custom-check-params:*`). Common
+issue/file params and documented scalar/enum options are type-validated;
+structured collection parameters remain per-check admissions. Parameters do
+not bypass the separate project/config check gates. The evidence below covers
+default project-check params only.
 
 ## Promoted (8 consistency checks)
 

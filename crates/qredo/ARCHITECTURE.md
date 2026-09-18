@@ -20,10 +20,10 @@ then sorts issues by compact numeric ranks rather than per-issue strings.
 `integration::{select, execute}` is the product contract: static configs
 whose checks and per-check parameter schemas are implemented are served
 natively. The admitted common parameters are `priority`, `exit_status`,
-`category` and per-check `files`; the first check-specific slice covers the
-labqoat `AliasUsage`, `CyclomaticComplexity`, `FunctionArity` and `Nesting`
-thresholds. Unknown keys and invalid values remain fail-closed. Anything else
-yields an explicit `Fallback` reason
+`category` and per-check `files`; all documented scalar and enum check
+parameters are type-validated against the pinned inventory. Structured
+collection parameters remain per-check admissions. Unknown keys and invalid
+values stay fail-closed. Anything else yields an explicit `Fallback` reason
 (`unsupported-check:*`, `custom-check-params:*`,
 `project-scope-check:*`, `needs-validated-config:*`,
 `unsupported-credo-config:*`, `native-pipeline-errors`). The CLI maps
