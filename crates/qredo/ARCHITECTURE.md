@@ -15,6 +15,8 @@ select the rolling `dev` release by commit SHA; release-tag and Hex installs
 select `v<VERSION>`. `QREDO_BUILD=source` builds the same Cargo binary locally.
 Release CI uses one Linux x64 runner to build Linux x64 and cross-compile Linux
 ARM64 plus Windows GNU, and one macOS ARM runner to build both Apple targets.
+Tagged releases promote the commit-addressed artifacts from the successful
+`main` push workflow instead of recompiling identical native targets.
 
 ## Pipeline
 

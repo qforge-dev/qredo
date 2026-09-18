@@ -104,10 +104,12 @@ on two runners, and replaces the `dev` GitHub prerelease. Development asset
 names include the exact Git commit consumed by a Mix git dependency.
 
 Publishing a non-prerelease GitHub release such as `v0.1.1` verifies that its
-tag matches both `VERSION` and `crates/qredo/Cargo.toml`, uploads immutable
-native assets plus `SHA256SUMS`, marks it latest, and publishes the matching
-Mix package to Hex. The repository must define a `HEX_API_KEY` Actions secret
-with package publishing permission.
+tag matches both `VERSION` and `crates/qredo/Cargo.toml`, promotes the tested
+artifacts from that commit's successful push build, uploads them with
+`SHA256SUMS`, marks the release latest, and publishes the matching Mix package
+to Hex. Stable releases do not compile the native targets a second time. The
+repository must define a `HEX_API_KEY` Actions secret with package publishing
+permission.
 
 See [AGENTS.md](crates/qredo/AGENTS.md) for the contribution workflow,
 [ARCHITECTURE.md](crates/qredo/ARCHITECTURE.md) for the design and

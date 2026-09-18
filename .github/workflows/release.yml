@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -22,6 +23,7 @@ env:
 
 jobs:
   quality:
+    if: github.event_name != 'release'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +38,7 @@ jobs:
       - run: bash scripts/check
 
   build:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs: quality
     strategy:
       fail-fast: false
@@ -62,7 +64,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.name }}
-          cache-workspace-crates: true
       - uses: taiki-e/install-action@cross
         if: matrix.cross
       - name: Build and package native executables
@@ -76,9 +77,44 @@ jobs:
           path: dist/qredo-*
           if-no-files-found: error
 
+  promote:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify stable release version
+        run: bash scripts/check-release-version "$QREDO_RELEASE_TAG"
+      - name: Download tested push artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QREDO_SOURCE_ID: ${{ github.sha }}
+        run: |
+          run_id=$(gh run list \
+            --workflow release.yml \
+            --event push \
+            --commit "$GITHUB_SHA" \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+          test -n "$run_id" || { echo "No push build found for $GITHUB_SHA" >&2; exit 1; }
+          gh run watch "$run_id" --exit-status --compact
+          gh run download "$run_id" --pattern 'native-*' --dir promoted-input
+          bash scripts/promote-release-assets promoted-input dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-promoted
+          path: dist/qredo-*
+          if-no-files-found: error
+
   publish:
-    if: github.event_name != 'pull_request'
-    needs: build
+    if: >-
+      always() &&
+      github.event_name != 'pull_request' &&
+      (needs.build.result == 'success' || needs.promote.result == 'success')
+    needs: [build, promote]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -105,9 +141,6 @@ jobs:
             --prerelease \
             --title "qredo dev (${GITHUB_SHA::7})" \
             --notes "Rolling development build for commit $GITHUB_SHA. Assets are replaced by every push to main."
-      - name: Verify stable release version
-        if: github.event_name == 'release'
-        run: bash scripts/check-release-version "$QREDO_RELEASE_TAG"
       - name: Upload stable release assets
         if: github.event_name == 'release'
         env:
