@@ -130,4 +130,9 @@ jobs:
           test -n "$HEX_API_KEY" || { echo 'HEX_API_KEY secret is required' >&2; exit 1; }
           mix local.hex --force
           mix deps.get
-          mix hex.publish --yes
+          version=$(tr -d '[:space:]' < VERSION)
+          if curl --fail --silent "https://hex.pm/api/packages/qredo/releases/$version" >/dev/null; then
+            mix hex.publish --yes --replace
+          else
+            mix hex.publish --yes
+          fi
