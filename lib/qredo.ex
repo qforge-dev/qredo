@@ -42,14 +42,14 @@ defmodule Qredo do
       {{:unix, :linux}, "aarch64" <> rest} -> linux_target("aarch64", rest)
       {{:unix, :linux}, "arm64" <> rest} -> linux_target("aarch64", rest)
       {{:unix, :linux}, "x86_64" <> rest} -> linux_target("x86_64", rest)
-      {{:win32, _}, "x86_64" <> _} -> {:ok, "x86_64-pc-windows-msvc"}
+      {{:win32, _}, "x86_64" <> _} -> {:ok, "x86_64-pc-windows-gnu"}
       _ -> {:error, unsupported_platform(os_type, architecture)}
     end
   end
 
   @doc false
   def artifact_name(release_id, target) do
-    suffix = if String.ends_with?(target, "windows-msvc"), do: ".exe", else: ""
+    suffix = if String.contains?(target, "windows"), do: ".exe", else: ""
     "qredo-#{release_id}-#{target}#{suffix}"
   end
 
@@ -173,7 +173,7 @@ defmodule Qredo do
       System.get_env("MIX_HOME") ||
         Path.join(System.user_home!(), ".mix")
 
-    executable = if String.ends_with?(target, "windows-msvc"), do: "qredo.exe", else: "qredo"
+    executable = if String.contains?(target, "windows"), do: "qredo.exe", else: "qredo"
     Path.join([mix_home, "qredo", release_id, target, executable])
   end
 

@@ -15,7 +15,7 @@ defmodule QredoTest do
              {:ok, "aarch64-unknown-linux-gnu"}
 
     assert Qredo.target_for({:win32, :nt}, "x86_64-pc-windows-msvc") ==
-             {:ok, "x86_64-pc-windows-msvc"}
+             {:ok, "x86_64-pc-windows-gnu"}
 
     assert {:error, message} =
              Qredo.target_for({:unix, :linux}, "riscv64-unknown-linux-gnu")
@@ -27,8 +27,8 @@ defmodule QredoTest do
     assert Qredo.artifact_name("v0.1.0", "aarch64-apple-darwin") ==
              "qredo-v0.1.0-aarch64-apple-darwin"
 
-    assert Qredo.artifact_name("abc123", "x86_64-pc-windows-msvc") ==
-             "qredo-abc123-x86_64-pc-windows-msvc.exe"
+    assert Qredo.artifact_name("abc123", "x86_64-pc-windows-gnu") ==
+             "qredo-abc123-x86_64-pc-windows-gnu.exe"
   end
 
   test "R-MIX-3 verifies the selected artifact checksum" do

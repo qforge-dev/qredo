@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Build and package one or more native/cross release targets.
+set -euo pipefail
+[[ $# -ge 2 ]] || { echo 'Usage: scripts/build-release-targets OUTPUT_DIR TARGET...' >&2; exit 64; }
+root=$(cd "$(dirname "$0")/.." && pwd)
+out=$1
+shift
+host=$(rustc -vV | awk '/^host:/ { print $2 }')
+for target in "$@"; do
+    if [[ "$target" == "$host" || ( "$host" == *apple-darwin && "$target" == *apple-darwin ) ]]; then
+        cargo build --release --locked -p qredo --target "$target"
+    else
+        command -v cross >/dev/null 2>&1 || {
+            echo "cross is required to build $target from $host" >&2
+            exit 1
+        }
+        cross build --release --locked -p qredo --target "$target"
+    fi
+    bash "$root/scripts/package-release-asset" "$target" "$out"
+done

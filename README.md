@@ -101,6 +101,18 @@ supported configs and reports an explicit `Fallback` reason otherwise.
 scripts/check  # rustfmt, Clippy (-D warnings), tests
 ```
 
+## Releases
+
+Every push to `main` runs the complete quality gate, builds five native targets
+on two runners, and replaces the `dev` GitHub prerelease. Development asset
+names include the exact Git commit consumed by a Mix git dependency.
+
+Publishing a non-prerelease GitHub release such as `v0.1.0` verifies that its
+tag matches both `VERSION` and `crates/qredo/Cargo.toml`, uploads immutable
+native assets plus `SHA256SUMS`, marks it latest, and publishes the matching
+Mix package to Hex. The repository must define a `HEX_API_KEY` Actions secret
+with package publishing permission.
+
 See [AGENTS.md](crates/qredo/AGENTS.md) for the contribution workflow,
 [ARCHITECTURE.md](crates/qredo/ARCHITECTURE.md) for the design and
 [compatibility](crates/qredo/compatibility/README.md) for provenance.

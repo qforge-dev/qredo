@@ -9,3 +9,5 @@ cargo clippy --workspace --locked --all-targets -- -D warnings
 cargo test --workspace --locked
 mix format --check-formatted
 mix test --warnings-as-errors
+bash -n scripts/package-release-asset scripts/build-release-targets scripts/check-release-version
+bash scripts/check-release-version "v$(tr -d '[:space:]' < VERSION)"

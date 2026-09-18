@@ -13,6 +13,8 @@ from the matching GitHub release, verifies it against `SHA256SUMS`, caches it
 under `MIX_HOME`, and runs it in the caller's working directory. Git checkouts
 select the rolling `dev` release by commit SHA; release-tag and Hex installs
 select `v<VERSION>`. `QREDO_BUILD=source` builds the same Cargo binary locally.
+Release CI uses one Linux x64 runner to build Linux x64 and cross-compile Linux
+ARM64 plus Windows GNU, and one macOS ARM runner to build both Apple targets.
 
 ## Pipeline
 
