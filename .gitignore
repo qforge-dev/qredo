@@ -1,2 +1,6 @@
 /target/
+/_build/
+/deps/
+/erl_crash.dump
+/qredo-*.tar
 work/

@@ -14,7 +14,35 @@ including explicit `nil` values that select Credo defaults, and fails closed
 with an explicit reason on anything else. See
 [ROADMAP](crates/qredo/ROADMAP.md).
 
-## Install
+## Install with Mix
+
+Add qredo as a development dependency. Git checkouts use the rolling `dev`
+GitHub release; tagged/Hex packages use the matching immutable release:
+
+```elixir
+defp deps do
+  [
+    {:qredo,
+     github: "qforge-dev/qredo",
+     only: [:dev, :test],
+     runtime: false}
+  ]
+end
+```
+
+Then run it through Mix; the first invocation downloads and SHA-256 verifies
+the native executable for the current platform:
+
+```sh
+mix deps.get
+mix qredo --strict
+```
+
+Set `QREDO_BUILD=source` or run `mix qredo.install --source` to compile with
+the pinned Rust toolchain instead. `QREDO_BINARY_PATH` selects an existing
+binary, and `QREDO_OFFLINE=1` prevents downloads.
+
+## Install with Cargo
 
 Requires Rust 1.91.1 (pinned in `rust-toolchain.toml`) and no Elixir
 installation for linting itself:

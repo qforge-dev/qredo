@@ -5,6 +5,15 @@ There is no daemon and no BEAM dependency at runtime. The only disk
 state is the opt-in `--stale` incremental cache (`~/.cache/qredo/`,
 see below); plain runs are stateless.
 
+## Distribution
+
+The root Mix project is a development-time adapter, not a second lint engine.
+`mix qredo` selects a supported Rust target, downloads an immutable executable
+from the matching GitHub release, verifies it against `SHA256SUMS`, caches it
+under `MIX_HOME`, and runs it in the caller's working directory. Git checkouts
+select the rolling `dev` release by commit SHA; release-tag and Hex installs
+select `v<VERSION>`. `QREDO_BUILD=source` builds the same Cargo binary locally.
+
 ## Pipeline
 
 `runner::run_checks` runs the full pipeline over `RunnerFile`s and a

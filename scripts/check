@@ -7,3 +7,5 @@ export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
 cargo fmt --all -- --check
 cargo clippy --workspace --locked --all-targets -- -D warnings
 cargo test --workspace --locked
+mix format --check-formatted
+mix test --warnings-as-errors

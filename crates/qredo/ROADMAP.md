@@ -21,6 +21,10 @@ APIs stay fail-closed with an explicit reason. One open question is
 tracked in P6: executable `.credo.exs` bodies beyond a declared pure
 subset (see below).
 
+Distribution is a thin Mix package around the Rust executable: development
+Git dependencies consume commit-addressed assets from a rolling `dev` release,
+while tagged releases publish immutable assets and the matching Hex version.
+
 ## Phases
 
 Each phase ends in a measurable gate; no phase starts concealing the

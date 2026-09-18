@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.91.1"
 license = "MIT"
 description = "Native Elixir linting compatible with Credo: rule kernels, pipeline runner and CLI"
-repository = "https://github.com/qredo/qredo"
+repository = "https://github.com/qforge-dev/qredo"
 keywords = ["elixir", "credo", "lint", "static-analysis"]
 categories = ["development-tools"]
 
