@@ -129,4 +129,5 @@ jobs:
         run: |
           test -n "$HEX_API_KEY" || { echo 'HEX_API_KEY secret is required' >&2; exit 1; }
           mix local.hex --force
+          mix deps.get
           mix hex.publish --yes
