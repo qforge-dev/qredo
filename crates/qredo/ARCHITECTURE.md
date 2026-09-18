@@ -22,8 +22,8 @@ whose checks and per-check parameter schemas are implemented are served
 natively. All five general parameters (`priority`, `exit_status`, `category`,
 `files` and `tags`) and all 81 documented rule-specific parameters are
 type/shape-validated against the pinned inventory, including structured lists,
-regexes, ranges and tuples. `tags` overrides participate in CLI selection and
-expand `:__initial__` like Credo. Unknown keys and invalid values stay
+regexes, ranges, tuples and explicit `nil` fallback-to-default values. `tags`
+overrides participate in CLI selection and expand `:__initial__` like Credo. Unknown keys and invalid values stay
 fail-closed. Anything else yields an explicit `Fallback` reason
 (`unsupported-check:*`, `custom-check-params:*`,
 `project-scope-check:*`, `needs-validated-config:*`,

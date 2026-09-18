@@ -76,7 +76,7 @@ impl Selection {
 /// Unknown tags match nothing, mirroring native `String.to_atom` behavior.
 fn has_any_tag(check: &str, configured: Option<&String>, wanted: &[String]) -> bool {
     let initial = crate::check_meta::check_tags(check);
-    let Some(raw) = configured else {
+    let Some(raw) = configured.filter(|raw| raw.as_str() != "null") else {
         return wanted.iter().any(|tag| initial.contains(&tag.as_str()));
     };
     let Ok(serde_json::Value::Array(tags)) = serde_json::from_str(raw) else {

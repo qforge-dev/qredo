@@ -769,9 +769,7 @@ fn encode_scalar(
             ":{}",
             text_of(node, source)?.trim_start_matches(':')
         )))),
-        "nil" => Err(UnsupportedConfig(
-            "nil params need native execution".to_owned(),
-        )),
+        "nil" => Ok(Some(serde_json::Value::Null)),
         "string" => Ok(Some(serde_json::Value::String(string_raw(node, source)?))),
         _ => Ok(None),
     }

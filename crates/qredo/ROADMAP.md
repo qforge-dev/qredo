@@ -46,8 +46,9 @@ never auto-updated, full diagnostics compared (never bare counts),
   rule-specific + 5 general): types, defaults, invalid values,
   interactions, each with differential cases in its corpus.
   All five general parameters and all 81 documented rule-specific options are
-  admitted with per-check type/shape validation. Configured `tags` replace or
-  extend built-in tags during CLI selection, including `:__initial__`.
+  admitted with per-check type/shape validation, including explicit `nil`
+  values that select upstream defaults. Configured `tags` replace or extend
+  built-in tags during CLI selection, including `:__initial__`.
   *Gate: every parameter covered by passing assertions.*
 - **P3 Check promotion.** Project-lane and validated-config checks,
   one at a time: differential campaign on real targets, then flip its

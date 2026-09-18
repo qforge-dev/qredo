@@ -10,7 +10,8 @@ prints issues with OR-combined exit codes, like `mix credo`.
 Status: early. 120 rule kernels exist and the admitted compatibility
 corpora pass; the CLI serves static configs with all 81 documented
 rule-specific parameters and all five general parameters validated by schema,
-and fails closed with an explicit reason on anything else. See
+including explicit `nil` values that select Credo defaults, and fails closed
+with an explicit reason on anything else. See
 [ROADMAP](crates/qredo/ROADMAP.md).
 
 ## Install

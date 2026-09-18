@@ -72,6 +72,7 @@ fn params_supported(entry: &crate::CheckEntry) -> bool {
         .params
         .iter()
         .all(|(name, value)| match name.as_str() {
+            "priority" | "exit_status" | "category" | "tags" | "files" if value == "null" => true,
             "priority" => crate::resolve_priority(&entry.module, None, &entry.params).is_ok(),
             "exit_status" => valid_exit_status(value),
             "category" => valid_category(value),
@@ -211,6 +212,9 @@ const STRING_LIST_PARAMS: &[(&str, &str)] = &[
 /// Per-check schemas for scalar values and enums.
 fn supported_check_param(module: &str, name: &str, value: &str) -> bool {
     let key = (module, name);
+    if value == "null" {
+        return known_check_param(key);
+    }
     if BOOL_PARAMS.contains(&key) {
         return matches!(value, "true" | "false");
     }
@@ -225,6 +229,46 @@ fn supported_check_param(module: &str, name: &str, value: &str) -> bool {
         return value.parse::<f64>().is_ok_and(f64::is_finite);
     }
     valid_enum_param(key, value) || valid_structured_param(key, value)
+}
+
+fn known_check_param(key: (&str, &str)) -> bool {
+    BOOL_PARAMS.contains(&key)
+        || USIZE_PARAMS.contains(&key)
+        || STRING_LIST_PARAMS.contains(&key)
+        || matches!(
+            key,
+            (
+                "Credo.Check.Readability.LargeNumbers",
+                "only_greater_than" | "trailing_digits"
+            ) | ("Credo.Check.Refactor.ABCSize", "max_size")
+                | (
+                    "Credo.Check.Consistency.LineEndings"
+                        | "Credo.Check.Consistency.ParameterPatternMatching"
+                        | "Credo.Check.Consistency.TabsOrSpaces"
+                        | "Credo.Check.Consistency.UnusedVariableNames",
+                    "force"
+                )
+                | ("Credo.Check.Design.MissingCheckInConfig", "compare_to")
+                | ("Credo.Check.Readability.AliasOrder", "sort_method")
+                | ("Credo.Check.Design.AliasUsage", "only")
+                | (
+                    "Credo.Check.Readability.ModuleDoc",
+                    "ignore_names" | "ignore_modules_using"
+                )
+                | (
+                    "Credo.Check.Refactor.ModuleDependencies" | "Credo.Check.Warning.MixEnv",
+                    "excluded_paths"
+                )
+                | ("Credo.Check.Warning.ForbiddenFunction", "functions")
+                | (
+                    "Credo.Check.Warning.ForbiddenModule" | "Credo.Check.Warning.UnusedOperation",
+                    "modules"
+                )
+                | (
+                    "Credo.Check.Warning.MissedMetadataKeyInLoggerConfig",
+                    "metadata_keys"
+                )
+        )
 }
 
 /// Enumerated atom options documented by upstream.
@@ -445,6 +489,7 @@ pub(crate) fn runner_of(
             .into_iter()
             .map(|mut entry| {
                 entry.enabled = true;
+                entry.params.retain(|_, value| value != "null");
                 entry
             })
             .collect(),
@@ -921,6 +966,38 @@ mod tests {
     }
 
     #[test]
+    fn explicit_nil_defaults_serve() {
+        for (module, param) in [
+            ("Credo.Check.Consistency.LineEndings", "force"),
+            ("Credo.Check.Consistency.ParameterPatternMatching", "force"),
+            ("Credo.Check.Consistency.TabsOrSpaces", "force"),
+            ("Credo.Check.Consistency.UnusedVariableNames", "force"),
+            ("Credo.Check.Design.AliasUsage", "only"),
+        ] {
+            let source = format!(
+                "%{{configs: [%{{name: \"default\", checks: %{{enabled: [{{{module}, [{param}: nil]}}]}}}}]}}\n"
+            );
+            assert!(
+                matches!(select(&source, "default"), Outcome::Serve { .. }),
+                "{module}.{param}=nil must serve"
+            );
+        }
+        let common = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Warning.IoInspect, [priority: nil, exit_status: nil, category: nil, files: nil, tags: nil]}]}}]}\n";
+        assert!(matches!(select(common, "default"), Outcome::Serve { .. }));
+        let report = execute(
+            common,
+            "default",
+            &[crate::RunnerFile {
+                filename: "lib/a.ex".to_owned(),
+                source: "IO.inspect(:ok)\n".to_owned(),
+            }],
+            -99,
+        )
+        .expect("nil general params run with defaults");
+        assert_eq!(report.issues.len(), 1);
+    }
+
+    #[test]
     fn invalid_promoted_param_values_fall_back_closed() {
         for (module, param, value) in [
             ("Credo.Check.Design.AliasUsage", "priority", ":urgent"),
@@ -1266,6 +1343,10 @@ mod tests {
                 !params_supported(&entry_with_param(module, name, invalid)),
                 "{module}.{name}={invalid} must fail closed"
             );
+            assert!(
+                params_supported(&entry_with_param(module, name, "null")),
+                "{module}.{name}=nil must use its default"
+            );
         }
     }
 
@@ -1444,6 +1525,10 @@ mod tests {
             assert!(
                 !params_supported(&entry_with_param(module, name, invalid)),
                 "{module}.{name}={invalid} must fail closed"
+            );
+            assert!(
+                params_supported(&entry_with_param(module, name, "null")),
+                "{module}.{name}=nil must use its default"
             );
         }
     }

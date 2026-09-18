@@ -14,6 +14,7 @@ mirroring the Elixir literals:
 | tuple (e.g. MFA `{Mod, :fun, "msg"}`) | `{"tuple": [...]}` | compact JSON |
 | regex (e.g. `~r/.../`) | `{"regex": "<source>"}` | compact JSON |
 | range (e.g. `2..4`) | `{"range": [2, 4]}` | compact JSON |
+| `nil` | `null` | `"null"` at the gate, then omitted so the check default applies |
 
 The generic harness (`tests/cases.rs`) converts each value with the middle
 column rule; per-check kernels parse the resulting strings. A leading-`:`
