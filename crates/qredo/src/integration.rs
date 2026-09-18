@@ -75,6 +75,7 @@ fn params_supported(entry: &crate::CheckEntry) -> bool {
             "priority" => crate::resolve_priority(&entry.module, None, &entry.params).is_ok(),
             "exit_status" => valid_exit_status(value),
             "category" => valid_category(value),
+            "tags" => json(value).is_some_and(|value| valid_atom_array(&value)),
             // The static parser has already required lists of plain strings and
             // flattened them to the comma-separated form consumed by file_select.
             "files.included" | "files.excluded" => true,
@@ -295,6 +296,15 @@ fn valid_string_array(value: &serde_json::Value) -> bool {
         .is_some_and(|items| items.iter().all(serde_json::Value::is_string))
 }
 
+fn valid_atom_array(value: &serde_json::Value) -> bool {
+    value.as_array().is_some_and(|items| {
+        items.iter().all(|item| {
+            item.as_str()
+                .is_some_and(|name| name.starts_with(':') && name.len() > 1)
+        })
+    })
+}
+
 fn valid_regex(value: &serde_json::Value) -> bool {
     value
         .as_object()
@@ -431,7 +441,7 @@ pub(crate) fn runner_of(
     selection: crate::Selection,
 ) -> crate::RunnerConfig {
     crate::RunnerConfig {
-        checks: enabled_checks(config, &selection)
+        checks: enabled_entries(config, &selection)
             .into_iter()
             .map(|mut entry| {
                 entry.enabled = true;
@@ -480,14 +490,15 @@ pub fn execute(
 /// CLI check-count reporting so both agree.
 #[must_use]
 pub fn enabled_modules(config: &crate::CredoConfig, selection: &crate::Selection) -> Vec<String> {
-    enabled_checks(config, selection)
+    enabled_entries(config, selection)
         .into_iter()
         .map(|check| check.module)
         .collect()
 }
 
 /// Enabled check entries with their configured parameters preserved.
-fn enabled_checks(
+#[must_use]
+pub fn enabled_entries(
     config: &crate::CredoConfig,
     selection: &crate::Selection,
 ) -> Vec<crate::CheckEntry> {
@@ -766,6 +777,37 @@ mod execute_tests {
     }
 
     #[test]
+    fn configured_tags_replace_or_extend_initial_tags() {
+        let files = vec![RunnerFile {
+            filename: "lib/a.ex".to_owned(),
+            source: "x = 1 \n".to_owned(),
+        }];
+        let custom = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Readability.TrailingWhiteSpace, [tags: [:custom]]}]}}]}\n";
+        let custom_selection = crate::Selection {
+            checks_with_tag: vec!["custom".to_owned()],
+            ..crate::Selection::default()
+        };
+        let custom_report = execute_selected(custom, "default", &files, -99, custom_selection)
+            .expect("custom tag serves");
+        assert_eq!(custom_report.issues.len(), 1);
+
+        let formatter_selection = crate::Selection {
+            checks_with_tag: vec!["formatter".to_owned()],
+            ..crate::Selection::default()
+        };
+        let replaced =
+            execute_selected(custom, "default", &files, -99, formatter_selection.clone())
+                .expect("replacement tags serve");
+        assert!(replaced.issues.is_empty());
+
+        let extended = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Readability.TrailingWhiteSpace, [tags: [:__initial__, :custom]]}]}}]}\n";
+        let extended_report =
+            execute_selected(extended, "default", &files, -99, formatter_selection)
+                .expect("initial tags serve");
+        assert_eq!(extended_report.issues.len(), 1);
+    }
+
+    #[test]
     fn subset_execution_returns_only_requested_files() {
         let both = [
             ("lib/a.ex".to_owned(), "defmodule A do\nend\n".to_owned()),
@@ -874,7 +916,7 @@ mod tests {
 
     #[test]
     fn common_builtin_params_serve_when_valid() {
-        let source = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Warning.IoInspect, [priority: :ignore, exit_status: 0, category: :warning, files: %{included: [\"lib/\"], excluded: [\"lib/generated/\"]}]}]}}]}\n";
+        let source = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Warning.IoInspect, [priority: :ignore, exit_status: 0, category: :warning, tags: [:__initial__, :custom], files: %{included: [\"lib/\"], excluded: [\"lib/generated/\"]}]}]}}]}\n";
         assert!(matches!(select(source, "default"), Outcome::Serve { .. }));
     }
 
@@ -902,6 +944,8 @@ mod tests {
             ("Credo.Check.Refactor.Nesting", "max_nesting", ":deep"),
             ("Credo.Check.Design.AliasUsage", "max_complexity", "8"),
             ("Credo.Check.Warning.IoInspect", "category", ":unknown"),
+            ("Credo.Check.Warning.IoInspect", "tags", ":custom"),
+            ("Credo.Check.Warning.IoInspect", "tags", "[\"custom\"]"),
         ] {
             let source = format!(
                 "%{{configs: [%{{name: \"default\", checks: %{{enabled: [{{{module}, [{param}: {value}]}}]}}}}]}}\n"

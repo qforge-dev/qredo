@@ -351,7 +351,7 @@ fn project_entries(runner_config: &crate::RunnerConfig) -> Vec<&crate::CheckEntr
         .iter()
         .filter(|entry| {
             entry.enabled
-                && runner_config.selection.should_run(&entry.module)
+                && runner_config.selection.should_run_entry(entry)
                 && !crate::version_skipped_on_pinned_toolchain(&entry.module)
                 && crate::runs_at_min_priority(&entry.module, runner_config.min_priority)
                 && !crate::supports_per_file(&entry.module)
@@ -395,7 +395,7 @@ fn pattern_stops(
     let mut errors = Vec::new();
     for entry in runner_config.checks.iter().filter(|entry| {
         entry.enabled
-            && runner_config.selection.should_run(&entry.module)
+            && runner_config.selection.should_run_entry(entry)
             && !crate::version_skipped_on_pinned_toolchain(&entry.module)
             && crate::runs_at_min_priority(&entry.module, runner_config.min_priority)
             && entry.module.as_str() != REDUNDANT
@@ -1224,7 +1224,7 @@ fn redundant_globally(
         .filter(|entry| {
             entry.module.as_str() == REDUNDANT
                 && entry.enabled
-                && runner_config.selection.should_run(&entry.module)
+                && runner_config.selection.should_run_entry(entry)
         })
         .collect();
     if redundant.is_empty() {
@@ -1435,6 +1435,35 @@ mod tests {
         assert_eq!(second, first);
         assert_eq!(second, fresh(TWO_CHECKS, &files, -99));
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn stale_respects_configured_check_tags() {
+        let path = fresh_path("configured-tags");
+        let config = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Readability.TrailingWhiteSpace, [tags: [:custom]]}]}}]}\n";
+        let files = vec![crate::RunnerFile {
+            filename: "lib/a.ex".to_owned(),
+            source: "x = 1 \n".to_owned(),
+        }];
+        let selection = crate::Selection {
+            checks_with_tag: vec!["custom".to_owned()],
+            ..crate::Selection::default()
+        };
+        let report = execute_stale_with_path(
+            config,
+            "default",
+            &files,
+            -99,
+            selection.clone(),
+            Path::new("/test-root"),
+            Some(&path),
+        )
+        .expect("configured tags serve");
+        let fresh = crate::integration::execute_selected(config, "default", &files, -99, selection)
+            .expect("fresh configured tags serve");
+        assert_eq!(report, fresh);
+        assert_eq!(report.issues.len(), 1);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

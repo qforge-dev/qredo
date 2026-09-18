@@ -19,7 +19,7 @@ The generic harness (`tests/cases.rs`) converts each value with the middle
 column rule; per-check kernels parse the resulting strings. A leading-`:`
 string is ambiguous between an atom encoding and a genuine `~w()` colon-word,
 so kernels MUST compare such values colon-tolerantly (accept with or without
-the colon). Structured params
-(regexes, tuples, ranges, lists) need dedicated per-check parsing — cases using
-them fail until their check implements it, which is exactly the phase-2 work
-queue.
+the colon). Structured params (regexes, tuples, ranges, lists) are admitted
+only when their check implements and validates the exact shape. General `tags`
+is an atom list in this encoding; `:__initial__` expands to the check's
+built-in tags during CLI tag selection, matching Credo.

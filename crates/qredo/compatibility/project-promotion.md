@@ -16,11 +16,11 @@ cannot serve both paths:
 - `supports_per_file()` stays false for all project-lane checks (subset
   unsoundness is a property of the check, not of promotion).
 
-Unsupported check params stay fail-closed (`custom-check-params:*`). Common
-issue/file params and all 81 documented rule-specific options are validated
-against per-check scalar and structured schemas. Parameters do not bypass the
-separate project/config check gates. The evidence below covers default
-project-check params only.
+Unsupported check params stay fail-closed (`custom-check-params:*`). All five
+general parameters and all 81 documented rule-specific options are validated
+against scalar and structured schemas; configured `tags` also drive CLI tag
+selection. Parameters do not bypass the separate project/config check gates.
+The evidence below covers default project-check params only.
 
 ## Promoted (8 consistency checks)
 

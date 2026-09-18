@@ -901,11 +901,11 @@ fn check_count(
     selection: &crate::Selection,
     min_priority: i32,
 ) -> usize {
-    crate::integration::enabled_modules(config, selection)
+    crate::integration::enabled_entries(config, selection)
         .iter()
-        .filter(|module| selection.should_run(module))
-        .filter(|module| !crate::version_skipped_on_pinned_toolchain(module))
-        .filter(|module| crate::runs_at_min_priority(module, min_priority))
+        .filter(|entry| selection.should_run_entry(entry))
+        .filter(|entry| !crate::version_skipped_on_pinned_toolchain(&entry.module))
+        .filter(|entry| crate::runs_at_min_priority(&entry.module, min_priority))
         .count()
 }
 

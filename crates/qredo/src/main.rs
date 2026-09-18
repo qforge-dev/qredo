@@ -1158,11 +1158,11 @@ fn check_count(
     selection: &qredo::Selection,
     min_priority: i32,
 ) -> usize {
-    qredo::integration::enabled_modules(config, selection)
+    qredo::integration::enabled_entries(config, selection)
         .iter()
-        .filter(|module| selection.should_run(module))
-        .filter(|module| !qredo::version_skipped_on_pinned_toolchain(module))
-        .filter(|module| qredo::runs_at_min_priority(module, min_priority))
+        .filter(|entry| selection.should_run_entry(entry))
+        .filter(|entry| !qredo::version_skipped_on_pinned_toolchain(&entry.module))
+        .filter(|entry| qredo::runs_at_min_priority(&entry.module, min_priority))
         .count()
 }
 
@@ -2228,5 +2228,21 @@ mod tests {
         // there; config discovery is skipped via --config-file.
         assert_eq!(run_with(&argv), 129);
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn check_count_uses_configured_tags() {
+        let source = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Readability.TrailingWhiteSpace, [tags: [:custom]]}]}}]}\n";
+        let config = qredo::parse_config(source, "default").expect("config parses");
+        let custom = qredo::Selection {
+            checks_with_tag: vec!["custom".to_owned()],
+            ..qredo::Selection::default()
+        };
+        let formatter = qredo::Selection {
+            checks_with_tag: vec!["formatter".to_owned()],
+            ..qredo::Selection::default()
+        };
+        assert_eq!(check_count(&config, &custom, -99), 1);
+        assert_eq!(check_count(&config, &formatter, -99), 0);
     }
 }

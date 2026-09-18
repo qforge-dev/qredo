@@ -120,7 +120,7 @@ pub fn run_checks(files: &[RunnerFile], config: &RunnerConfig) -> RunReport {
     // checks because it reads every file's collected issues.
     let mut work = Worklist::default();
     for entry in &config.checks {
-        if !entry.enabled || !config.selection.should_run(&entry.module) {
+        if !entry.enabled || !config.selection.should_run_entry(entry) {
             continue;
         }
         run_check_entry(entry, &prepared, config, &mut work, &mut report);

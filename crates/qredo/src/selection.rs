@@ -46,10 +46,23 @@ impl Selection {
     /// strictness is required ([`resolve`] reports them explicitly).
     #[must_use]
     pub fn should_run(&self, check: &str) -> bool {
+        self.should_run_with_tags(check, None)
+    }
+
+    /// True when a configured check runs, including its per-check `tags`
+    /// override. `:__initial__` expands to the check's built-in tags.
+    #[must_use]
+    pub fn should_run_entry(&self, entry: &crate::CheckEntry) -> bool {
+        self.should_run_with_tags(&entry.module, entry.params.get("tags"))
+    }
+
+    fn should_run_with_tags(&self, check: &str, configured_tags: Option<&String>) -> bool {
         if matches_any(check, &self.ignore) {
             return false;
         }
-        if !self.checks_with_tag.is_empty() && !has_any_tag(check, &self.checks_with_tag) {
+        if !self.checks_with_tag.is_empty()
+            && !has_any_tag(check, configured_tags, &self.checks_with_tag)
+        {
             return false;
         }
         if self.only.is_empty() {
@@ -61,9 +74,24 @@ impl Selection {
 
 /// True when the check carries any of the listed tags (union).
 /// Unknown tags match nothing, mirroring native `String.to_atom` behavior.
-fn has_any_tag(check: &str, tags: &[String]) -> bool {
-    let carried = crate::check_meta::check_tags(check);
-    tags.iter().any(|tag| carried.contains(&tag.as_str()))
+fn has_any_tag(check: &str, configured: Option<&String>, wanted: &[String]) -> bool {
+    let initial = crate::check_meta::check_tags(check);
+    let Some(raw) = configured else {
+        return wanted.iter().any(|tag| initial.contains(&tag.as_str()));
+    };
+    let Ok(serde_json::Value::Array(tags)) = serde_json::from_str(raw) else {
+        return false;
+    };
+    tags.iter()
+        .filter_map(serde_json::Value::as_str)
+        .any(|tag| {
+            let tag = tag.trim_start_matches(':');
+            if tag == "__initial__" {
+                wanted.iter().any(|item| initial.contains(&item.as_str()))
+            } else {
+                wanted.iter().any(|item| item == tag)
+            }
+        })
 }
 
 /// Case-insensitive regex match of one pattern against `check`.
