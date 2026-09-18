@@ -28,7 +28,7 @@ use crate::config_file::FileEntry;
 use crate::pipeline::GeneralParams;
 
 /// A file-pattern problem naming the offending pattern.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PatternError(pub String);
 
 /// True when `path` is selected by `pattern` (both project-relative, or
@@ -38,15 +38,7 @@ pub struct PatternError(pub String);
 /// Returns [`PatternError`] for nested braces or uncompilable classes,
 /// mirroring upstream raises.
 pub fn wildcard_match(pattern: &str, path: &str) -> Result<bool, PatternError> {
-    for alternative in expand_braces(pattern)? {
-        if match_segments(
-            &alternative.split('/').collect::<Vec<_>>(),
-            &path.split('/').collect::<Vec<_>>(),
-        )? {
-            return Ok(true);
-        }
-    }
-    Ok(false)
+    CompiledGlob::compile(pattern).is_match(path)
 }
 
 /// Textual brace expansion; nested braces raise upstream, so they error here.
@@ -91,20 +83,90 @@ fn expand_braces(pattern: &str) -> Result<Vec<String>, PatternError> {
     Ok(out)
 }
 
-/// Segmentwise match with `**` spanning zero or more non-dot segments.
-fn match_segments(patterns: &[&str], segments: &[&str]) -> Result<bool, PatternError> {
-    let mut patterns = patterns;
+/// One precompiled glob alternative.
+#[derive(Debug, Clone)]
+enum CompiledAlternative {
+    /// Literal directory prefix (`"lib/"`, bare `"test"`): exact-or-prefix
+    /// segment equality, never wildcards.
+    DirPrefix(Vec<String>),
+    /// Segment matcher with `**` recursion.
+    Segments(Vec<CompiledSegment>),
+}
+
+/// A glob pattern compiled once and matched many times. Brace errors are
+/// retained and surfaced only when a filename is actually matched, just as
+/// `wildcard_match` did before compilation was cached.
+///
+/// Backs hot per-(check, file) selection: brace expansion and segment
+/// regexes build once instead of per file. Compile errors retain
+/// `wildcard_match`'s lazy evaluation order.
+#[derive(Debug, Clone)]
+struct CompiledGlob {
+    alternatives: Result<Vec<CompiledAlternative>, PatternError>,
+}
+
+/// One precompiled glob segment.
+#[derive(Debug, Clone)]
+enum CompiledSegment {
+    /// `**`: zero or more non-dot segments.
+    Recursive,
+    /// No wildcard characters: plain equality (dotfiles match).
+    Literal(String),
+    /// Wildcard segment: anchored regex (dotfiles never match).
+    Pattern(Result<regex::Regex, PatternError>),
+}
+
+impl CompiledGlob {
+    /// Compile one glob, retaining errors for lazy evaluation.
+    fn compile(pattern: &str) -> Self {
+        let alternatives = expand_braces(pattern).map(|expanded| {
+            expanded
+                .iter()
+                .map(|alternative| compile_alternative(alternative))
+                .collect()
+        });
+        Self { alternatives }
+    }
+
+    /// True when `path` matches.
+    ///
+    /// # Errors
+    /// Returns a retained pattern error if evaluation reaches it.
+    fn is_match(&self, path: &str) -> Result<bool, PatternError> {
+        let segments: Vec<&str> = path.split('/').collect();
+        let alternatives = self.alternatives.as_ref().map_err(Clone::clone)?;
+        for alternative in alternatives {
+            let matches = match alternative {
+                CompiledAlternative::DirPrefix(prefix) => {
+                    !prefix.is_empty()
+                        && segments.len() >= prefix.len()
+                        && segments[..prefix.len()]
+                            .iter()
+                            .zip(prefix.iter())
+                            .all(|(segment, expected)| *segment == expected)
+                }
+                CompiledAlternative::Segments(compiled) => match_compiled(compiled, &segments)?,
+            };
+            if matches {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
+/// Compile one brace-expanded alternative, mirroring the `match_segments`
+/// entry checks (trailing-slash and bare-directory forms stay literal
+/// exact-or-prefix matches).
+fn compile_alternative(alternative: &str) -> CompiledAlternative {
+    let mut parts: Vec<&str> = alternative.split('/').collect();
     let mut dir_prefix = false;
-    while patterns.last() == Some(&"") {
+    while parts.last() == Some(&"") {
         dir_prefix = true;
-        patterns = &patterns[..patterns.len() - 1];
+        parts.pop();
     }
     if dir_prefix {
-        return Ok(segments == patterns
-            || segments.len() > patterns.len() && segments[..patterns.len()] == *patterns);
-    }
-    if patterns.is_empty() {
-        return Ok(segments.is_empty());
+        return CompiledAlternative::DirPrefix(parts.iter().map(ToString::to_string).collect());
     }
     // Bare directory patterns (`"test"`, like trailing-slash `"test/"`)
     // match the directory itself and everything below it; bare `.ex`/`.exs`
@@ -114,17 +176,32 @@ fn match_segments(patterns: &[&str], segments: &[&str]) -> Result<bool, PatternE
         clippy::case_sensitive_file_extension_comparisons,
         reason = "mirrors upstream String.ends_with?([\".ex\", \".exs\"])"
     )]
-    if !patterns
-        .iter()
-        .any(|pattern| pattern.contains(['*', '?', '[', '{']))
-        && !patterns
+    if !parts.iter().any(|part| part.contains(['*', '?', '[', '{']))
+        && !parts
             .last()
             .is_some_and(|last| last.ends_with(".ex") || last.ends_with(".exs"))
     {
-        return Ok(segments == patterns
-            || segments.len() > patterns.len() && segments[..patterns.len()] == *patterns);
+        return CompiledAlternative::DirPrefix(parts.iter().map(ToString::to_string).collect());
     }
-    if patterns[0] == "**" {
+    let mut compiled = Vec::new();
+    for part in parts {
+        if part == "**" {
+            compiled.push(CompiledSegment::Recursive);
+        } else if !part.contains(['*', '?', '[']) {
+            compiled.push(CompiledSegment::Literal(part.to_owned()));
+        } else {
+            compiled.push(CompiledSegment::Pattern(segment_regex(part)));
+        }
+    }
+    CompiledAlternative::Segments(compiled)
+}
+
+/// Recursive segment match with `**` spanning zero or more non-dot segments.
+fn match_compiled(patterns: &[CompiledSegment], segments: &[&str]) -> Result<bool, PatternError> {
+    let Some((head, rest)) = patterns.split_first() else {
+        return Ok(segments.is_empty());
+    };
+    if matches!(head, CompiledSegment::Recursive) {
         for skip in 0..=segments.len() {
             if segments[..skip]
                 .iter()
@@ -132,28 +209,32 @@ fn match_segments(patterns: &[&str], segments: &[&str]) -> Result<bool, PatternE
             {
                 continue;
             }
-            if match_segments(&patterns[1..], &segments[skip..])? {
+            if match_compiled(rest, &segments[skip..])? {
                 return Ok(true);
             }
         }
         return Ok(false);
     }
-    let Some((head, rest)) = segments.split_first() else {
+    let Some((segment, remaining)) = segments.split_first() else {
         return Ok(false);
     };
-    Ok(match_segment(patterns[0], head)? && match_segments(&patterns[1..], rest)?)
-}
-
-/// One segment match; wildcard segments never match dotfiles.
-fn match_segment(pattern: &str, name: &str) -> Result<bool, PatternError> {
-    if !pattern.contains(['*', '?', '[']) {
-        return Ok(pattern == name);
-    }
-    if name.starts_with('.') {
+    let matched = match head {
+        CompiledSegment::Literal(expected) => expected == segment,
+        CompiledSegment::Pattern(_) if segment.starts_with('.') => false,
+        CompiledSegment::Pattern(expression) => {
+            expression.as_ref().map_err(Clone::clone)?.is_match(segment)
+        }
+        CompiledSegment::Recursive => false,
+    };
+    if !matched {
         return Ok(false);
     }
-    // Runs of `*` collapse (verified `a**b` ≡ `a*b`); a full `**` segment
-    // never reaches here.
+    match_compiled(rest, remaining)
+}
+
+/// Anchored regex source for one wildcard segment: runs of `*` collapse
+/// (verified `a**b` ≡ `a*b`); a full `**` segment never reaches here.
+fn segment_regex_source(pattern: &str) -> String {
     let mut regex = String::from("^");
     let bytes = pattern.as_bytes();
     let mut index = 0_usize;
@@ -180,9 +261,143 @@ fn match_segment(pattern: &str, name: &str) -> Result<bool, PatternError> {
         }
     }
     regex.push('$');
-    regex::Regex::new(&regex)
+    regex
+}
+
+/// Compiled anchored regex for one wildcard segment.
+fn segment_regex(pattern: &str) -> Result<regex::Regex, PatternError> {
+    let source = segment_regex_source(pattern);
+    regex::Regex::new(&source)
         .map_err(|error| PatternError(format!("invalid file pattern `{pattern}`: {error}")))
-        .map(|expression| expression.is_match(name))
+}
+
+/// One precompiled config file entry.
+#[derive(Debug, Clone)]
+enum CompiledEntry {
+    Glob(CompiledGlob),
+    Regex(Result<regex::Regex, PatternError>),
+}
+
+impl CompiledEntry {
+    /// Compile one entry, retaining errors for lazy evaluation.
+    fn compile(entry: &FileEntry) -> Self {
+        match entry {
+            FileEntry::Glob(pattern) => Self::Glob(CompiledGlob::compile(pattern)),
+            FileEntry::Regex(source) => {
+                Self::Regex(regex::Regex::new(source).map_err(|error| {
+                    PatternError(format!("invalid file regex `{source}`: {error}"))
+                }))
+            }
+        }
+    }
+
+    /// Match one entry, surfacing a retained error only if reached.
+    fn is_match(&self, filename: &str) -> Result<bool, PatternError> {
+        match self {
+            Self::Glob(glob) => glob.is_match(filename),
+            Self::Regex(expression) => Ok(expression
+                .as_ref()
+                .map_err(Clone::clone)?
+                .is_match(filename)),
+        }
+    }
+}
+
+/// Per-check file selection compiled once per run.
+///
+/// Hot lanes evaluate selection per file; compiling once removes per-file
+/// brace expansion and regex builds. Error behavior mirrors
+/// `check_runs_on_entries`: the first bad pattern in evaluation order wins,
+/// and a bad `files.excluded` with empty `files.included` never surfaces
+/// (the excluded list is unreachable then, exactly as before).
+#[derive(Debug, Clone)]
+pub(crate) struct CheckFileMatcher {
+    general_included: Vec<CompiledEntry>,
+    general_excluded: Vec<CompiledEntry>,
+    check_included: Vec<CompiledGlob>,
+    check_excluded: Vec<CompiledGlob>,
+}
+
+impl CheckFileMatcher {
+    /// Compile selection for one check. Invalid patterns are retained so
+    /// they surface in the same lazy evaluation order as the old matcher.
+    #[must_use]
+    pub(crate) fn compile(
+        rule: &str,
+        general_included: &[FileEntry],
+        general_excluded: &[FileEntry],
+        check_params: &BTreeMap<String, String>,
+    ) -> Self {
+        let compiled_general_included = general_included
+            .iter()
+            .map(CompiledEntry::compile)
+            .collect();
+        let compiled_general_excluded = general_excluded
+            .iter()
+            .map(CompiledEntry::compile)
+            .collect();
+        let (default_included, default_excluded) = default_check_files(rule);
+        let included = check_params.get("files.included").map_or_else(
+            || default_included.unwrap_or_default(),
+            |value| split_globs(value),
+        );
+        let compiled_included = included
+            .iter()
+            .map(|pattern| CompiledGlob::compile(pattern))
+            .collect();
+        let excluded = check_params
+            .get("files.excluded")
+            .map_or(default_excluded, |value| split_globs(value));
+        let compiled_excluded = excluded
+            .iter()
+            .map(|pattern| CompiledGlob::compile(pattern))
+            .collect();
+        Self {
+            general_included: compiled_general_included,
+            general_excluded: compiled_general_excluded,
+            check_included: compiled_included,
+            check_excluded: compiled_excluded,
+        }
+    }
+
+    /// Match one file using cached patterns.
+    ///
+    /// # Errors
+    /// Returns the first pattern error reached in upstream evaluation order.
+    pub(crate) fn matches(&self, filename: &str) -> Result<bool, PatternError> {
+        if !self.general_included.is_empty()
+            && !any_entry_matches(&self.general_included, filename)?
+        {
+            return Ok(false);
+        }
+        if any_entry_matches(&self.general_excluded, filename)? {
+            return Ok(false);
+        }
+        if self.check_included.is_empty() {
+            return Ok(true);
+        }
+        for pattern in &self.check_included {
+            if pattern.is_match(filename)? {
+                for excluded in &self.check_excluded {
+                    if excluded.is_match(filename)? {
+                        return Ok(false);
+                    }
+                }
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
+/// `Iterator::any` with short-circuiting error propagation.
+fn any_entry_matches(entries: &[CompiledEntry], filename: &str) -> Result<bool, PatternError> {
+    for entry in entries {
+        if entry.is_match(filename)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Append a `[...]` class starting at `index` (which points at `[`);
@@ -635,6 +850,119 @@ mod tests {
         )
         .expect("valid patterns");
         assert_eq!(selected, vec!["lib/a.ex".to_owned()]);
+    }
+
+    const MATCHER_FILENAMES: &[&str] = &[
+        "lib/a.ex",
+        "lib/old/b.ex",
+        "lib/_build/c.ex",
+        "test/a_test.exs",
+        "test/my_module_text.exs",
+        "special/a.ex",
+        "special/old/b.ex",
+        "other/b.ex",
+    ];
+
+    fn assert_compiled_agrees(
+        rule: &str,
+        included: &[FileEntry],
+        excluded: &[FileEntry],
+        params: &BTreeMap<String, String>,
+    ) {
+        let matcher = CheckFileMatcher::compile(rule, included, excluded, params);
+        for filename in MATCHER_FILENAMES {
+            assert_eq!(
+                matcher.matches(filename),
+                check_runs_on_entries(rule, filename, included, excluded, params),
+                "{rule} vs {filename}"
+            );
+        }
+    }
+
+    #[test]
+    fn compiled_matcher_agrees_with_entries() {
+        // The precompiled matcher must agree with `check_runs_on_entries`
+        // on every (general entries, check params, filename) combination,
+        // including check-level file defaults.
+        let lib_only: Vec<FileEntry> = vec![FileEntry::Glob("lib/".to_owned())];
+        let with_regex_excluded: Vec<FileEntry> = vec![
+            FileEntry::Glob("lib/".to_owned()),
+            FileEntry::Regex("/_build/".to_owned()),
+        ];
+        let mut special_params = BTreeMap::new();
+        special_params.insert("files.included".to_owned(), "special/".to_owned());
+        let mut excluded_params = BTreeMap::new();
+        excluded_params.insert("files.excluded".to_owned(), "special/old/".to_owned());
+        let empty = BTreeMap::new();
+        assert_compiled_agrees("Credo.Check.Warning.IoInspect", &[], &[], &empty);
+        assert_compiled_agrees("Credo.Check.Warning.IoInspect", &lib_only, &[], &empty);
+        assert_compiled_agrees(
+            "Credo.Check.Warning.IoInspect",
+            &with_regex_excluded,
+            &[],
+            &empty,
+        );
+        assert_compiled_agrees("Credo.Check.Warning.IoInspect", &[], &[], &special_params);
+        assert_compiled_agrees(
+            "Credo.Check.Warning.IoInspect",
+            &lib_only,
+            &[],
+            &excluded_params,
+        );
+        assert_compiled_agrees(
+            "Credo.Check.Design.SkipTestWithoutComment",
+            &[],
+            &[],
+            &empty,
+        );
+        assert_compiled_agrees("Credo.Check.Warning.WrongTestFilename", &[], &[], &empty);
+    }
+
+    #[test]
+    fn compiled_matcher_error_order_matches_entries() {
+        // First bad pattern in evaluation order wins, exactly like
+        // `check_runs_on_entries` — including the unreachable-excluded
+        // carve-out (empty `files.included` never evaluates `files.excluded`).
+        let bad_included =
+            BTreeMap::from([("files.included".to_owned(), "lib/{a,{b}}.ex".to_owned())]);
+        let bad_excluded =
+            BTreeMap::from([("files.excluded".to_owned(), "lib/{a,{b}}.ex".to_owned())]);
+        let empty_included_bad_excluded = BTreeMap::from([
+            ("files.included".to_owned(), String::new()),
+            ("files.excluded".to_owned(), "lib/{a,{b}}.ex".to_owned()),
+        ]);
+        let bad_regex = [FileEntry::Regex("([".to_owned())];
+        let empty = BTreeMap::new();
+        assert_compiled_agrees("Credo.Check.Warning.IoInspect", &[], &[], &bad_included);
+        assert_compiled_agrees("Credo.Check.Warning.IoInspect", &[], &[], &bad_excluded);
+        assert_compiled_agrees("Credo.Check.Warning.IoInspect", &[], &bad_regex, &empty);
+        // Empty `files.included` falls back to every file without ever
+        // compiling `files.excluded`: no error, everything selected.
+        let matcher = CheckFileMatcher::compile(
+            "Credo.Check.Warning.IoInspect",
+            &[],
+            &[],
+            &empty_included_bad_excluded,
+        );
+        assert!(matcher.matches("lib/a.ex").expect("excluded unreachable"));
+        assert!(
+            check_runs_on_entries(
+                "Credo.Check.Warning.IoInspect",
+                "lib/a.ex",
+                &[],
+                &[],
+                &empty_included_bad_excluded,
+            )
+            .expect("no error")
+        );
+
+        // A later invalid pattern remains unobserved when an earlier one
+        // already selects the file.
+        let lazy_general = [
+            FileEntry::Glob("lib/".to_owned()),
+            FileEntry::Regex("([".to_owned()),
+        ];
+        assert_compiled_agrees("Credo.Check.Warning.IoInspect", &lazy_general, &[], &empty);
     }
 
     #[test]

@@ -185,9 +185,14 @@ fn cold_cache(
         .iter()
         .map(|file| crate::batch::Prepared::eager(&file.source))
         .collect();
+    let project_matchers: BTreeMap<String, crate::file_select::CheckFileMatcher> =
+        project_entries(runner_config)
+            .into_iter()
+            .map(|entry| (entry.module.clone(), check_matcher(entry, runner_config)))
+            .collect();
     for (index, file) in files.iter().enumerate() {
         let (name, entry) =
-            cold_file_entry(file, report, runner_config, &prepared[index], &skipped);
+            cold_file_entry(file, report, &project_matchers, &prepared[index], &skipped);
         cache.files.insert(name, entry);
     }
     for entry in project_entries(runner_config) {
@@ -209,7 +214,7 @@ fn cold_cache(
 fn cold_file_entry(
     file: &crate::RunnerFile,
     report: &crate::RunReport,
-    runner_config: &crate::RunnerConfig,
+    project_matchers: &BTreeMap<String, crate::file_select::CheckFileMatcher>,
     prepared: &crate::batch::Prepared<'_>,
     skipped: &BTreeSet<&str>,
 ) -> (String, CachedFile) {
@@ -232,13 +237,13 @@ fn cold_file_entry(
         .cloned()
         .collect();
     let mut project_counts = BTreeMap::new();
-    for entry in project_entries(runner_config) {
-        let votes = match selected_for(entry, &file.filename, runner_config) {
-            Ok(true) => collect_one_votes(&entry.module, file, prepared),
+    for (module, matcher) in project_matchers {
+        let votes = match selected_for(matcher, &file.filename) {
+            Ok(true) => collect_one_votes(module, file, prepared),
             Ok(false) | Err(()) => BTreeMap::new(),
         };
         if !votes.is_empty() {
-            project_counts.insert(entry.module.clone(), votes);
+            project_counts.insert(module.clone(), votes);
         }
     }
     (
@@ -312,21 +317,26 @@ fn project_entries(runner_config: &crate::RunnerConfig) -> Vec<&crate::CheckEntr
         .collect()
 }
 
-/// Per-check file selection mirroring the pipeline. `Err(())` records a
-/// pattern stop for the check (the caller pushes the error once).
-fn selected_for(
+/// Compile one check's file selection once for repeated file matches.
+fn check_matcher(
     entry: &crate::CheckEntry,
-    filename: &str,
     runner_config: &crate::RunnerConfig,
-) -> Result<bool, ()> {
-    crate::check_runs_on_entries(
+) -> crate::file_select::CheckFileMatcher {
+    crate::file_select::CheckFileMatcher::compile(
         &entry.module,
-        filename,
         &runner_config.files_included,
         &runner_config.files_excluded,
         &entry.params,
     )
-    .map_err(|_| ())
+}
+
+/// Per-check file selection mirroring the pipeline. Pattern errors were
+/// already recorded by the caller's validation pass.
+fn selected_for(
+    matcher: &crate::file_select::CheckFileMatcher,
+    filename: &str,
+) -> Result<bool, ()> {
+    matcher.matches(filename).map_err(|_| ())
 }
 
 /// Upfront pattern validation over all files for every executed check:
@@ -344,14 +354,9 @@ fn pattern_stops(
         .iter()
         .filter(|entry| entry.enabled && runner_config.selection.should_run(&entry.module))
     {
+        let matcher = check_matcher(entry, runner_config);
         for file in files {
-            match crate::check_runs_on_entries(
-                &entry.module,
-                &file.filename,
-                &runner_config.files_included,
-                &runner_config.files_excluded,
-                &entry.params,
-            ) {
+            match matcher.matches(&file.filename) {
                 Ok(_) => {}
                 Err(error) => {
                     if stopped.insert(entry.module.clone()) {
@@ -696,15 +701,16 @@ fn voting_files(
     reused: &[usize],
     fresh_valid: &[usize],
 ) -> (Vec<usize>, Vec<usize>) {
+    let matcher = check_matcher(entry, runner_config);
     let mut voting_reused = Vec::new();
     for index in reused {
-        if selected_for(entry, &files[*index].filename, runner_config).unwrap_or(false) {
+        if selected_for(&matcher, &files[*index].filename).unwrap_or(false) {
             voting_reused.push(*index);
         }
     }
     let mut voting_fresh = Vec::new();
     for index in fresh_valid {
-        if selected_for(entry, &files[*index].filename, runner_config).unwrap_or(false) {
+        if selected_for(&matcher, &files[*index].filename).unwrap_or(false) {
             voting_fresh.push(*index);
         }
     }
@@ -934,10 +940,11 @@ fn fresh_vote_counts(
 ) -> BTreeMap<String, BTreeMap<String, BTreeMap<String, usize>>> {
     let mut out: BTreeMap<String, BTreeMap<String, BTreeMap<String, usize>>> = BTreeMap::new();
     for entry in project_entries(runner_config) {
+        let matcher = check_matcher(entry, runner_config);
         let mut voting: Vec<usize> = Vec::new();
         let mut slots: Vec<usize> = Vec::new();
         for (slot, global) in fresh_valid.iter().enumerate() {
-            if selected_for(entry, &files[*global].filename, runner_config).unwrap_or(false) {
+            if selected_for(&matcher, &files[*global].filename).unwrap_or(false) {
                 voting.push(*global);
                 slots.push(slot);
             }

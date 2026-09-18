@@ -14,7 +14,7 @@ use crate::check_meta::{FileMeta, build_issue};
 use crate::config_checks;
 use crate::config_file::CheckEntry;
 use crate::config_file::FileEntry;
-use crate::file_select::check_runs_on_entries;
+use crate::file_select::CheckFileMatcher;
 use crate::issue::Issue;
 use crate::pipeline::GeneralParams;
 use crate::project::ProjectFile;
@@ -399,21 +399,22 @@ fn lane_inputs<'s>(
         trees: Vec::new(),
         facts: Vec::new(),
     };
+    let matcher =
+        CheckFileMatcher::compile(rule, &config.files_included, &config.files_excluded, params);
     for file in prepared {
-        match selected_or_error(rule, file, config, params, report) {
+        match selected_or_error(&matcher, file.filename, report) {
             Err(()) => return None,
-            Ok(false) => {}
-            Ok(true) => {
-                inputs.index_map.push(file.index);
-                inputs.trees.push(file.prepared.tree());
-                inputs.facts.push(file.prepared.facts());
-                inputs.metas.push(&file.meta);
-                inputs.files.push(ProjectFile {
-                    filename: file.filename.to_owned(),
-                    source: file.source.to_owned(),
-                });
-            }
+            Ok(false) => continue,
+            Ok(true) => {}
         }
+        inputs.index_map.push(file.index);
+        inputs.trees.push(file.prepared.tree());
+        inputs.facts.push(file.prepared.facts());
+        inputs.metas.push(&file.meta);
+        inputs.files.push(ProjectFile {
+            filename: file.filename.to_owned(),
+            source: file.source.to_owned(),
+        });
     }
     Some(inputs)
 }
@@ -536,8 +537,10 @@ fn selected_files<'s, 'f>(
     report: &mut RunReport,
 ) -> Option<Vec<&'s PreparedFile<'f>>> {
     let mut selected = Vec::new();
+    let matcher =
+        CheckFileMatcher::compile(rule, &config.files_included, &config.files_excluded, params);
     for file in prepared {
-        match selected_or_error(rule, file, config, params, report) {
+        match selected_or_error(&matcher, file.filename, report) {
             Err(()) => return None,
             Ok(false) => {}
             Ok(true) => selected.push(file),
@@ -576,20 +579,11 @@ fn once_rule_named(
 /// Per-check file selection; pattern errors are recorded once and stop
 /// the check (`Err(())` signals the recorded stop).
 fn selected_or_error(
-    rule: &str,
-    file: &PreparedFile<'_>,
-    config: &RunnerConfig,
-    params: &BTreeMap<String, String>,
+    matcher: &CheckFileMatcher,
+    filename: &str,
     report: &mut RunReport,
 ) -> Result<bool, ()> {
-    check_runs_on_entries(
-        rule,
-        file.filename,
-        &config.files_included,
-        &config.files_excluded,
-        params,
-    )
-    .map_err(|error| {
+    matcher.matches(filename).map_err(|error| {
         report.errors.push(RunError::Pattern(error.0));
     })
 }

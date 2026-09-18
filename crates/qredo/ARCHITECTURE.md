@@ -12,6 +12,8 @@ see below); plain runs are stateless.
 complaint, never counted clean), per-check file selection, kernel /
 project / filename lanes, config-comment suppression, priority
 filtering, relevant ordering and OR-combined exit status.
+File-selection globs and regexes compile once per check and retain
+upstream's lazy pattern-error ordering when matched across files.
 
 `integration::{select, execute}` is the product contract: static
 default-parameter configs whose checks are all implemented are served
