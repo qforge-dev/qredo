@@ -62,6 +62,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.name }}
+          cache-workspace-crates: true
       - uses: taiki-e/install-action@cross
         if: matrix.cross
       - name: Build and package native executables

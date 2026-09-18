@@ -21,7 +21,7 @@ Add qredo from Hex as a development dependency:
 ```elixir
 defp deps do
   [
-    {:qredo, "~> 0.1.0", only: [:dev, :test], runtime: false}
+    {:qredo, "~> 0.1.1", only: [:dev, :test], runtime: false}
   ]
 end
 ```
@@ -103,7 +103,7 @@ Every push to `main` runs the complete quality gate, builds five native targets
 on two runners, and replaces the `dev` GitHub prerelease. Development asset
 names include the exact Git commit consumed by a Mix git dependency.
 
-Publishing a non-prerelease GitHub release such as `v0.1.0` verifies that its
+Publishing a non-prerelease GitHub release such as `v0.1.1` verifies that its
 tag matches both `VERSION` and `crates/qredo/Cargo.toml`, uploads immutable
 native assets plus `SHA256SUMS`, marks it latest, and publishes the matching
 Mix package to Hex. The repository must define a `HEX_API_KEY` Actions secret
