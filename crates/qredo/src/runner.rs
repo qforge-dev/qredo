@@ -186,13 +186,13 @@ pub fn supports_per_file(rule: &str) -> bool {
 /// differential proof (real-target campaign + corpus + tie/revert
 /// contracts). They still aggregate across files, so subset execution
 /// stays fail-closed (`supports_per_file` remains false for all of them)
-/// and `DuplicatedCode` stays fully gated (absolute peer paths in
-/// messages, unverified scale behavior).
+/// including duplication, whose groups require the whole selected file set.
 #[must_use]
 pub fn promoted_project_check(rule: &str) -> bool {
     matches!(
         rule,
-        "Credo.Check.Consistency.LineEndings"
+        "Credo.Check.Design.DuplicatedCode"
+            | "Credo.Check.Consistency.LineEndings"
             | "Credo.Check.Consistency.ExceptionNames"
             | "Credo.Check.Consistency.MultiAliasImportRequireUse"
             | "Credo.Check.Consistency.ParameterPatternMatching"
@@ -931,13 +931,13 @@ mod tests {
             prepared,
             comments: config_comments(&file.source),
         };
-        let params = BTreeMap::new();
+        let params = BTreeMap::from([("mass_threshold".to_owned(), "10".to_owned())]);
         let named = once_rule_named("Credo.Check.Design.DuplicatedCode", &prepared_file, &params);
-        assert_eq!(named.len(), 1);
+        assert!(!named.is_empty());
         assert!(
             named[0]
                 .message
-                .starts_with("Duplicate code found in lib/a.ex (mass: "),
+                .starts_with("Duplicate code found in lib/a.ex:"),
             "unexpected message: {}",
             named[0].message
         );
@@ -946,11 +946,11 @@ mod tests {
             &prepared_file.prepared,
             &params,
         );
-        assert_eq!(anonymous.len(), 1);
+        assert_eq!(anonymous.len(), named.len());
         assert!(
             anonymous[0]
                 .message
-                .starts_with("Duplicate code found in file (mass: "),
+                .starts_with("Duplicate code found in file:"),
             "unexpected message: {}",
             anonymous[0].message
         );

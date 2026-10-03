@@ -18,7 +18,8 @@ defmodule Qredo.MixProject do
           "README.md",
           "crates/qredo/ROADMAP.md",
           "crates/qredo/ARCHITECTURE.md",
-          "crates/qredo/AGENTS.md"
+          "crates/qredo/AGENTS.md",
+          "crates/qredo/compatibility/duplicated.md"
         ]
       ],
       deps: deps()
@@ -44,6 +45,7 @@ defmodule Qredo.MixProject do
         "crates/qredo/src",
         "crates/qredo/compatibility/rules.json",
         "crates/qredo/compatibility/README.md",
+        "crates/qredo/compatibility/duplicated.md",
         "crates/qredo/compatibility/upstream/inventory.json",
         "crates/qredo/compatibility/upstream/credo_default_config.exs",
         "crates/qredo/Cargo.toml",

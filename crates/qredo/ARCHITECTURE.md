@@ -61,13 +61,29 @@ analysis, duplication models) keep explicit tree logic; the
 `residual_tree_walks` test pins exactly which files those are, so new
 tree walks fail loudly.
 
+### Duplicate code
+
+EX2002 lowers the shared tree-sitter tree into flat, metadata-free structural
+descriptors only when selected. Children precede parents; exact hash-table
+interning assigns identities using child IDs (collisions compare complete
+descriptors). Tuple mass is accumulated bottom-up, occurrences retain source
+locations separately, and duplicate-subtree pruning propagates once over the
+identity DAG. This avoids recursive subtree cloning, repeated mass walks,
+subtree serialization and SHA-256 hashing. Independent file normalization
+uses the existing bounded worker pool. Single-file kernels use the same engine.
+
+Reporting preserves same-file peers, occurrence thresholds, macro exclusions,
+Credo's fixed pruning threshold, nil locations and severity. Chunk order is
+deterministic rather than reproducing Credo's task-completion race; this
+explicit compatibility contract is documented in `compatibility/duplicated.md`.
+
 ## Incremental cache (`--stale`)
 
 `stale::execute_stale` serves `suggest --stale` / `list --stale` with
 output identical to a fresh run. Per file it stores the content hash,
 per-check consistency vote counts and validation outcomes; globally it
 stores the sorted final issues, config fingerprint and per-check majority
-winners (`stale_cache::DiskCache`, schema `cache-v3.json`). Comment-validation
+winners (`stale_cache::DiskCache`, schema `cache-v4.json`). Comment-validation
 outcomes, filename-dependent pattern validation and the final globally sorted
 report are hash-bound cache data too: an exact filename/order and content-hash
 hit returns that report directly without rescanning comments, rematching every
@@ -88,6 +104,13 @@ votes, or any fingerprint mismatch (tool version, config bytes, env
 snapshot, checks, selection, priority) fails open to a full run.
 An unchanged hit leaves the existing cache file untouched rather than
 serializing and atomically rewriting an identical payload.
+
+EX2002 stores portable per-file descriptors plus scopes/priority bonuses.
+Incremental edits normalize fresh files, rebuild global structural identities
+and pruning, and replace all duplicate issues, including unchanged-file peers.
+Unchanged files need no parse for either detection or issue construction.
+Invalid descriptor references invalidate the cache. No duplication data is
+collected when the check is not selected.
 
 ## Compatibility method
 

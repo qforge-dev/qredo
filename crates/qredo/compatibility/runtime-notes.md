@@ -13,8 +13,9 @@ Fixed in this phase (unit-tested, corpus-green):
 - EX3018 `PreferUnquotedAtoms`: trigger/message always render `:"atom"`
   regardless of source quote.
 - EX2002 `DuplicatedCode` single-file wording follows the collector
-  template with the checked filename (threaded through the kernel lane;
-  the anonymous API path keeps the generic rendering).
+  template with peer filename/line locations. Single-file and project paths
+  now share the structural engine; the anonymous API uses `file` as its name.
+  Cross-chunk peer order is deterministic (see `duplicated.md`).
 
 Accepted deviations (documented, not silent):
 

@@ -1541,6 +1541,8 @@ mod tests {
                     "facts.rs",
                     "project.rs",
                     "project/collect_duplicated.rs",
+                    "project/duplicated/lower.rs",
+                    "project/duplicated/literals.rs",
                     "runner.rs",
                     "ts_parser.rs",
                 ]

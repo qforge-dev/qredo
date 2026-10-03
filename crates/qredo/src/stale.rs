@@ -247,6 +247,10 @@ fn cached_comment_errors(report: &crate::RunReport) -> BTreeMap<&str, CachedComm
 }
 
 /// One cold-cache file unit with its project votes.
+#[allow(
+    clippy::too_many_lines,
+    reason = "three validation states plus optional project summaries"
+)]
 fn cold_file_entry(
     file: &crate::RunnerFile,
     project_matchers: &BTreeMap<String, crate::file_select::CheckFileMatcher>,
@@ -264,6 +268,7 @@ fn cold_file_entry(
                 skipped_invalid: false,
                 mods_funs: 0,
                 comment_error: Some(error.clone()),
+                duplicated: None,
             },
         );
     }
@@ -276,6 +281,7 @@ fn cold_file_entry(
                 skipped_invalid: true,
                 mods_funs: 0,
                 comment_error: None,
+                duplicated: None,
             },
         );
     }
@@ -297,6 +303,10 @@ fn cold_file_entry(
             skipped_invalid: false,
             mods_funs: prepared.facts().modules.len() + prepared.facts().defs.len(),
             comment_error: None,
+            duplicated: project_matchers
+                .get(crate::project::collect_duplicated::RULE)
+                .filter(|matcher| selected_for(matcher, &file.filename).unwrap_or(false))
+                .map(|_| crate::stale_duplicated::Cached::collect(prepared)),
         },
     )
 }
@@ -693,6 +703,7 @@ struct PersistEntries<'a> {
     drop_checks: &'a BTreeSet<String>,
     fresh_counts: &'a ProjectCountsByFile,
     fresh_mods_funs: &'a BTreeMap<String, usize>,
+    fresh_duplicated: &'a BTreeMap<String, crate::stale_duplicated::Cached>,
 }
 
 impl PersistEntries<'_> {
@@ -706,6 +717,7 @@ impl PersistEntries<'_> {
                 skipped_invalid: false,
                 mods_funs: 0,
                 comment_error: Some(error.clone()),
+                duplicated: None,
             };
         }
         if self.plan.skipped_set.contains(&file.filename) {
@@ -715,6 +727,7 @@ impl PersistEntries<'_> {
                 skipped_invalid: true,
                 mods_funs: 0,
                 comment_error: None,
+                duplicated: None,
             };
         }
         CachedFile {
@@ -723,6 +736,14 @@ impl PersistEntries<'_> {
             skipped_invalid: false,
             mods_funs: self.mods_funs(index, file),
             comment_error: None,
+            duplicated: if self.plan.reused.contains(&index) {
+                self.cache
+                    .files
+                    .get(&file.filename)
+                    .and_then(|c| c.duplicated.clone())
+            } else {
+                self.fresh_duplicated.get(&file.filename).cloned()
+            },
         }
     }
 
@@ -809,12 +830,15 @@ fn persist_cache(
             )
         })
         .collect();
+    let fresh_duplicated =
+        fresh_duplicate_summaries(files, runner_config, fresh_valid, fresh_prepared);
     let entries = PersistEntries {
         cache,
         plan,
         drop_checks,
         fresh_counts: &fresh_counts,
         fresh_mods_funs: &fresh_mods_funs,
+        fresh_duplicated: &fresh_duplicated,
     };
     for (index, file) in files.iter().enumerate() {
         next.files
@@ -941,6 +965,19 @@ fn project_phase(
             drop_checks.insert(entry.module.clone());
             continue;
         }
+        if entry.module == crate::project::collect_duplicated::RULE {
+            fresh_issues.extend(duplicate_increment(
+                entry,
+                files,
+                runner_config,
+                cache,
+                &plan.reused,
+                fresh_valid,
+                fresh_prepared,
+            )?);
+            drop_checks.insert(entry.module.clone());
+            continue;
+        }
         match project_increment(
             entry,
             files,
@@ -967,6 +1004,69 @@ fn project_phase(
         fresh_issues,
         drop_checks,
     })
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "project merge spine sharing fresh prepared files and cached summaries"
+)]
+fn duplicate_increment(
+    entry: &crate::CheckEntry,
+    files: &[crate::RunnerFile],
+    config: &crate::RunnerConfig,
+    cache: &DiskCache,
+    reused: &[usize],
+    valid: &[usize],
+    prepared: &[crate::batch::Prepared<'_>],
+) -> Option<Vec<crate::Issue>> {
+    let fresh = fresh_duplicate_summaries(files, config, valid, prepared);
+    let (mut selected, voting_fresh) = voting_files(entry, files, config, reused, valid);
+    selected.extend(voting_fresh);
+    selected.sort_unstable();
+    let summaries: Option<Vec<_>> = selected
+        .iter()
+        .map(|i| {
+            let name = &files[*i].filename;
+            fresh
+                .get(name)
+                .or_else(|| cache.files.get(name).and_then(|c| c.duplicated.as_ref()))
+        })
+        .collect();
+    Some(crate::stale_duplicated::run(
+        entry,
+        files,
+        config,
+        &selected,
+        &summaries?,
+    ))
+}
+
+/// Fresh duplication data is collected only when the selected project check
+/// needs it. Prepared's lazy summary is shared by regrouping and persistence.
+fn fresh_duplicate_summaries(
+    files: &[crate::RunnerFile],
+    config: &crate::RunnerConfig,
+    valid: &[usize],
+    prepared: &[crate::batch::Prepared<'_>],
+) -> BTreeMap<String, crate::stale_duplicated::Cached> {
+    let Some(entry) = project_entries(config)
+        .into_iter()
+        .find(|entry| entry.module == crate::project::collect_duplicated::RULE)
+    else {
+        return BTreeMap::new();
+    };
+    let matcher = check_matcher(entry, config);
+    valid
+        .iter()
+        .zip(prepared)
+        .filter(|(i, _)| selected_for(&matcher, &files[**i].filename).unwrap_or(false))
+        .map(|(i, prepared)| {
+            (
+                files[*i].filename.clone(),
+                crate::stale_duplicated::Cached::collect(prepared),
+            )
+        })
+        .collect()
 }
 
 /// Winner stability gate: a flipped cached majority must fail open to a
@@ -1397,6 +1497,61 @@ mod tests {
         crate::integration::execute(config, "default", files, min_priority).expect("served")
     }
 
+    #[test]
+    fn ex2002_stale_edit_revert_rename_delete_and_suppression() {
+        let config = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Design.DuplicatedCode, [mass_threshold: 3]}]}}]}";
+        let path = fresh_path("ex2002-edits");
+        let original = vec![
+            crate::RunnerFile {
+                filename: "lib/a.ex".to_owned(),
+                source: "defmodule A do\n def a(x), do: x + 1\nend\n".to_owned(),
+            },
+            crate::RunnerFile {
+                filename: "lib/b.ex".to_owned(),
+                source: "defmodule B do\n def b(x), do: x + 1\nend\n".to_owned(),
+            },
+        ];
+        let mut changed = original.clone();
+        changed[1].source = changed[1].source.replace("+ 1", "+ 2");
+        let mut renamed = original.clone();
+        renamed[1].filename = "lib/c.ex".to_owned();
+        let mut suppressed = original.clone();
+        suppressed[0].source.insert_str(
+            0,
+            "# credo:disable-for-this-file Credo.Check.Design.DuplicatedCode\n",
+        );
+        let mut invalid = original.clone();
+        invalid[1].source = "defmodule B do\n".to_owned();
+        for files in [
+            &original,
+            &original,
+            &changed,
+            &original,
+            &renamed,
+            &suppressed,
+            &invalid,
+            &original,
+            &vec![original[0].clone()],
+            &original,
+        ] {
+            let expected = fresh(config, files, -99);
+            let actual = stale(config, files, -99, &path);
+            assert_eq!(actual.issues, expected.issues, "EX2002.stale {files:?}");
+            assert_eq!(actual.exit_status, expected.exit_status);
+            assert_eq!(actual.errors, expected.errors);
+            assert_eq!(actual.skipped_invalid, expected.skipped_invalid);
+        }
+        // An incremental edit must not fall back to a cold save: regroup the
+        // descriptors directly, with a saver that records the resulting cache.
+        let (runner, fingerprint) = runner_and_fingerprint(config, -99);
+        let cache = crate::stale_cache::load_file(&path, &fingerprint).unwrap();
+        let plan = plan_partitions(&changed, &runner, &cache);
+        let valid = vec![1];
+        let prepared = vec![crate::batch::Prepared::eager(&changed[1].source)];
+        assert!(project_phase(&changed, &runner, &cache, &plan, &valid, &prepared).is_some());
+        std::fs::remove_file(path).unwrap();
+    }
+
     fn runner_and_fingerprint(
         config_source: &str,
         min_priority: i32,
@@ -1593,6 +1748,7 @@ mod tests {
                 skipped_invalid: false,
                 mods_funs: 0,
                 comment_error: None,
+                duplicated: None,
             },
         );
         let mut winners = BTreeMap::new();

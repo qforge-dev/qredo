@@ -42,6 +42,7 @@ mod selection;
 mod source;
 pub mod stale;
 pub mod stale_cache;
+mod stale_duplicated;
 mod suppression;
 mod syntax;
 mod trailing_blank_line;

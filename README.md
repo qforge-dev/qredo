@@ -14,6 +14,13 @@ including explicit `nil` values that select Credo defaults, and fails closed
 with an explicit reason on anything else. See
 [ROADMAP](crates/qredo/ROADMAP.md).
 
+`Credo.Check.Design.DuplicatedCode` runs natively across the selected project,
+including duplicates within a file. It reuses tree-sitter parses and compact
+structural identities; no Elixir runtime is needed. Enable it in `.credo.exs`
+with `{Credo.Check.Design.DuplicatedCode, []}`. All three check parameters are
+supported. Peer lists use deterministic chunk order where Credo's concurrent
+execution can vary their order; see the [compatibility evidence](crates/qredo/compatibility/duplicated.md).
+
 ## Install with Mix
 
 Add qredo from Hex as a development dependency:
@@ -75,6 +82,10 @@ plus a fingerprint over tool version, config bytes, environment snapshot,
 check list, selection and minimum priority. Any mismatch — or a flipped
 consistency majority — fails open to a full run, so `--stale` output
 always matches a fresh run.
+
+Duplicate-check summaries and reporting scopes are cached per file too. An
+edit reuses unchanged-file syntax and rebuilds global duplicate groups, so
+findings in unchanged peer files are refreshed correctly.
 
 ## Library
 

@@ -13,7 +13,7 @@ use crate::issue::Issue;
 use crate::pipeline::GeneralParams;
 use crate::{Finding, Trigger};
 
-mod collect_duplicated;
+pub(crate) mod collect_duplicated;
 mod collect_exception_names;
 mod collect_multi_alias;
 mod collect_param_pattern;
@@ -159,10 +159,12 @@ pub(crate) fn build_project_issues(
             )));
         };
         let finding = project_finding(issue);
-        out.push((
-            issue.file,
-            build_issue(rule, finding, params, general, meta)?,
-        ));
+        let mut built = build_issue(rule, finding, params, general, meta)?;
+        built.line_no = issue.line;
+        if issue.line.is_none() {
+            built.scope = None;
+        }
+        out.push((issue.file, built));
     }
     Ok(out)
 }
@@ -203,7 +205,8 @@ pub(crate) enum StaleDetails {
 /// emit fresh-file issues once the global winner is known. `facts` aligns
 /// with `files` for the `Facts`-backed checks (callers parse fresh files
 /// once and share). Returns `None` for checks without incremental support
-/// (`DuplicatedCode`, unknown rules): callers fail open to a full run.
+/// (unknown rules). `DuplicatedCode` uses the dedicated structural-summary
+/// path in `stale_duplicated` instead of consistency vote counts.
 #[allow(
     clippy::too_many_lines,
     clippy::cognitive_complexity,

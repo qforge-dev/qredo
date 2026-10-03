@@ -13,7 +13,7 @@
 /// upstream caches the same way because per-finding recomputation is
 /// prohibitive on large files. Scopes resolve from the shared single-walk
 /// facts; the per-line table makes `at` O(1) instead of scanning records.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Scopes {
     scopes: Vec<String>,
     /// Scope id per 1-based source line.

@@ -43,13 +43,16 @@ never blamed (except ExceptionNames single-match suppression, mirrored).
 
 ## Kept gated
 
-- `Credo.Check.Design.DuplicatedCode` (`project-scope-check:*`): exact
-  match on small probes, but message peer paths are absolute, chunk-scale
-  ordering is unverified, and near-threshold edits flip whole groups.
-  Promote after Jason-scale differential + edit/revert blame stability +
-  message path relativization.
 - `needs-validated-config` (EX2007/EX2008): require full project config
   inventory; exact message templates already live in `config_checks`
   (corpus-pinned via `tests/config.rs`), served by the real-Credo fallback.
 - Custom params on promoted checks: lane-level corpus proof exists, but
   flow-level discovery/selection interplay per param is unproven.
+
+## Promoted: EX2002 DuplicatedCode
+
+Full-project runs and `--stale` serve the check with all three parameters.
+Same-file and cross-file occurrences share a compact structural engine.
+Subset execution remains refused. See [duplicated.md](duplicated.md) for
+oracle coverage, scale/performance evidence and the explicit deterministic
+peer-order contract (upstream chunk scheduling is nondeterministic).

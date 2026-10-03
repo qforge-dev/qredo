@@ -10,6 +10,12 @@ Compatibility target: Credo `ea1ccb9` on Elixir 1.20.2 / OTP 29.
 relabelled discrepancy. New Credo versions need their own reviewed
 inventory.
 
+Explicit nondeterminism contract: EX2002 peer lists preserve Credo's reverse
+encounter order within 30-file chunks and use discovery order across chunks.
+Credo's asynchronous chunk-completion order is variable. Membership, locations,
+mass, severity and issue multiplicity remain compatibility requirements;
+Qredo's peer ordering is reproducible. See `compatibility/duplicated.md`.
+
 ## Scope
 
 In scope: all 120 checks in-pipeline, all parameters, full
@@ -55,8 +61,10 @@ never auto-updated, full diagnostics compared (never bare counts),
   built-in tags during CLI selection, including `:__initial__`.
   *Gate: every parameter covered by passing assertions.*
 - **P3 Check promotion.** Project-lane and validated-config checks,
-  one at a time: differential campaign on real targets, then flip its
-  gate entry. Kernels unchanged; only the promotion is new.
+   one at a time: differential campaign on real targets, then flip its
+   gate entry. EX2002 now serves full projects using a compact structural
+   engine and per-file incremental summaries. All nine project-lane checks
+   still reject subset execution.
   *Gate: zero fallback refusals on served corpus configs.*
 - **P4 Message parity.** Transcribe the 120 message catalogs
   verbatim; differential asserts on message text.

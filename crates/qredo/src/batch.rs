@@ -31,6 +31,7 @@ pub(crate) struct Prepared<'src> {
     masked: OnceLock<String>,
     tree: OnceLock<Option<tree_sitter::Tree>>,
     facts: OnceLock<crate::facts::Facts>,
+    duplicated: OnceLock<crate::project::collect_duplicated::Summary>,
 }
 
 impl<'src> Prepared<'src> {
@@ -41,6 +42,7 @@ impl<'src> Prepared<'src> {
             masked: OnceLock::new(),
             tree: OnceLock::new(),
             facts: OnceLock::new(),
+            duplicated: OnceLock::new(),
         }
     }
 
@@ -85,6 +87,16 @@ impl<'src> Prepared<'src> {
         self.facts.get_or_init(|| match self.tree() {
             Some(tree) => crate::facts::extract(tree, self.source),
             None => crate::facts::Facts::empty(),
+        })
+    }
+
+    /// Optional duplication descriptors, never computed for other checks.
+    pub(crate) fn duplicated(&self) -> &crate::project::collect_duplicated::Summary {
+        self.duplicated.get_or_init(|| {
+            self.tree().map_or_else(
+                crate::project::collect_duplicated::Summary::default,
+                |tree| crate::project::collect_duplicated::summarize(tree, self.source),
+            )
         })
     }
 }

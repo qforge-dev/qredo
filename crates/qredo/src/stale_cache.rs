@@ -1,6 +1,6 @@
 //! Persistent incremental cache for `--stale` runs.
 //!
-//! Layout: `$XDG_CACHE_HOME/qredo/<proj>/cache-v3.json`, falling back to
+//! Layout: `$XDG_CACHE_HOME/qredo/<proj>/cache-v4.json`, falling back to
 //! `~/.cache/qredo/<proj>/` when `XDG_CACHE_HOME` is unset. `<proj>` is the
 //! first 16 hex chars of the SHA-256 over the canonical root path, so
 //! distinct checkouts never share entries. A moved checkout simply starts
@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 
 /// On-disk schema version; bumps invalidate every existing cache.
-pub const CACHE_VERSION: u32 = 3;
+pub const CACHE_VERSION: u32 = 4;
 
 /// Cached comment-registration failure for one exact source hash.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -45,6 +45,9 @@ pub struct CachedFile {
     pub mods_funs: usize,
     /// Comment-validation failure, reusable only with the matching hash.
     pub comment_error: Option<CachedCommentError>,
+    /// Portable EX2002 descriptors and reporting scopes (only when selected).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) duplicated: Option<crate::stale_duplicated::Cached>,
 }
 
 /// Whole-project cache payload.
@@ -141,7 +144,7 @@ pub fn cache_dir(root: &Path) -> Option<PathBuf> {
 /// Cache file path for one project root, or `None` when unresolvable.
 #[must_use]
 pub fn cache_file(root: &Path) -> Option<PathBuf> {
-    cache_dir(root).map(|dir| dir.join("cache-v3.json"))
+    cache_dir(root).map(|dir| dir.join("cache-v4.json"))
 }
 
 /// Global fingerprint over everything that can change issue output for
@@ -219,6 +222,13 @@ pub fn load_file(path: &Path, fingerprint: &str) -> Option<DiskCache> {
         return None;
     }
     if cache.fingerprint != fingerprint {
+        return None;
+    }
+    if cache.files.values().any(|file| {
+        file.duplicated
+            .as_ref()
+            .is_some_and(|cached| !cached.valid())
+    }) {
         return None;
     }
     Some(cache)
@@ -310,6 +320,7 @@ mod tests {
                 skipped_invalid: false,
                 mods_funs: 0,
                 comment_error: None,
+                duplicated: None,
             },
         );
         save_file(&path, &cache);
@@ -342,6 +353,7 @@ mod tests {
                     line_no: 1,
                     message: "cached-comment".to_owned(),
                 }),
+                duplicated: None,
             },
         );
         save_file(&path, &cache);
@@ -368,7 +380,7 @@ mod tests {
         assert!(text.contains("qredo"), "{text}");
         assert_eq!(
             cache_file(Path::new("/proj/app")).expect("resolvable"),
-            dir.join("cache-v3.json")
+            dir.join("cache-v4.json")
         );
     }
 }

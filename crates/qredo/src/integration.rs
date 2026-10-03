@@ -773,14 +773,15 @@ mod execute_tests {
     }
 
     #[test]
-    fn duplicated_code_stays_gated() {
+    fn duplicated_code_full_runs_serve_but_subsets_refuse() {
         let source = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Design.DuplicatedCode, []}]}}]}\n";
         assert_eq!(
-            execute(source, "default", &tabs_project(), -99).expect_err("gated"),
+            execute_files(source, "default", &[], -99).expect_err("subset"),
             Fallback {
                 reason: "project-scope-check:Credo.Check.Design.DuplicatedCode".to_owned(),
             }
         );
+        assert!(execute(source, "default", &tabs_project(), -99).is_ok());
     }
 
     #[test]
@@ -1567,7 +1568,7 @@ mod tests {
 
     #[test]
     fn project_and_config_validated_checks_fall_back() {
-        // TabsOrSpaces is promoted (serves); DuplicatedCode stays gated.
+        // Both consistency and duplication checks serve full projects.
         let promoted = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Consistency.TabsOrSpaces, []}]}}]}\n";
         assert_eq!(
             select(promoted, "default"),
@@ -1578,8 +1579,8 @@ mod tests {
         let project = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Design.DuplicatedCode, []}]}}]}\n";
         assert_eq!(
             select(project, "default"),
-            Outcome::Fallback {
-                reason: "project-scope-check:Credo.Check.Design.DuplicatedCode".to_owned(),
+            Outcome::Serve {
+                checks: vec!["Credo.Check.Design.DuplicatedCode".to_owned()],
             }
         );
         let validated = "%{configs: [%{name: \"default\", checks: %{enabled: [{Credo.Check.Design.MissingCheckInConfig, []}]}}]}\n";

@@ -630,7 +630,15 @@ struct JsonIssue<'a> {
     message: &'a str,
     priority: i32,
     scope: Option<&'a str>,
-    trigger: Option<&'a str>,
+    trigger: JsonTrigger<'a>,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(untagged)]
+enum JsonTrigger<'a> {
+    Text(&'a str),
+    Sentinel([&'static str; 1]),
+    Null,
 }
 
 impl<'a> JsonIssue<'a> {
@@ -646,8 +654,13 @@ impl<'a> JsonIssue<'a> {
             priority: issue.priority,
             scope: issue.scope.as_deref(),
             trigger: match &issue.trigger {
-                IssueTrigger::Text(trigger) => Some(trigger.as_str()),
-                IssueTrigger::NoTrigger => None,
+                IssueTrigger::Text(trigger) => JsonTrigger::Text(trigger),
+                IssueTrigger::NoTrigger
+                    if issue.check == crate::project::collect_duplicated::RULE =>
+                {
+                    JsonTrigger::Sentinel(["__no_trigger__"])
+                }
+                IssueTrigger::NoTrigger => JsonTrigger::Null,
             },
         }
     }

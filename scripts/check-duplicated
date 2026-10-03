@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Development-only pinned oracle verification; never updates expectations.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+ref=${1:-"$root/work/ref/credo"}
+pin=ea1ccb9023b44eecbe079dc4bfd48cca4e8b0187
+[[ $(git -C "$ref" rev-parse HEAD) == "$pin" ]] || { echo 'Wrong Credo pin' >&2; exit 1; }
+git -C "$ref" diff --quiet HEAD -- lib mix.exs mix.lock
+elixir -e 'unless System.version() == "1.20.2" and System.otp_release() == "29", do: System.halt(1)'
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/qredo-duplicated.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+elixir -e '
+[root, out] = System.argv()
+data = root |> Path.join("crates/qredo/compatibility/duplicated.json") |> File.read!() |> :json.decode()
+shapes = root |> Path.join("crates/qredo/compatibility/duplicated-shapes.json") |> File.read!() |> :json.decode()
+File.write!(out, :json.encode(Map.put(data, "shapes", shapes)))
+' "$root" "$tmp/expected.json"
+(cd "$ref" && mix run "$root/scripts/duplicated-oracle.exs" "$tmp/expected.json") > "$tmp/actual.json"
+elixir -e '
+[a,b] = Enum.map(System.argv(), &(:json.decode(File.read!(&1))))
+for key <- ["shapes", "projects"] do
+  unless a[key] == b[key], do: raise("EX2002 #{key} oracle mismatch; inspect, do not update expectations")
+  IO.puts("EX2002 #{key}: #{length(a[key])} pinned expectations verified")
+end
+' "$tmp/expected.json" "$tmp/actual.json"
+elixir "$root/scripts/duplicated-campaign.exs" > "$tmp/campaign.json"
+(cd "$ref" && mix run "$root/scripts/duplicated-oracle.exs" "$tmp/campaign.json") > "$tmp/oracle.json"
+(cd "$root" && QREDO_PROJECTS="$tmp/oracle.json" cargo test --locked --test duplicated ex2002_external_projects -- --ignored)

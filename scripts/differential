@@ -3,8 +3,8 @@
 #
 # Usage: scripts/differential APPROOT [--config FILE] [--reps N] [--out DIR]
 # Runs both tools over the same lib/ + test/ files with the same project
-# .credo.exs (--strict, json), normalizes to sorted (check, filename,
-# line) triples and compares triple sets plus exit codes. Timing is
+# .credo.exs (--strict, json), compares complete sorted diagnostics
+# (preserving multiplicity) plus exit codes. Timing is
 # observational only. First run clones the pinned Credo checkout and
 # compiles it (network required once).
 set -euo pipefail
@@ -29,9 +29,11 @@ done
 approot=$(cd "${rest[0]}" && pwd) || exit 64
 [[ -z "$cfg" ]] && cfg="$approot/.credo.exs"
 [[ -f "$cfg" ]] || { echo "No config at $cfg" >&2; exit 64; }
+cfg="$(cd "$(dirname "$cfg")" && pwd)/$(basename "$cfg")"
 [[ -d "$approot/lib" || -d "$approot/test" ]] || { echo "No lib/ or test/ in $approot" >&2; exit 64; }
 [[ -n "$out" ]] || out="$root/work/differential/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$out"
+out=$(cd "$out" && pwd)
 export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 for cmd in cargo elixir mix git rustc; do
@@ -65,25 +67,8 @@ export LC_ALL=C
 (cd "$ref" && mix compile) >"$out/credo-compile.log" 2>&1
 cargo build --release -p qredo --locked --offline >"$out/rust-build.log" 2>&1
 
-# Point the same config at the approot with absolute included paths.
-tmpconfig="$out/abs.credo.exs"
-elixir -e '
-[config_path, approot, tmp] = System.argv()
-{config, _} = Code.eval_file(config_path)
-abs = fn
-  %Regex{} = r -> r
-  rel when is_binary(rel) ->
-    if Path.type(rel) == :absolute, do: rel, else: Path.join(approot, rel)
-  other -> other
-end
-configs = Enum.map(config[:configs], fn c ->
-  if c[:name] == "default",
-    do: put_in(c, [:files, :included], Enum.map(get_in(c, [:files, :included]) || [], abs)),
-    else: c
-end)
-unless Enum.any?(configs, &(&1[:name] == "default")), do: raise("no default config")
-File.write!(tmp, inspect(%{configs: configs}, limit: :infinity, printable_limit: :infinity))
-' "$cfg" "$approot" "$tmpconfig"
+# Load the pinned compiled reference while running in the same working
+# directory as qredo. Rewriting paths in config changes EX2002 peer messages.
 
 run_timed() {
     local tag=$1 rundir=$2; shift 2
@@ -99,23 +84,23 @@ normalize() {
     elixir -e '
 [native_path, rust_path, approot, out_n, out_r] = System.argv()
 strip = fn file -> String.replace_prefix(file || "", approot <> "/", "") end
-triples = fn path ->
+diagnostics = fn path ->
   path
   |> File.read!()
   |> :json.decode()
   |> Map.fetch!("issues")
   |> Enum.map(fn i ->
-    Enum.join([i["check"], strip.(i["filename"]), inspect(i["line_no"])], "\t")
+    i |> Map.update!("filename", strip) |> Enum.sort() |> inspect(limit: :infinity, printable_limit: :infinity)
   end)
 end
-File.write!(out_n, Enum.join(Enum.sort(triples.(native_path)), "\n") <> "\n")
-File.write!(out_r, Enum.join(Enum.sort(triples.(rust_path)), "\n") <> "\n")
+File.write!(out_n, Enum.join(Enum.sort(diagnostics.(native_path)), "\n") <> "\n")
+File.write!(out_r, Enum.join(Enum.sort(diagnostics.(rust_path)), "\n") <> "\n")
 ' "$out/native-$rep.out" "$out/rust-$rep.out" "$approot" "$out/native-triples-$rep.txt" "$out/rust-triples-$rep.txt"
 }
 
 fail=""
 for (( i=1; i<=reps; i++ )); do
-    rcode=$(run_timed "rust-$i" "$root" "$root/target/release/qredo" "$approot" --config-file "$cfg" --strict --format json)
+    rcode=$(run_timed "rust-$i" "$approot" "$root/target/release/qredo" . --config-file "$cfg" --strict --format json)
     if ! grep -q '"issues"' "$out/rust-$i.out" 2>/dev/null; then
         reason=$(grep -o "unsupported config: .*" "$out/rust-$i.time" | head -n 1 || true)
         printf 'rep %d: rust REFUSED (%s, exit %s); cannot compare, see triage\n' \
@@ -124,14 +109,14 @@ for (( i=1; i<=reps; i++ )); do
         continue
     fi
     rissues=$(elixir -e 'IO.puts(length(:json.decode(File.read!(hd(System.argv())))["issues"]))' "$out/rust-$i.out")
-    ncode=$(run_timed "native-$i" "$ref" mix credo --config-file "$tmpconfig" --strict --format json)
+    ncode=$(run_timed "native-$i" "$approot" elixir -pa "$ref/_build/dev/lib/*/ebin" -e 'Application.ensure_all_started(:credo); exec = Credo.run(System.argv()); System.halt(Credo.Execution.get_exit_status(exec))' -- --config-file "$cfg" --strict --format json)
     nissues=$(elixir -e 'IO.puts(length(:json.decode(File.read!(hd(System.argv())))["issues"]))' "$out/native-$i.out")
     printf 'rep %d: rust exit=%s issues=%s | native exit=%s issues=%s\n' \
         "$i" "$rcode" "$rissues" "$ncode" "$nissues" | tee -a "$out/reps.txt"
     echo "$rcode $ncode" >> "$out/exits.tsv"
     normalize "$i"
     if ! diff -q "$out/native-triples-$i.txt" "$out/rust-triples-$i.txt" >/dev/null; then
-        fail="rep $i: issue triples differ"
+        fail="rep $i: complete diagnostics differ"
         diff -u "$out/native-triples-$i.txt" "$out/rust-triples-$i.txt" | head -n 20 || true
     fi
     if [[ "$rcode" != "$ncode" ]]; then
