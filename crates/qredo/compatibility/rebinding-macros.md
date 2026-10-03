@@ -14,3 +14,8 @@ the real variable (dedicated regression test).
 
 The repeated-assert example was verified clean against the pinned native check.
 All existing rebinding corpus cases continue to pass.
+
+`EX4028.unicode-offsets` also covers non-ASCII test names/comments before macro
+calls. Since masking preserves character positions rather than byte offsets,
+the call inventory is translated into masked-buffer offsets in one pass;
+ASCII source keeps the direct-offset fast path.

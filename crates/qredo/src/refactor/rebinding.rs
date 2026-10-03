@@ -47,12 +47,7 @@ pub(crate) fn check_prepared(
         pending_case: false,
         in_head: false,
         source_start: masked.as_ptr().addr(),
-        call_starts: prepared
-            .facts()
-            .calls
-            .iter()
-            .map(|call| call.start as usize)
-            .collect(),
+        call_starts: masked_call_starts(prepared, masked),
     };
     for (idx, line) in lines.iter().enumerate() {
         scan.process_line(line, idx + 1, &lines);
@@ -63,6 +58,38 @@ pub(crate) fn check_prepared(
     scan.findings
         .sort_by_key(|f| (f.line, f.column.unwrap_or(0)));
     scan.findings
+}
+
+/// Masking preserves character positions, but replaces a Unicode character
+/// in a literal/comment with one ASCII space. Translate facts' original byte
+/// offsets into the masked buffer once; ordinary ASCII keeps the fast path.
+fn masked_call_starts(
+    prepared: &crate::batch::Prepared<'_>,
+    masked: &str,
+) -> std::collections::BTreeSet<usize> {
+    let starts: std::collections::BTreeSet<usize> = prepared
+        .facts()
+        .calls
+        .iter()
+        .map(|call| call.start as usize)
+        .collect();
+    if prepared.source().len() == masked.len() {
+        return starts;
+    }
+    let mut pending = starts.into_iter().peekable();
+    prepared
+        .source()
+        .char_indices()
+        .zip(masked.char_indices())
+        .filter_map(|((original, _), (masked, _))| {
+            if pending.peek() == Some(&original) {
+                pending.next();
+                Some(masked)
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 struct Scope {
@@ -675,6 +702,12 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].trigger, crate::Trigger::Text("assert".to_owned()));
         assert_eq!(found[0].line, 3);
+    }
+
+    #[test]
+    fn ex4028_unicode_before_macro_calls_preserves_offsets() {
+        let source = "# café\ndefmodule T do\n test \"żółć\" do\n  assert {:ok, value} = first()\n  assert {:ok, value} = second()\n end\nend\n";
+        assert!(check_prepared(&crate::batch::Prepared::lazy(source), &BTreeMap::new()).is_empty());
     }
     #[test]
     fn single_binding_is_clean() {
