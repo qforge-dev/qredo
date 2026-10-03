@@ -46,6 +46,13 @@ pub(crate) fn check_prepared(
         allow_bang: helpers::param_bool(params, "allow_bang", false),
         pending_case: false,
         in_head: false,
+        source_start: masked.as_ptr().addr(),
+        call_starts: prepared
+            .facts()
+            .calls
+            .iter()
+            .map(|call| call.start as usize)
+            .collect(),
     };
     for (idx, line) in lines.iter().enumerate() {
         scan.process_line(line, idx + 1, &lines);
@@ -72,6 +79,10 @@ struct Scan {
     pending_case: bool,
     /// Inside a multi-line `def`-family head: head matches never count.
     in_head: bool,
+    source_start: usize,
+    /// Shared syntax facts distinguish call heads from variables, including
+    /// user-defined macros; no ExUnit-name blacklist is involved.
+    call_starts: std::collections::BTreeSet<usize>,
 }
 
 impl Scan {
@@ -149,6 +160,12 @@ impl Scan {
             return;
         }
         for stmt in text.split(';') {
+            let start = stmt.trim_start().as_ptr().addr() - self.source_start;
+            if self.call_starts.contains(&start) {
+                // Credo only collects direct assignment statements in a
+                // block, never matches inside function/macro arguments.
+                continue;
+            }
             record_statement(stmt, line_no, top);
         }
     }
@@ -634,6 +651,31 @@ fn boundary_flip(left: Option<char>, right: Option<char>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ex4028_macro_calls_are_not_bindings() {
+        for call in [
+            "assert",
+            "refute",
+            "assert_receive",
+            "custom_assert",
+            "ExUnit.Assertions.assert",
+        ] {
+            let source = format!(
+                "defmodule Test do\n test \"matches\" do\n  {call} {{:ok, value}} = first()\n  {call} {{:ok, value}} = second()\n end\nend\n"
+            );
+            let found = check_prepared(&crate::batch::Prepared::lazy(&source), &BTreeMap::new());
+            assert!(found.is_empty(), "EX4028.call-head {call}: {found:?}");
+        }
+    }
+
+    #[test]
+    fn ex4028_assert_can_still_be_a_real_variable() {
+        let source = "def f do\n assert = 1\n assert = 2\nend\n";
+        let found = check_prepared(&crate::batch::Prepared::lazy(source), &BTreeMap::new());
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].trigger, crate::Trigger::Text("assert".to_owned()));
+        assert_eq!(found[0].line, 3);
+    }
     #[test]
     fn single_binding_is_clean() {
         assert!(
